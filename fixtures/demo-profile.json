@@ -1,0 +1,11 @@
+{
+  "include_selector": "main",
+  "remove_selectors": [".cookie-banner"],
+  "volatile_rules": [
+    {
+      "selector": ".countdown",
+      "marker": "[COUNTDOWN]"
+    }
+  ]
+}
+

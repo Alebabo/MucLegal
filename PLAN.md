@@ -23,11 +23,11 @@ Das System trifft keine abschließende juristische Entscheidung. Jede Bewertung 
 
 ## Vorbereitung – maximal 1 Stunde
 
-- [ ] Das GitHub-Repository `https://github.com/Alebabo/MucLegal.git` als Arbeitsverzeichnis klonen oder den bestehenden Ordner korrekt mit dem Remote verbinden.
-- [ ] Python 3.11+ und eine minimale Projektstruktur einrichten.
-- [ ] Eine kontrollierbare öffentliche Demo-URL oder lokale HTTP-Fixture festlegen.
-- [ ] Drei HTML-Fixtures anlegen: unverändert, nur flüchtiges Rauschen geändert, rechtlich relevante Aussage geändert.
-- [ ] Entscheidungen aus [`reference/FINDINGS.md`](reference/FINDINGS.md) als verbindliche technische Grundlage verwenden.
+- [x] Das GitHub-Repository `https://github.com/Alebabo/MucLegal.git` als Arbeitsverzeichnis klonen oder den bestehenden Ordner korrekt mit dem Remote verbinden.
+- [x] Python 3.11+ und eine minimale Projektstruktur einrichten.
+- [x] Eine kontrollierbare öffentliche Demo-URL oder lokale HTTP-Fixture festlegen.
+- [x] Drei HTML-Fixtures anlegen: unverändert, nur flüchtiges Rauschen geändert, rechtlich relevante Aussage geändert.
+- [x] Entscheidungen aus [`reference/FINDINGS.md`](reference/FINDINGS.md) als verbindliche technische Grundlage verwenden.
 
 ## Zielstruktur
 
@@ -47,35 +47,35 @@ app.py            # eine kleine Prüf- und Freigabeansicht
 
 ### 1. Abruf und Rohdaten sichern
 
-- [ ] HTTP-Abruf mit festem, identifizierbarem User-Agent, Timeout und begrenzten Wiederholungen implementieren.
-- [ ] URL, Abrufzeitpunkt, Statuscode, Response-Header und unverändertes HTML speichern.
-- [ ] Playwright nur als klar getrennten Fallback für öffentlich sichtbare, clientseitig gerenderte Inhalte vorsehen.
-- [ ] Bei CAPTCHA, Login oder Blockseite abbrechen und den Vorgang als manuell zu prüfen markieren.
+- [x] HTTP-Abruf mit festem, identifizierbarem User-Agent, Timeout und begrenzten Wiederholungen implementieren.
+- [x] URL, Abrufzeitpunkt, Statuscode, Response-Header und unverändertes HTML speichern.
+- [x] Playwright nur als klar getrennten Fallback für öffentlich sichtbare, clientseitig gerenderte Inhalte vorsehen.
+- [x] Bei CAPTCHA, Login oder Blockseite abbrechen und den Vorgang als manuell zu prüfen markieren.
 
 ### 2. Deterministische Normalisierung
 
-- [ ] `trafilatura` in einer fest gepinnten Version verwenden.
-- [ ] Extraktion fest konfigurieren: Textausgabe, Präzision bevorzugen, keine Kommentare, keine Links/Bilder/Metadaten, Tabellen behalten, interne Deduplizierung deaktivieren.
-- [ ] Vor der Extraktion nur explizit konfigurierte Störelemente über CSS-Selektoren entfernen, etwa Cookie-Banner oder bekannte Navigation.
-- [ ] Nach der Extraktion Zeilenenden, Unicode und überflüssige Leerzeichen deterministisch vereinheitlichen.
-- [ ] Nur bekannte flüchtige Werte innerhalb eng begrenzter Selektoren durch typisierte Marker ersetzen, zum Beispiel einen Countdown durch `[COUNTDOWN]`.
-- [ ] Keine globalen Regeln verwenden, die Preise, Datumsangaben, Verfügbarkeiten oder Werbeaussagen entfernen könnten.
-- [ ] Den normalisierten UTF-8-Text mit SHA-256 hashen.
+- [x] `trafilatura` in einer fest gepinnten Version verwenden.
+- [x] Extraktion fest konfigurieren: Textausgabe, Präzision bevorzugen, keine Kommentare, keine Links/Bilder/Metadaten, Tabellen behalten, interne Deduplizierung deaktivieren.
+- [x] Vor der Extraktion nur explizit konfigurierte Störelemente über CSS-Selektoren entfernen, etwa Cookie-Banner oder bekannte Navigation.
+- [x] Nach der Extraktion Zeilenenden, Unicode und überflüssige Leerzeichen deterministisch vereinheitlichen.
+- [x] Nur bekannte flüchtige Werte innerhalb eng begrenzter Selektoren durch typisierte Marker ersetzen, zum Beispiel einen Countdown durch `[COUNTDOWN]`.
+- [x] Keine globalen Regeln verwenden, die Preise, Datumsangaben, Verfügbarkeiten oder Werbeaussagen entfernen könnten.
+- [x] Den normalisierten UTF-8-Text mit SHA-256 hashen.
 
 ### 3. Snapshots und Vergleich
 
-- [ ] Snapshot-Metadaten in SQLite speichern; große Artefakte als Dateien ablegen.
-- [ ] Hash, vorherigen Hash, Pfade zu Rohdaten und normalisiertem Text sowie Zeitpunkte verknüpfen.
-- [ ] Bei identischem Hash keine LLM-Prüfung starten.
-- [ ] Bei verändertem Hash einen verständlichen Text-Diff erzeugen und zur nächsten Stufe weitergeben.
+- [x] Snapshot-Metadaten in SQLite speichern; große Artefakte als Dateien ablegen.
+- [x] Hash, vorherigen Hash, Pfade zu Rohdaten und normalisiertem Text sowie Zeitpunkte verknüpfen.
+- [x] Bei identischem Hash keine LLM-Prüfung starten.
+- [x] Bei verändertem Hash einen verständlichen Text-Diff erzeugen und zur nächsten Stufe weitergeben.
 
 ### Abnahme Bautag 1
 
-- [ ] Zwei Läufe mit identischem HTML erzeugen denselben normalisierten Text und denselben Hash.
-- [ ] Ein veränderter Countdown erzeugt weiterhin denselben Hash.
-- [ ] Eine veränderte rechtlich relevante Werbeaussage erzeugt einen neuen Hash und einen passenden Diff.
-- [ ] Alle drei Fälle sind durch automatisierte Tests mit lokalen Fixtures belegt.
-- [ ] Ein kompletter Abruf kann ohne LLM und ohne UI über einen einzelnen Befehl ausgeführt werden.
+- [x] Zwei Läufe mit identischem HTML erzeugen denselben normalisierten Text und denselben Hash.
+- [x] Ein veränderter Countdown erzeugt weiterhin denselben Hash.
+- [x] Eine veränderte rechtlich relevante Werbeaussage erzeugt einen neuen Hash und einen passenden Diff.
+- [x] Alle drei Fälle sind durch automatisierte Tests mit lokalen Fixtures belegt.
+- [x] Ein kompletter Abruf kann ohne LLM und ohne UI über einen einzelnen Befehl ausgeführt werden.
 
 ## Bautag 2 – Juristische Vorprüfung, Beweiskette und Demo
 
