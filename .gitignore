@@ -11,10 +11,14 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+dist/
+build/
+*.egg-info/
 
 # Runtime artifacts
 data/
 artifacts/
+.muclegal/
 *.sqlite
 *.sqlite3
 

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muclegal"
+version = "0.1.0"
+description = "Deterministischer Unterlassungs- und Umsetzungsmonitor"
+requires-python = ">=3.11"
+dependencies = [
+  "trafilatura==2.2.0",
+]
+
+[project.scripts]
+muclegal = "muclegal.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["muclegal*"]
+
