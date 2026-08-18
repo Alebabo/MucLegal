@@ -1,0 +1,19 @@
+{
+  "ergebnis": "nicht_umfasst",
+  "begruendung": "Der Nachher-Ausschnitt nennt ein konkretes Enddatum und verweist auf veröffentlichte Teilnahmebedingungen; damit entspricht er dem im Tenor ausdrücklich ausgenommenen Fall einer echten befristeten Aktion.",
+  "tatsachenbasis": [
+    "Nachher-Ausschnitt nennt den 31.08.2026 als Enddatum.",
+    "Der Tenor nimmt echte befristete Aktionen mit belegbarem Enddatum ausdrücklich aus."
+  ],
+  "rechtsquellen": [
+    {
+      "fundstelle": "§ 5 UWG",
+      "status": "nicht_verifiziert"
+    }
+  ],
+  "staerkstes_gegenargument": "Der bloße Verweis auf Teilnahmebedingungen beweist noch nicht, dass die Aktion am angegebenen Datum tatsächlich endet.",
+  "unsicherheit": "Die Teilnahmebedingungen und das tatsächliche Abschalten der Aktion müssen menschlich verifiziert werden.",
+  "confidence": 0.74,
+  "freigabe_durch_mensch": null
+}
+

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MucLegal - Fallprüfung</title>
+  <style>
+    :root { --navy:#132238; --teal:#007a78; --pale:#e9f5f3; --line:#d6dee8; --muted:#5c6776; --amber:#9a5800; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f5f7fa; color:var(--navy); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    header { background:var(--navy); color:white; padding:18px max(24px,calc((100vw - 1120px)/2)); display:flex; justify-content:space-between; align-items:center; }
+    header strong { font-size:21px; letter-spacing:.2px; }
+    header span { color:#b8dedb; font-size:13px; }
+    main { max-width:1120px; margin:28px auto; padding:0 24px 40px; }
+    .status { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
+    .pill { border-radius:999px; padding:5px 10px; font-weight:700; font-size:12px; background:#fff1d6; color:var(--amber); }
+    .pill.decided { background:var(--pale); color:var(--teal); }
+    .grid { display:grid; grid-template-columns:1.35fr .85fr; gap:18px; }
+    .card { background:white; border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow:0 2px 10px #1322380b; margin-bottom:18px; }
+    h1 { font-size:25px; margin:0 0 5px; }
+    h2 { font-size:16px; margin:0 0 14px; color:var(--teal); }
+    h3 { font-size:13px; margin:17px 0 5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+    p { margin:6px 0; }
+    .muted { color:var(--muted); }
+    .change { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .change div { padding:13px; border-radius:8px; background:#f7f9fb; border-left:3px solid var(--line); }
+    .change div:last-child { background:var(--pale); border-color:var(--teal); }
+    .score { font-size:30px; font-weight:750; color:var(--teal); }
+    ul { padding-left:20px; }
+    .artifacts { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    a { color:var(--teal); }
+    form { display:grid; gap:8px; }
+    button { border:1px solid var(--teal); border-radius:8px; background:white; color:var(--teal); padding:10px 12px; text-align:left; cursor:pointer; font-weight:650; }
+    button:hover { background:var(--pale); }
+    .warning { background:#fff7e9; border-left:4px solid #d48200; padding:11px 13px; border-radius:6px; color:#704100; }
+    code { font-size:12px; word-break:break-all; }
+    @media (max-width:800px) { .grid,.change { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<header><strong>MucLegal</strong><span>Unterlassungs- und Umsetzungsmonitor</span></header>
+<main>
+  <div class="status">
+    <span class="pill{% if human_review %} decided{% endif %}">{% if human_review %}MENSCHLICH: {{ human_review.decision|upper }}{% else %}MENSCHLICHE PRÜFUNG OFFEN{% endif %}</span>
+    <span class="muted">{{ case.fall_id }} · {{ case.erkannt_am }}</span>
+  </div>
+  <div class="grid">
+    <section>
+      <div class="card">
+        <h1>{{ case.fall_id }}</h1>
+        <p class="muted">{{ case.url }}</p>
+        <h2>Festgestellte Änderung</h2>
+        <div class="change"><div><h3>Vorher</h3>{{ case.vorher }}</div><div><h3>Nachher</h3>{{ case.nachher }}</div></div>
+      </div>
+      <div class="card">
+        <h2>Automatische Vorprüfung</h2>
+        <div class="score">{{ "%.0f"|format(case.assessment.confidence * 100) }} %</div>
+        <strong>{{ case.assessment.ergebnis }}</strong>
+        <p>{{ case.assessment.begruendung }}</p>
+        <h3>Tatsachenbasis</h3>
+        <ul>{% for fact in case.assessment.tatsachenbasis %}<li>{{ fact }}</li>{% endfor %}</ul>
+        <h3>Stärkstes Gegenargument</h3><p>{{ case.assessment.staerkstes_gegenargument }}</p>
+        <h3>Unsicherheit</h3><p>{{ case.assessment.unsicherheit }}</p>
+        <p class="warning">Die Modellbewertung ist keine abschließende Rechtsentscheidung. Im Modelloutput bleibt <code>freigabe_durch_mensch: null</code>.</p>
+      </div>
+    </section>
+    <aside>
+      <div class="card">
+        <h2>Menschliche Entscheidung</h2>
+        <form method="post" action="/review">
+          <button name="decision" value="freigegeben">✓ Freigeben</button>
+          <button name="decision" value="abgelehnt">× Ablehnen</button>
+          <button name="decision" value="weitere_pruefung">… Weitere Prüfung</button>
+        </form>
+        {% if human_review %}<p class="muted">Gespeichert: {{ human_review.decided_at }}</p>{% endif %}
+      </div>
+      <div class="card">
+        <h2>Beweiskette</h2>
+        <p><strong>WARC:</strong> {{ case.evidence.warc_status }}</p>
+        <p><strong>RFC 3161:</strong> {{ case.evidence.timestamp_status }}</p>
+        <p><strong>Wayback:</strong> {{ case.evidence.wayback_status }}</p>
+        <h3>Manifest SHA-256</h3><code>{{ case.evidence.manifest_sha256 }}</code>
+        <h3>Artefakte</h3>
+        <div class="artifacts">
+          {% for label in ["raw_html","response_headers","normalized_text","diff","model_input","model_output","warc","manifest","report"] %}
+            {% if case.artifacts.get(label) %}<a href="/artifact/{{ label }}">{{ label }}</a>{% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+</body>
+</html>
+

@@ -81,38 +81,38 @@ app.py            # eine kleine Prüf- und Freigabeansicht
 
 ### 4. Strukturierte LLM-Vorprüfung
 
-- [ ] Einen synthetischen Unterlassungstenor und zwei klar beschriftete Demo-Fälle verwenden: `kerngleich_umfasst` und `nicht_umfasst`.
-- [ ] Nur Tenor, relevanten Vorher-/Nachher-Ausschnitt und belegte Metadaten an das Modell senden.
-- [ ] Ein festes JSON-Schema erzwingen, mindestens mit Ergebnis, Begründung, Tatsachenbasis, Norm-/Zitatstatus, Gegenargument, Unsicherheit und `freigabe_durch_mensch`.
-- [ ] Prompt-Regeln umsetzen: Ergebnis zuerst; Tatsachen, Rechtsquelle und Schlussfolgerung trennen; stärkstes Gegenargument nennen; ungeprüfte Fundstellen ausdrücklich markieren.
-- [ ] Modellantwort strikt validieren. Ungültige oder fehlende Antworten werden gespeichert, aber nicht als Bewertung ausgegeben.
-- [ ] Einen Offline-Demomodus mit gespeicherten, klar als Fixture gekennzeichneten Antworten vorsehen.
+- [x] Einen synthetischen Unterlassungstenor und zwei klar beschriftete Demo-Fälle verwenden: `kerngleich_umfasst` und `nicht_umfasst`.
+- [x] Nur Tenor, relevanten Vorher-/Nachher-Ausschnitt und belegte Metadaten an das Modell senden.
+- [x] Ein festes JSON-Schema erzwingen, mindestens mit Ergebnis, Begründung, Tatsachenbasis, Norm-/Zitatstatus, Gegenargument, Unsicherheit und `freigabe_durch_mensch`.
+- [x] Prompt-Regeln umsetzen: Ergebnis zuerst; Tatsachen, Rechtsquelle und Schlussfolgerung trennen; stärkstes Gegenargument nennen; ungeprüfte Fundstellen ausdrücklich markieren.
+- [x] Modellantwort strikt validieren. Ungültige oder fehlende Antworten werden gespeichert, aber nicht als Bewertung ausgegeben.
+- [x] Einen Offline-Demomodus mit gespeicherten, klar als Fixture gekennzeichneten Antworten vorsehen.
 
 ### 5. Beweiskette
 
-- [ ] Mit GNU Wget ein WARC samt CDX für die statische Demo-Seite erzeugen.
-- [ ] Das WARC mit `warcio check` validieren.
-- [ ] Ein Manifest mit SHA-256-Hashes aller wesentlichen Artefakte erzeugen: Roh-HTML, Header, normalisierter Text, Diff, Modellinput und Modelloutput.
-- [ ] Den Manifest-Hash über OpenSSL per RFC 3161 stempeln und das Token anschließend lokal verifizieren.
-- [ ] Aktuelles TSA-Zertifikat und CA-Kette zusammen mit der Verifikation dokumentieren.
-- [ ] Wayback Save Page Now nur als optionale, nicht beweisentscheidende Zusatzquelle verwenden.
-- [ ] Einen kleinen, lesbaren Prüfbericht als PDF erzeugen.
+- [x] Mit GNU Wget ein WARC samt CDX für die statische Demo-Seite erzeugen.
+- [x] Das WARC mit `warcio check` validieren.
+- [x] Ein Manifest mit SHA-256-Hashes aller wesentlichen Artefakte erzeugen: Roh-HTML, Header, normalisierter Text, Diff, Modellinput und Modelloutput.
+- [x] Den Manifest-Hash über OpenSSL per RFC 3161 stempeln und das Token anschließend lokal verifizieren.
+- [x] Aktuelles TSA-Zertifikat und CA-Kette zusammen mit der Verifikation dokumentieren.
+- [x] Wayback Save Page Now nur als optionale, nicht beweisentscheidende Zusatzquelle verwenden.
+- [x] Einen kleinen, lesbaren Prüfbericht als PDF erzeugen.
 
 ### 6. Ein-Seiten-Demo
 
-- [ ] Eine minimale FastAPI/Jinja- oder Streamlit-Ansicht bauen.
-- [ ] Auf einer Seite anzeigen: URL, letzter Abruf, Status, Vorher/Nachher-Diff, Modellbewertung, Unsicherheit, Beweisartefakte und Zeitstempelstatus.
-- [ ] Eine menschliche Entscheidung `freigegeben`, `abgelehnt` oder `weitere Prüfung` erfassen.
-- [ ] Automatische Bewertung und menschliche Freigabe optisch und in den Daten klar trennen.
+- [x] Eine minimale FastAPI/Jinja- oder Streamlit-Ansicht bauen.
+- [x] Auf einer Seite anzeigen: URL, letzter Abruf, Status, Vorher/Nachher-Diff, Modellbewertung, Unsicherheit, Beweisartefakte und Zeitstempelstatus.
+- [x] Eine menschliche Entscheidung `freigegeben`, `abgelehnt` oder `weitere Prüfung` erfassen.
+- [x] Automatische Bewertung und menschliche Freigabe optisch und in den Daten klar trennen.
 
 ### Abnahme Bautag 2
 
-- [ ] Der Golden Path läuft vom Abruf bis zum Prüfbericht ohne manuelle Dateibearbeitung durch.
-- [ ] Beide juristischen Demo-Fälle liefern schema-valide, nachvollziehbare Ergebnisse.
-- [ ] Das WARC ist valide und sämtliche Manifest-Hashes lassen sich erneut berechnen.
-- [ ] Der RFC-3161-Zeitstempel wird lokal erfolgreich verifiziert.
-- [ ] Die UI zeigt keinen Fall als endgültig entschieden, solange keine menschliche Freigabe vorliegt.
-- [ ] Die Demo funktioniert auch dann nachvollziehbar, wenn LLM, freeTSA oder Wayback kurzfristig nicht erreichbar sind.
+- [x] Der Golden Path läuft vom Abruf bis zum Prüfbericht ohne manuelle Dateibearbeitung durch.
+- [x] Beide juristischen Demo-Fälle liefern schema-valide, nachvollziehbare Ergebnisse.
+- [x] Das WARC ist valide und sämtliche Manifest-Hashes lassen sich erneut berechnen.
+- [x] Der RFC-3161-Zeitstempel wird lokal erfolgreich verifiziert.
+- [x] Die UI zeigt keinen Fall als endgültig entschieden, solange keine menschliche Freigabe vorliegt.
+- [x] Die Demo funktioniert auch dann nachvollziehbar, wenn LLM, freeTSA oder Wayback kurzfristig nicht erreichbar sind.
 
 ## Testmatrix
 

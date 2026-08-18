@@ -20,11 +20,25 @@ def _parser() -> argparse.ArgumentParser:
     check.add_argument("--store", type=Path, default=Path(".muclegal"))
     check.add_argument("--timeout", type=float, default=10.0)
     check.add_argument("--attempts", type=int, default=3)
+    demo = subparsers.add_parser("demo", help="Golden Path mit lokalen Fixtures ausführen")
+    demo.add_argument("--case", choices=["kerngleich", "nicht-umfasst"], default="kerngleich")
+    demo.add_argument("--store", type=Path, default=Path(".muclegal-demo"))
+    demo.add_argument("--report", type=Path)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "demo":
+        from muclegal.demo import run_demo
+
+        try:
+            result = run_demo(args.case, args.store, report_output=args.report)
+        except Exception as exc:
+            print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+            return 2
+        print(json.dumps(result.__dict__, ensure_ascii=False, indent=2))
+        return 0
     if args.command != "check":
         return 2
     try:

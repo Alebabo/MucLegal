@@ -22,6 +22,16 @@ class SnapshotRecord:
     diff_path: str | None
 
 
+@dataclass(frozen=True)
+class SnapshotArtifacts:
+    raw_html_path: str
+    response_headers_path: str
+    normalized_text_path: str
+    diff_path: str | None
+    fetched_at: str
+    normalized_sha256: str
+
+
 class SnapshotRepository:
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root).resolve()
@@ -180,6 +190,7 @@ class SnapshotRepository:
                 encoding="utf-8",
                 newline="\n",
             )
+
         if failure.body is not None:
             body_path = directory / "response.bin"
             body_path.write_bytes(failure.body)
@@ -201,6 +212,20 @@ class SnapshotRepository:
                     str(body_path) if body_path else None,
                 ),
             )
+
+    def snapshot_artifacts(self, snapshot_id: int) -> SnapshotArtifacts:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT raw_html_path, response_headers_path, normalized_text_path, diff_path,
+                       fetched_at, normalized_sha256
+                FROM snapshots WHERE id = ?
+                """,
+                (snapshot_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"Snapshot {snapshot_id} existiert nicht.")
+        return SnapshotArtifacts(**dict(row))
 
     def _new_artifact_directory(self, url: str, kind: str) -> Path:
         url_key = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
