@@ -1,0 +1,16 @@
+{
+  "fall_id": "VZ-2024-0417",
+  "schuldner": "Beispiel Möbel GmbH",
+  "ue_datum": "2024-11-08",
+  "vertragsstrafe": {
+    "modus": "neuer_hamburger_brauch",
+    "richtwert_eur": 5100
+  },
+  "tenor": "Es wird untersagt, mit zeitlich befristeten Rabattaktionen zu werben, wenn die angegebene Frist tatsächlich nicht besteht.",
+  "verbotene_praxis": "künstliche Dringlichkeit ohne realen Hintergrund",
+  "kerngleich_umfasst": ["Countdown", "Restmengenanzeige", "nur heute"],
+  "nicht_umfasst": ["echte befristete Aktion mit belegbarem Enddatum"],
+  "kanaele": ["Startseite", "PDP", "Checkout", "Newsletter"],
+  "rechtsgrundlage": ["§ 5 UWG", "§ 8 Abs. 1 UWG"]
+}
+

@@ -1,4 +1,4 @@
-from muclegal.storage.repository import SnapshotRecord, SnapshotRepository
+from muclegal.storage.repository import SnapshotArtifacts, SnapshotRecord, SnapshotRepository
 
-__all__ = ["SnapshotRecord", "SnapshotRepository"]
+__all__ = ["SnapshotArtifacts", "SnapshotRecord", "SnapshotRepository"]
 

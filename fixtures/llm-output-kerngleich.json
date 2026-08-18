@@ -1,0 +1,23 @@
+{
+  "ergebnis": "kerngleich_umfasst",
+  "begruendung": "Die neue Aussage erzeugt durch Restmengenhinweis und offenes Aktionsende denselben künstlichen Zeitdruck, den der Tenor erfasst, obwohl die Formulierung abweicht.",
+  "tatsachenbasis": [
+    "Nachher-Ausschnitt: Nur noch 3 Stück verfügbar - Aktion endet in Kürze.",
+    "Der Tenor nennt künstliche Dringlichkeit; Restmengenanzeigen sind ausdrücklich als kerngleich umfasst beschrieben."
+  ],
+  "rechtsquellen": [
+    {
+      "fundstelle": "§ 5 UWG",
+      "status": "nicht_verifiziert"
+    },
+    {
+      "fundstelle": "§ 8 Abs. 1 UWG",
+      "status": "nicht_verifiziert"
+    }
+  ],
+  "staerkstes_gegenargument": "Die Mengenangabe könnte auf einem realen, technisch belegten Lagerbestand beruhen und wäre dann keine künstliche Verknappung.",
+  "unsicherheit": "Es liegen keine Lagerdaten und kein belegtes Enddatum vor; diese Tatsachen müssen menschlich geprüft werden.",
+  "confidence": 0.86,
+  "freigabe_durch_mensch": null
+}
+

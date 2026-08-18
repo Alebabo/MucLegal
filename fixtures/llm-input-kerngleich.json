@@ -1,0 +1,11 @@
+{
+  "vorher": "Unsere Gartenmöbel sind dauerhaft günstig.",
+  "nachher": "Nur noch 3 Stück verfügbar - Aktion endet in Kürze.",
+  "belegte_metadaten": {
+    "fall_id": "VZ-2024-0417",
+    "url": "https://example.org/angebote",
+    "erkannt_am": "2026-08-19T08:00:00Z",
+    "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}
+

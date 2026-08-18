@@ -19,6 +19,9 @@ build/
 data/
 artifacts/
 .muclegal/
+.muclegal-demo/
+output/
+tmp/
 *.sqlite
 *.sqlite3
 
