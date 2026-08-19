@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import gzip
+import ipaddress
 import re
+import socket
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,6 +25,7 @@ class FetchPolicy:
     max_attempts: int = 3
     retry_backoff_seconds: float = 0.25
     respect_robots: bool = True
+    require_public_network: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,8 +95,7 @@ class HttpFetcher:
         assert last_failure is not None
         raise last_failure
 
-    @staticmethod
-    def _validate_url(url: str) -> None:
+    def _validate_url(self, url: str) -> None:
         parsed = parse.urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise FetchFailure("invalid_url", "Nur öffentliche HTTP(S)-URLs sind zulässig.")
@@ -103,13 +105,34 @@ class HttpFetcher:
                 "URLs mit Zugangsdaten werden nicht abgerufen.",
                 manual_review=True,
             )
+        if self.policy.require_public_network:
+            try:
+                addresses = {
+                    item[4][0]
+                    for item in socket.getaddrinfo(parsed.hostname, parsed.port or 443)
+                }
+            except socket.gaierror as exc:
+                raise FetchFailure("dns_error", f"Hostname konnte nicht aufgelöst werden: {exc}") from exc
+            if not addresses:
+                raise FetchFailure("dns_error", "Hostname lieferte keine Netzwerkadresse.")
+            for address in addresses:
+                ip = ipaddress.ip_address(address)
+                if not ip.is_global:
+                    raise FetchFailure(
+                        "non_public_target",
+                        "Nur öffentlich erreichbare Internetadressen sind zulässig.",
+                        manual_review=True,
+                    )
 
     def _require_robots_permission(self, url: str) -> None:
+        self._validate_url(url)
         parsed = parse.urlsplit(url)
         robots_url = parse.urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
         req = request.Request(robots_url, headers={"User-Agent": self.policy.user_agent})
+        redirects = _RedirectRecorder(self._validate_url)
+        opener = request.build_opener(redirects)
         try:
-            with request.urlopen(req, timeout=self.policy.timeout_seconds) as response:
+            with opener.open(req, timeout=self.policy.timeout_seconds) as response:
                 raw = response.read(1_000_000)
                 encoding = response.headers.get_content_charset() or "utf-8"
                 rules = raw.decode(encoding, errors="replace")

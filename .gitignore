@@ -20,8 +20,10 @@ data/
 artifacts/
 .muclegal/
 .muclegal-demo/
+.muclegal-ui/
 output/
 tmp/
+.playwright-cli/
 *.sqlite
 *.sqlite3
 

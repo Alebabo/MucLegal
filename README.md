@@ -73,7 +73,7 @@ Der aktuelle Golden Path umfasst:
 
 ## Voraussetzungen und Installation
 
-Benötigt werden Python 3.11 oder neuer und Git. Für die vollständige WARC-Stufe wird GNU Wget benötigt; unter Windows verwendet das Projekt bevorzugt GNU Wget über WSL.
+Benötigt werden Python 3.11 oder neuer und Git. Für die vollständige Beweiskette werden GNU Wget und OpenSSL benötigt; unter Windows verwendet das Projekt bevorzugt GNU Wget über WSL.
 
 ```powershell
 python -m venv .venv
@@ -81,6 +81,39 @@ python -m venv .venv
 ```
 
 Für die Offline-Demo ist kein API-Schlüssel erforderlich. Die optionale Live-Vorprüfung benötigt `ANTHROPIC_API_KEY`.
+
+## Lokales Pipeline Test Harness
+
+Das bewusst schematische Test-Harness akzeptiert genau eine öffentliche Webadresse. Der erste Abruf speichert
+nur eine kostenlose Baseline. Erst wenn ein späterer Abruf eine relevante Änderung erkennt,
+werden Anthropic und anschließend die Beweiskette gestartet.
+
+Den Schlüssel ausschließlich in der lokalen Serverumgebung setzen. Er wird nicht im Browser
+eingegeben und darf nicht in das Repository geschrieben werden:
+
+```powershell
+$env:ANTHROPIC_API_KEY = Read-Host -MaskInput "Neuer Anthropic API-Key"
+python -m uvicorn app:app --host 127.0.0.1 --port 8000
+```
+
+Danach `http://127.0.0.1:8000` öffnen, eine öffentliche URL eintragen und die erste Baseline
+anlegen. Bei einem späteren erneuten Klick gilt:
+
+- unveränderter Hash: Ende ohne Anthropic-Aufruf,
+- veränderter Hash: Vorher-/Nachher-Ausschnitt, Anthropic-Vorprüfung, WARC, Manifest,
+  RFC-3161-Zeitstempel und PDF,
+- Login, CAPTCHA, `robots.txt`-Verbot oder interne Adresse: sicherer Abbruch.
+
+Die Oberfläche verwendet ausschließlich den synthetischen Tenor aus `fixtures/tenor.json`.
+Rohes HTML und Beweismittel bleiben lokal; nur der normalisierte Änderungsausschnitt wird an
+Anthropic gesendet. Laufdaten liegen im ignorierten Verzeichnis `.muclegal-ui/`.
+
+Die linke Seite zeigt ausschließlich den technischen Pipeline- und Hashstatus. In der intern
+scrollbaren Proof-Seitenleiste lassen sich alle vollständigen Beweispakete nach URL und Zeitpunkt
+auswählen. Text-, JSON-, Diff- und HTML-Artefakte werden als ungefährlicher Quelltext angezeigt;
+PDFs können eingebettet betrachtet, WARC/CDX und große Binärdateien heruntergeladen werden. Die
+Desktop-App-Shell füllt das Browserfenster aus, ohne dass das Dokument selbst scrollt. Sie ist ein
+Pipeline-Prüfwerkzeug und ausdrücklich noch nicht die spätere juristische Produktoberfläche.
 
 ## Schnellstart: vollständige Offline-Demo
 

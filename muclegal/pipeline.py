@@ -20,6 +20,7 @@ class CheckOutcome:
     needs_review: bool
     diff_path: str | None
     normalized_text_path: str
+    previous_normalized_text_path: str | None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -70,5 +71,6 @@ def check_url(
         needs_review=changed,
         diff_path=record.diff_path,
         normalized_text_path=record.normalized_text_path,
+        previous_normalized_text_path=previous.normalized_text_path if previous else None,
     )
 
