@@ -12,12 +12,14 @@ from typing import Any, Callable
 from muclegal.evidence import (
     OpenSslTsaClient,
     build_pdf_report,
-    capture_warc,
+    capture_snapshot_warc,
     create_manifest,
     verify_manifest,
+    sha256_file,
 )
-from muclegal.evidence.wayback import record_wayback_unavailable
-from muclegal.fetch import FetchPolicy, HttpFetcher
+from muclegal.evidence.wayback import WaybackClient
+from muclegal.llm.tenor import TenorDraft
+from muclegal.fetch import FetchPolicy, HttpFetcher, ScreenshotCapture
 from muclegal.llm import AnthropicAnalyzer, analyze_and_store
 from muclegal.llm.analyzer import build_model_input
 from muclegal.normalize import NormalizationConfig
@@ -74,13 +76,18 @@ class LiveMonitorWorkflow:
         config: NormalizationConfig | None = None,
         fetcher: HttpFetcher | None = None,
         analyzer_factory: Callable[[], Any] = AnthropicAnalyzer,
-        warc_capturer: Callable[..., Any] = capture_warc,
+        warc_capturer: Callable[..., Any] | None = None,
         tsa_client: OpenSslTsaClient | None = None,
         report_builder: Callable[[dict[str, Any], str | Path], str] = build_pdf_report,
+        wayback_client: WaybackClient | None = None,
+        screenshot_capturer: Callable[[str, Path], ScreenshotCapture] | None = None,
     ) -> None:
         self.store = Path(store).resolve()
         self.store.mkdir(parents=True, exist_ok=True)
-        self.tenor_path = Path(tenor_path).resolve()
+        approved_tenor_path = self.store / "approved-tenor.json"
+        self.tenor_path = (
+            approved_tenor_path if approved_tenor_path.is_file() else Path(tenor_path).resolve()
+        )
         self.tenor = json.loads(self.tenor_path.read_text(encoding="utf-8"))
         self.config = config or NormalizationConfig()
         self.repository = SnapshotRepository(self.store / "snapshots")
@@ -91,6 +98,17 @@ class LiveMonitorWorkflow:
         self.warc_capturer = warc_capturer
         self.tsa_client = tsa_client or OpenSslTsaClient()
         self.report_builder = report_builder
+        self.wayback_client = wayback_client or WaybackClient()
+        self.screenshot_capturer = screenshot_capturer
+
+    def use_approved_tenor(self, draft: TenorDraft) -> Path:
+        """Persist a human-approved draft and make it the next run's monitoring tenor."""
+        tenor = draft.to_monitoring_tenor()
+        path = self.store / "approved-tenor.json"
+        _write_json(path, tenor)
+        self.tenor = tenor
+        self.tenor_path = path
+        return path
 
     @property
     def latest_case_path(self) -> Path:
@@ -101,18 +119,45 @@ class LiveMonitorWorkflow:
         progress("fetch", "Öffentliche Webseite und robots.txt werden geprüft und abgerufen.")
         outcome = check_url(url, self.config, self.repository, self.fetcher)
         progress("normalize", "Der Seiteninhalt wurde konservativ normalisiert und gehasht.")
+        snapshot = self.repository.snapshot_artifacts(outcome.snapshot_id)
+        screenshot: ScreenshotCapture | None = None
+        screenshot_error: str | None = None
+        if self.screenshot_capturer is not None:
+            progress("screenshot", "Der sichtbare Seitenzustand wird als Full-Page-PNG gespeichert.")
+            screenshot_path = Path(snapshot.raw_html_path).parent / "screenshot.png"
+            try:
+                screenshot = self.screenshot_capturer(outcome.url, screenshot_path)
+                self.repository.save_snapshot_screenshot(
+                    outcome.snapshot_id,
+                    path=screenshot.path,
+                    sha256=screenshot.sha256,
+                    size_bytes=screenshot.size_bytes,
+                )
+            except Exception as exc:
+                screenshot_error = f"{type(exc).__name__}: {exc}"
+                self.repository.save_snapshot_screenshot(
+                    outcome.snapshot_id, error_message=screenshot_error
+                )
         progress("compare", "Der normalisierte Seitenstand wird mit der Baseline verglichen.")
         if outcome.status == "baseline_created":
+            states = _terminal_steps("compare", skipped_after=True)
+            if screenshot_error:
+                states["screenshot"] = "warning"
             return LiveWorkflowResult(
                 "baseline_created",
-                "Baseline gespeichert. Erst eine spätere Änderung startet die Anthropic-Prüfung.",
-                step_states=_terminal_steps("compare", skipped_after=True),
+                "Baseline gespeichert. Erst eine spätere Änderung startet die Anthropic-Prüfung."
+                + (" Der Screenshot konnte nicht erzeugt werden." if screenshot_error else ""),
+                step_states=states,
             )
         if outcome.status == "unchanged":
+            states = _terminal_steps("compare", skipped_after=True)
+            if screenshot_error:
+                states["screenshot"] = "warning"
             return LiveWorkflowResult(
                 "unchanged",
-                "Keine relevante Änderung erkannt; Anthropic wurde nicht aufgerufen.",
-                step_states=_terminal_steps("compare", skipped_after=True),
+                "Keine relevante Änderung erkannt; Anthropic wurde nicht aufgerufen."
+                + (" Der Screenshot konnte nicht erzeugt werden." if screenshot_error else ""),
+                step_states=states,
             )
         if not outcome.diff_path or not outcome.previous_normalized_text_path:
             raise RuntimeError("Änderung erkannt, aber der Vorher-/Nachher-Vergleich ist unvollständig.")
@@ -120,7 +165,6 @@ class LiveMonitorWorkflow:
         before_text = Path(outcome.previous_normalized_text_path).read_text(encoding="utf-8")
         after_text = Path(outcome.normalized_text_path).read_text(encoding="utf-8")
         before_excerpt, after_excerpt = changed_excerpts(before_text, after_text)
-        snapshot = self.repository.snapshot_artifacts(outcome.snapshot_id)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         bundle = self.store / "bundles" / f"{stamp}-{uuid.uuid4().hex[:8]}"
         artifacts_dir = bundle / "artifacts"
@@ -154,6 +198,8 @@ class LiveMonitorWorkflow:
             "model_input": Path(analysis.input_path),
             "model_output": Path(analysis.output_path),
         }
+        if screenshot is not None:
+            source_artifacts["screenshot"] = Path(screenshot.path)
         bundled_artifacts: dict[str, Path] = {}
         for label, source in source_artifacts.items():
             destination = artifacts_dir / f"{label}{source.suffix}"
@@ -161,20 +207,47 @@ class LiveMonitorWorkflow:
             bundled_artifacts[label] = destination
 
         warnings: list[str] = []
+        if screenshot_error:
+            warnings.append(f"Screenshot konnte nicht erzeugt werden: {screenshot_error}")
         warc_status = "valide (warcio check)"
+        snapshot_payload_sha256 = sha256_file(snapshot.raw_html_path)
+        warc_payload_sha256: str | None = None
+        capture_relation = "separate_recapture_unverified"
         try:
-            warc = self.warc_capturer(outcome.url, capture_dir)
+            if self.warc_capturer is None:
+                warc = capture_snapshot_warc(
+                    outcome.url,
+                    capture_dir,
+                    raw_html_path=snapshot.raw_html_path,
+                    response_headers_path=snapshot.response_headers_path,
+                    final_url=snapshot.final_url,
+                    fetched_at=snapshot.fetched_at,
+                    status_code=snapshot.status_code,
+                )
+            else:
+                warc = self.warc_capturer(outcome.url, capture_dir)
             bundled_artifacts["warc"] = Path(warc.warc_path)
             bundled_artifacts["cdx"] = Path(warc.cdx_path)
+            warc_payload_sha256 = getattr(warc, "response_payload_sha256", None)
+            if warc_payload_sha256 == snapshot_payload_sha256:
+                capture_relation = "exact_payload"
+            elif warc_payload_sha256:
+                capture_relation = "separate_recapture_mismatch"
+                warnings.append(
+                    "WARC und primärer Snapshot enthalten unterschiedliche Antwortbytes."
+                )
         except Exception as exc:
             warc_status = f"unvollständig: {type(exc).__name__}: {exc}"
+            capture_relation = "warc_unavailable"
             warnings.append("WARC konnte nicht vollständig erzeugt oder validiert werden.")
             warc_status_path = bundle / "warc-status.json"
             _write_json(warc_status_path, {"status": "failed", "message": warc_status})
             bundled_artifacts["warc_status"] = warc_status_path
 
-        wayback = record_wayback_unavailable(bundle)
+        wayback = self.wayback_client.save(outcome.url, bundle)
         bundled_artifacts["wayback_status"] = bundle / "wayback-status.json"
+        if wayback.status == "unavailable":
+            warnings.append("Wayback Save Page Now ist nicht erreichbar.")
         progress("manifest", "Das Hash-Manifest wird erzeugt und unmittelbar verifiziert.")
         manifest = create_manifest(bundled_artifacts, bundle)
         verification = verify_manifest(manifest.manifest_path)
@@ -198,11 +271,19 @@ class LiveMonitorWorkflow:
                 "chain_head_sha256": manifest.chain_head_sha256,
                 "timestamp_status": timestamp.status,
                 "wayback_status": wayback.status,
+                "wayback_url": wayback.url,
+                "snapshot_payload_sha256": snapshot_payload_sha256,
+                "warc_payload_sha256": warc_payload_sha256,
+                "capture_relation": capture_relation,
+                "screenshot_status": "captured" if screenshot else "failed",
+                "screenshot_sha256": screenshot.sha256 if screenshot else None,
+                "screenshot_path": screenshot.path if screenshot else None,
             },
         }
         report_path = Path(self.report_builder(report_data, bundle / "pruefbericht.pdf"))
         case_record = {
             **report_data,
+            "tenor": self.tenor,
             "analysis_mode": analysis.mode,
             "schema_valid": True,
             "snapshot_sha256": snapshot.normalized_sha256,
@@ -232,10 +313,14 @@ class LiveMonitorWorkflow:
             step_states["warc"] = "warning"
         if timestamp.status != "verified":
             step_states["timestamp"] = "warning"
+        if screenshot_error:
+            step_states["screenshot"] = "warning"
         return LiveWorkflowResult(status, message, str(self.latest_case_path), step_states)
 
 
-PIPELINE_STEPS = ("fetch", "normalize", "compare", "anthropic", "warc", "manifest", "timestamp")
+PIPELINE_STEPS = (
+    "fetch", "normalize", "screenshot", "compare", "anthropic", "warc", "manifest", "timestamp"
+)
 
 
 def _terminal_steps(last_success: str, *, skipped_after: bool = False) -> dict[str, str]:

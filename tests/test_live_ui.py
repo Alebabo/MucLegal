@@ -95,6 +95,15 @@ def fake_warc(url: str, output_directory: str | Path):
     return SimpleNamespace(warc_path=str(warc), cdx_path=str(cdx))
 
 
+def mismatched_warc(url: str, output_directory: str | Path):
+    result = fake_warc(url, output_directory)
+    return SimpleNamespace(
+        warc_path=result.warc_path,
+        cdx_path=result.cdx_path,
+        response_payload_sha256="0" * 64,
+    )
+
+
 def fake_report(report: dict, output_path: str | Path) -> str:
     self_contained = Path(output_path)
     self_contained.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
@@ -196,6 +205,48 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertEqual("pending", case["evidence"]["timestamp_status"])
         self.assertTrue(warc_status_exists)
 
+    def test_mismatched_warc_is_never_presented_as_identical_capture(self) -> None:
+        analyzer = RecordingAnalyzer()
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                analyzer_factory=lambda: analyzer,
+                warc_capturer=mismatched_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            workflow.run(server.url)
+            _LiveHandler.page = (FIXTURES / "legal-change.html").read_bytes()
+            result = workflow.run(server.url)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("separate_recapture_mismatch", case["evidence"]["capture_relation"])
+        self.assertIn("unterschiedliche Antwortbytes", " ".join(case["warnings"]))
+
+    def test_default_primary_warc_is_bound_to_saved_snapshot(self) -> None:
+        analyzer = RecordingAnalyzer()
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                analyzer_factory=lambda: analyzer,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            workflow.run(server.url)
+            _LiveHandler.page = (FIXTURES / "legal-change.html").read_bytes()
+            result = workflow.run(server.url)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+        self.assertEqual("completed", result.status)
+        self.assertEqual("exact_payload", case["evidence"]["capture_relation"])
+        self.assertEqual(
+            case["evidence"]["snapshot_payload_sha256"],
+            case["evidence"]["warc_payload_sha256"],
+        )
+
 
 class LiveUiTests(unittest.TestCase):
     def test_missing_key_disables_form_and_rejects_api(self) -> None:
@@ -252,13 +303,13 @@ class LiveUiTests(unittest.TestCase):
                 completed = poll(client, third.json()["run_id"])
                 result_page = client.get("/")
 
-        self.assertIn("Pipeline gegen öffentliche URL testen", page.text)
-        self.assertIn("Pipeline Test Harness", page.text)
+        self.assertIn("Umsetzung auf öffentlicher URL überwachen", page.text)
+        self.assertIn("Unterlassungs- und Umsetzungsmonitor", page.text)
         self.assertEqual("baseline_created", baseline["status"])
         self.assertEqual("unchanged", unchanged["status"])
         self.assertEqual("completed", completed["status"])
         self.assertTrue(completed["result_available"])
-        self.assertIn("Anthropic-Gateway", result_page.text)
+        self.assertIn("Juristische Vorprüfung", result_page.text)
         self.assertEqual(1, len(analyzer.calls))
 
     def test_run_api_exposes_granular_skipped_and_success_states(self) -> None:

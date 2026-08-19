@@ -21,6 +21,126 @@
       "input_path": "llm-input-nicht-umfasst.json",
       "offline_response_path": "llm-output-nicht-umfasst.json",
       "expected_result": "nicht_umfasst"
+    },
+    {
+      "id": "checkout-countdown-reset",
+      "input": {
+        "vorher": "Versandkosten werden im nächsten Schritt angezeigt.",
+        "nachher": "Nur heute: 20 % Rabatt. Countdown 00:14:59; nach Ablauf startet er erneut.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/checkout"}
+      },
+      "expected_result": "kerngleich_umfasst",
+      "expected_reason": "Der wiederkehrende Countdown erzeugt trotz anderer Darstellung dieselbe künstliche zeitliche Dringlichkeit.",
+      "strongest_counterargument": "Der Betreiber könnte einen technischen Fehler statt einer bewusst nicht bestehenden Frist behaupten.",
+      "fixture_confidence": 0.9
+    },
+    {
+      "id": "newsletter-nur-heute-wiederholt",
+      "input": {
+        "vorher": "Unsere Wochenangebote.",
+        "nachher": "Nur heute 25 %; dieselbe Aussage wurde an drei aufeinanderfolgenden Tagen versandt.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "synthetic://newsletter/3"}
+      },
+      "expected_result": "kerngleich_umfasst",
+      "expected_reason": "Die belegte tägliche Wiederholung widerlegt die behauptete Tagesfrist und verwirklicht den charakteristischen Kern.",
+      "strongest_counterargument": "Denkbar wären getrennte, jeweils neu beschlossene Tagesaktionen.",
+      "fixture_confidence": 0.86
+    },
+    {
+      "id": "pdp-falsche-restmenge",
+      "input": {
+        "vorher": "Sofa Modell Nord, lieferbar.",
+        "nachher": "Nur noch 2 verfügbar; der öffentliche Lagerfeed weist durchgehend 240 Stück aus.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/pdp/nord"}
+      },
+      "expected_result": "kerngleich_umfasst",
+      "expected_reason": "Die nachweislich falsche Restmengenanzeige erzeugt die vom Tenor erfasste künstliche Dringlichkeit.",
+      "strongest_counterargument": "Der Lagerfeed könnte andere Filial- oder Onlinebestände abbilden.",
+      "fixture_confidence": 0.88
+    },
+    {
+      "id": "messeaktion-mit-enddatum",
+      "input": {
+        "vorher": "Regulärer Preis 899 Euro.",
+        "nachher": "Messeaktion bis 24.08.2026; Veranstaltungsvertrag und Preisplan belegen das Enddatum.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/messe"}
+      },
+      "expected_result": "nicht_umfasst",
+      "expected_reason": "Die Befristung ist durch konkrete Unterlagen belegt und fällt damit unter den ausdrücklich nicht umfassten Gegenfall.",
+      "strongest_counterargument": "Die Aktion könnte nach dem Enddatum tatsächlich verlängert werden.",
+      "fixture_confidence": 0.9
+    },
+    {
+      "id": "echte-filialrestmenge",
+      "input": {
+        "vorher": "Abholung in München möglich.",
+        "nachher": "Noch 3 Stück in Filiale München; signierter Warenwirtschaftsexport bestätigt exakt drei Stück.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/pdp/stuhl"}
+      },
+      "expected_result": "nicht_umfasst",
+      "expected_reason": "Die konkrete Restmenge ist nach dem Fixture belegt und erzeugt keine künstliche Dringlichkeit ohne realen Hintergrund.",
+      "strongest_counterargument": "Reservierungen oder zeitversetzte Bestandsbuchungen könnten die Anzeige trotzdem irreführend machen.",
+      "fixture_confidence": 0.84
+    },
+    {
+      "id": "neutraler-lieferhinweis",
+      "input": {
+        "vorher": "Lieferzeit 2 bis 3 Werktage.",
+        "nachher": "Für Lieferung vor Weihnachten bitte bis 18.12. bestellen; Logistikplan belegt den Stichtag.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/versand"}
+      },
+      "expected_result": "nicht_umfasst",
+      "expected_reason": "Der belegte Logistikstichtag betrifft die Lieferbarkeit und keine fingierte Rabattbefristung.",
+      "strongest_counterargument": "Die Gestaltung könnte den Lieferhinweis werblich als künstlichen Kaufdruck einsetzen.",
+      "fixture_confidence": 0.82
+    },
+    {
+      "id": "nur-kurze-zeit-ohne-beleg",
+      "input": {
+        "vorher": "20 % Rabatt auf ausgewählte Möbel.",
+        "nachher": "Nur für kurze Zeit 20 % Rabatt; ein Enddatum oder Verlaufsdaten fehlen.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/start"}
+      },
+      "expected_result": "unklar",
+      "expected_reason": "Die Aussage kann kerngleich sein, doch ohne Beleg zur tatsächlichen Dauer lässt sich die fehlende Frist nicht feststellen.",
+      "strongest_counterargument": "Eine intern festgelegte und tatsächlich eingehaltene kurze Aktion wäre nicht umfasst.",
+      "fixture_confidence": 0.58
+    },
+    {
+      "id": "restmenge-ohne-lagerbeleg",
+      "input": {
+        "vorher": "Artikel verfügbar.",
+        "nachher": "Nur noch 4 auf Lager; weitere Bestandsinformationen fehlen.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/pdp/tisch"}
+      },
+      "expected_result": "unklar",
+      "expected_reason": "Die Variante ist im Tenorprofil genannt, aber ihre Unrichtigkeit ist ohne Lagerbeleg nicht feststellbar.",
+      "strongest_counterargument": "Die Anzeige kann einen realen und zutreffenden Lagerbestand wiedergeben.",
+      "fixture_confidence": 0.55
+    },
+    {
+      "id": "countdown-serverstatus-offen",
+      "input": {
+        "vorher": "Aktionspreis 599 Euro.",
+        "nachher": "Aktionspreis endet in 01:30:00; es liegt nur ein einzelner Snapshot vor.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "https://example.org/aktion"}
+      },
+      "expected_result": "unklar",
+      "expected_reason": "Ein einzelner Countdown belegt weder sein Zurücksetzen noch das Fehlen eines realen Enddatums.",
+      "strongest_counterargument": "Der Countdown kann eine echte, serverseitig eingehaltene Befristung anzeigen.",
+      "fixture_confidence": 0.52
+    },
+    {
+      "id": "app-banner-kontext-fehlt",
+      "input": {
+        "vorher": "Kein vorheriger App-Stand vorhanden.",
+        "nachher": "Jetzt zugreifen, bevor es zu spät ist; Produkt, Preis und Aktionsbedingungen sind nicht sichtbar.",
+        "belegte_metadaten": {"fall_id": "VZ-2024-0417", "url": "synthetic://app/banner"}
+      },
+      "expected_result": "unklar",
+      "expected_reason": "Die Formulierung erzeugt Druck, kann ohne Produkt- und Aktionskontext aber nicht sicher dem untersagten Rabattmechanismus zugeordnet werden.",
+      "strongest_counterargument": "Es könnte sich lediglich um allgemeine Werbung ohne Befristungsbehauptung handeln.",
+      "fixture_confidence": 0.45
     }
   ]
 }

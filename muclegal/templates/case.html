@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MucLegal · Pipeline Test Harness</title>
+  <title>MucLegal · Unterlassungs- und Umsetzungsmonitor</title>
   <style>
     :root {
       color-scheme:light; --background:#f8fafc; --card:#fff; --foreground:#0f172a;
@@ -14,8 +14,8 @@
     * { box-sizing:border-box; }
     html,body { width:100%; height:100%; margin:0; overflow:hidden; }
     body { background:var(--background); color:var(--foreground); font:13px/1.4 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
-    button,input,select { font:inherit; }
-    button:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid color-mix(in srgb,var(--primary) 35%,transparent); outline-offset:2px; }
+    button,input,select,textarea { font:inherit; }
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid color-mix(in srgb,var(--primary) 35%,transparent); outline-offset:2px; }
     .app { height:100dvh; min-height:0; display:grid; grid-template-rows:clamp(54px,7.2vh,66px) minmax(0,1fr); }
     .topbar { display:flex; align-items:center; gap:16px; padding:8px clamp(14px,2vw,28px); background:#fff; border-bottom:1px solid var(--border); }
     .logo { width:clamp(164px,16vw,218px); max-height:45px; object-fit:contain; object-position:left center; }
@@ -41,6 +41,13 @@
     .url-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }
     .url-head p { margin-top:2px; max-width:670px; font-size:11px; }
     .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-top:10px; }
+    .tenor-panel summary { cursor:pointer; font-weight:700; }
+    .tenor-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:9px; }
+    .tenor-grid .wide { grid-column:1/-1; }
+    .tenor-grid textarea { min-height:54px; resize:vertical; padding:8px 10px; }
+    .tenor-draft { margin-top:8px; padding:8px; border-left:3px solid var(--primary); background:var(--muted-bg); font-size:11px; }
+    .tenor-draft p { margin-top:3px; }
+    .tenor-actions { display:flex; align-items:center; gap:6px; margin-top:7px; }
     .input,.select { height:36px; width:100%; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; color:var(--foreground); padding:0 10px; box-shadow:0 1px 1px rgb(15 23 42 / .03); }
     .button { height:36px; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; color:var(--foreground); padding:0 13px; font-weight:650; cursor:pointer; white-space:nowrap; }
     .button:hover { background:var(--muted-bg); }
@@ -109,6 +116,7 @@
     .preview-empty { display:grid; min-height:150px; place-items:center; padding:20px; color:var(--muted); text-align:center; }
     pre { max-height:330px; min-height:150px; margin:0; overflow:auto; padding:11px; background:#0f172a; color:#dbeafe; font:10px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
     .pdf-frame { width:100%; height:430px; border:0; background:var(--muted-bg); }
+    .image-preview { display:block; width:100%; max-height:520px; object-fit:contain; background:var(--muted-bg); }
     [hidden] { display:none !important; }
     @media (max-height:800px) {
       .brand-copy span,.url-head p { display:none; }
@@ -134,31 +142,56 @@
   <header class="topbar">
     {% if workflow_enabled %}<img class="logo" src="/static/muclegal-logo-light.png" alt="MucLegal">{% else %}<strong>MucLegal</strong>{% endif %}
     <div class="separator"></div>
-    <div class="brand-copy"><strong>Beweispipeline</strong><span>Lokales technisches Prüfsystem</span></div>
-    <span class="badge">Pipeline Test Harness</span>
+    <div class="brand-copy"><strong>Unterlassungs- und Umsetzungsmonitor</strong><span>Juristische Vorprüfung mit menschlicher Entscheidung</span></div>
+    <span class="badge">Hackathon-Prototyp</span>
     <button id="sidebar-toggle" class="button sidebar-toggle" type="button">Proof</button>
   </header>
 
   <div class="workspace">
     <main class="control">
+      <details class="card card-pad tenor-panel"{% if not active_tenor or (tenor_draft and tenor_draft.decision != 'freigegeben') %} open{% endif %}>
+        <summary>1 · Unterlassungstenor prüfen und freigeben</summary>
+        {% if workflow_enabled %}
+        <form method="post" action="/tenor-draft" class="tenor-grid">
+          <input class="input" name="fall_id" required maxlength="200" value="VZ-2024-0417" aria-label="Fall-ID">
+          <input class="input" name="schuldner" required maxlength="500" value="Beispiel Möbel GmbH" aria-label="Schuldner">
+          <input class="input wide" name="fundstelle" required maxlength="2048" value="https://example.org/angebote" aria-label="Fundstelle">
+          <textarea class="input wide" name="beschreibung" required maxlength="4000" aria-label="Festgestellter Verstoß">mit künstlicher Dringlichkeit für eine Rabattaktion zu werben, obwohl die angegebene Befristung tatsächlich nicht besteht</textarea>
+          <input class="input wide" name="rechtsgrundlagen" required value="§ 5 UWG, § 8 Abs. 1 UWG" aria-label="Belegte Rechtsgrundlagen, kommagetrennt">
+          <button class="button primary" type="submit">Prüfentwurf erstellen</button>
+        </form>
+        {% endif %}
+        {% if tenor_draft %}
+        <div class="tenor-draft">
+          <strong>KI-/Demo-Entwurf · {{ tenor_draft.mode }}</strong>
+          <p>{{ tenor_draft.draft.entwurf }}</p>
+          <p><strong>Nicht umfasst:</strong> {{ tenor_draft.draft.nicht_umfasst|join(", ") }}</p>
+          <div class="tenor-actions">
+            <span class="status-chip{% if tenor_draft.decision == 'freigegeben' %} ok{% endif %}">{{ tenor_draft.decision or "MENSCHLICHE PRÜFUNG OFFEN" }}</span>
+            {% if workflow_enabled %}<form method="post" action="/tenor-review"><input type="hidden" name="draft_id" value="{{ tenor_draft.draft_id }}"><button class="button" name="decision" value="freigegeben">Tenor freigeben</button><button class="button" name="decision" value="abgelehnt">Ablehnen</button><button class="button" name="decision" value="weitere_pruefung">Offen</button></form>{% endif %}
+          </div>
+        </div>
+        {% elif active_tenor %}<div class="tenor-draft"><strong>Aktiver, synthetischer Demo-Tenor</strong><p>{{ active_tenor.tenor }}</p></div>{% endif %}
+      </details>
+
       <section class="card card-pad">
         <div class="url-head">
-          <div><h1>Pipeline gegen öffentliche URL testen</h1><p>Der erste Abruf speichert nur eine Baseline. Erst eine tatsächliche spätere Änderung startet Anthropic und die Beweissicherung.</p></div>
-          <span class="badge">Keine Produktivoberfläche</span>
+          <div><h1>2 · Umsetzung auf öffentlicher URL überwachen</h1><p>Der erste Abruf speichert die Baseline. Nur eine relevante spätere Änderung startet die juristische Vorprüfung und Beweissicherung.</p></div>
+          <span class="badge">Mensch entscheidet</span>
         </div>
         {% if workflow_enabled %}
         <form id="run-form" class="url-form">
           <input id="url" class="input" name="url" type="url" required placeholder="https://www.beispiel.de/angebote" aria-label="Webadresse">
-          <button id="run-button" class="button primary" type="submit"{% if not anthropic_ready %} disabled{% endif %}>Pipeline testen</button>
+          <button id="run-button" class="button primary" type="submit"{% if not anthropic_ready %} disabled{% endif %}>Monitoring starten</button>
         </form>
         {% if not anthropic_ready %}<div class="alert warning">ANTHROPIC_API_KEY fehlt am Server. Ein Schlüssel wird nie im Browser eingegeben.</div>{% endif %}
         {% else %}<div class="alert">Offline-Demolauf – Live-Abruf ist in dieser Ansicht deaktiviert.</div>{% endif %}
       </section>
 
       <section class="card pipeline-card">
-        <div class="section-row"><h2>Pipeline</h2><span id="terminal-badge" class="status-chip">wartend</span></div>
+        <div class="section-row"><h2>3 · Technischer Prüfpfad</h2><span id="terminal-badge" class="status-chip">wartend</span></div>
         <div class="steps" id="steps">
-          {% for key,label in [("fetch","Abruf"),("normalize","Normalisierung"),("compare","Vergleich"),("anthropic","Anthropic"),("warc","WARC"),("manifest","Manifest"),("timestamp","TSA/PDF")] %}
+          {% for key,label in [("fetch","Abruf"),("normalize","Normalisierung"),("screenshot","Screenshot"),("compare","Vergleich"),("anthropic","Anthropic"),("warc","WARC"),("manifest","Manifest"),("timestamp","TSA/PDF")] %}
           <div class="step" data-step="{{ key }}" data-state="waiting"><span class="step-dot"></span><span class="step-name">{{ label }}</span><span class="step-state">wartend</span></div>
           {% endfor %}
         </div>
@@ -167,7 +200,7 @@
 
       <div class="tech-grid">
         <section class="card metric-card">
-          <div class="metric-head"><h2>Anthropic-Gateway</h2><span id="schema-chip" class="status-chip">kein Ergebnis</span></div>
+          <div class="metric-head"><h2>4 · Juristische Vorprüfung</h2><span id="schema-chip" class="status-chip">kein Ergebnis</span></div>
           <dl class="metric-list">
             <div class="metric"><dt>Ergebniscode</dt><dd id="result-code">{{ case.assessment.ergebnis if case else "—" }}</dd></div>
             <div class="metric"><dt>Confidence</dt><dd id="confidence">{% if case %}{{ "%.0f"|format(case.assessment.confidence * 100) }} %{% else %}—{% endif %}</dd></div>
@@ -176,11 +209,12 @@
           </dl>
         </section>
         <section class="card metric-card">
-          <div class="metric-head"><h2>Hashes & Beweisstatus</h2><span id="evidence-chip" class="status-chip">lokal</span></div>
+          <div class="metric-head"><h2>5 · Beweisstatus</h2><span id="evidence-chip" class="status-chip">lokal</span></div>
           <dl class="metric-list">
             <div class="metric"><dt>Aktueller Hash</dt><dd><code id="current-hash">{{ case.snapshot_sha256 if case and case.snapshot_sha256 else "—" }}</code></dd></div>
             <div class="metric"><dt>Vorheriger Hash</dt><dd><code id="previous-hash">{{ case.previous_snapshot_sha256 if case and case.previous_snapshot_sha256 else "—" }}</code></dd></div>
             <div class="metric"><dt>WARC</dt><dd id="warc-status">{{ case.evidence.warc_status if case else "—" }}</dd></div>
+            <div class="metric"><dt>Aufnahmebezug</dt><dd id="capture-relation">{{ case.evidence.capture_relation if case and case.evidence.capture_relation else "—" }}</dd></div>
             <div class="metric"><dt>Manifest</dt><dd id="manifest-status">{% if case %}verifiziert{% else %}—{% endif %}</dd></div>
             <div class="metric"><dt>TSA / PDF</dt><dd id="tsa-status">{% if case %}{{ case.evidence.timestamp_status }} / erzeugt{% else %}—{% endif %}</dd></div>
           </dl>
@@ -188,7 +222,7 @@
       </div>
 
       <section class="card review">
-        <div class="review-copy"><h2>Freigabe simulieren</h2><p>Das Modell setzt <code>freigabe_durch_mensch: null</code>.</p></div>
+        <div class="review-copy"><h2>6 · Menschlich entscheiden</h2><p>Das Modell setzt <code>freigabe_durch_mensch: null</code>.</p></div>
         <span class="status-chip{% if human_review %} ok{% endif %}">{% if human_review %}MENSCHLICH: {{ human_review.decision|upper }}{% else %}MENSCHLICHE PRÜFUNG OFFEN{% endif %}</span>
         {% if case %}<form method="post" action="/review"><button class="button" name="decision" value="freigegeben">Freigeben</button><button class="button" name="decision" value="abgelehnt">Ablehnen</button><button class="button" name="decision" value="weitere_pruefung">Offen</button></form>{% endif %}
       </section>
@@ -206,6 +240,7 @@
           <div class="preview-bar"><strong id="preview-title">Vorschau</strong><a id="preview-open" href="#" target="_blank" rel="noopener" hidden>Öffnen / laden</a></div>
           <div id="preview-empty" class="preview-empty">Artefakt auswählen. HTML wird ausschließlich als ungefährlicher Quelltext dargestellt.</div>
           <pre id="text-preview" hidden></pre>
+          <img id="image-preview" class="image-preview" alt="Gespeicherter Full-Page-Screenshot" hidden>
           <iframe id="pdf-preview" class="pdf-frame" title="PDF-Vorschau" hidden></iframe>
         </section>
       </div>
@@ -295,7 +330,7 @@
   function renderTechnical(data) {
     text("result-code",data.result_code); text("confidence",data.confidence == null ? "—" : `${Math.round(data.confidence*100)} %`);
     text("schema-valid",data.schema_valid ? "valide" : "ungültig"); text("current-hash",data.snapshot_sha256); text("previous-hash",data.previous_snapshot_sha256);
-    text("warc-status",data.warc_status); text("manifest-status",data.manifest_sha256 ? "verifiziert" : "fehlt"); text("tsa-status",`${data.timestamp_status||"—"} / ${data.artifacts.some(a=>a.label==="report"&&a.available)?"erzeugt":"fehlt"}`);
+    text("warc-status",data.warc_status); text("capture-relation",data.capture_relation); text("manifest-status",data.manifest_sha256 ? "verifiziert" : "fehlt"); text("tsa-status",`${data.timestamp_status||"—"} / ${data.artifacts.some(a=>a.label==="report"&&a.available)?"erzeugt":"fehlt"}`);
     const schema=document.getElementById("schema-chip"); schema.textContent=data.schema_valid?"schema-valide":"ungültig"; schema.className=`status-chip ${data.schema_valid?"ok":"warn"}`;
     const evidence=document.getElementById("evidence-chip"); evidence.textContent=data.status; evidence.className=`status-chip ${data.status==="completed"?"ok":"warn"}`;
   }
@@ -315,13 +350,14 @@
   }
   async function preview(caseId, artifact, button) {
     document.querySelectorAll(".artifact.selected").forEach(item=>item.classList.remove("selected")); button.classList.add("selected");
-    const title=document.getElementById("preview-title"),open=document.getElementById("preview-open"),pre=document.getElementById("text-preview"),pdf=document.getElementById("pdf-preview"),empty=document.getElementById("preview-empty");
-    title.textContent=artifact.title; pre.hidden=true; pdf.hidden=true; empty.hidden=true; open.hidden=false; const fileUrl=`/artifact/${encodeURIComponent(caseId)}/${encodeURIComponent(artifact.label)}`; open.href=fileUrl;
+    const title=document.getElementById("preview-title"),open=document.getElementById("preview-open"),pre=document.getElementById("text-preview"),image=document.getElementById("image-preview"),pdf=document.getElementById("pdf-preview"),empty=document.getElementById("preview-empty");
+    title.textContent=artifact.title; pre.hidden=true; image.hidden=true; pdf.hidden=true; empty.hidden=true; open.hidden=false; const fileUrl=`/artifact/${encodeURIComponent(caseId)}/${encodeURIComponent(artifact.label)}`; open.href=fileUrl;
     if (artifact.kind==="pdf") { pdf.src=fileUrl; pdf.hidden=false; return; }
+    if (artifact.kind==="image") { image.src=fileUrl; image.hidden=false; return; }
     if (artifact.kind==="text" && artifact.preview_available) { try { const data=await api(`/api/cases/${encodeURIComponent(caseId)}/preview/${encodeURIComponent(artifact.label)}`); pre.textContent=data.content; pre.hidden=false; } catch(error) { showEmptyPreview(error.message); } return; }
     showEmptyPreview("Binäres oder großes Artefakt: sicher herunterladen beziehungsweise in einem neuen Tab öffnen.",true);
   }
-  function showEmptyPreview(message,keepOpen=false) { const empty=document.getElementById("preview-empty"); empty.textContent=message; empty.hidden=false; document.getElementById("text-preview").hidden=true; document.getElementById("pdf-preview").hidden=true; if(!keepOpen)document.getElementById("preview-open").hidden=true; }
+  function showEmptyPreview(message,keepOpen=false) { const empty=document.getElementById("preview-empty"); empty.textContent=message; empty.hidden=false; document.getElementById("text-preview").hidden=true; document.getElementById("image-preview").hidden=true; document.getElementById("pdf-preview").hidden=true; if(!keepOpen)document.getElementById("preview-open").hidden=true; }
   function renderEmpty() { document.getElementById("artifact-groups").replaceChildren(); showEmptyPreview("Noch kein vollständiges Beweispaket vorhanden."); }
   loadCases();
 })();

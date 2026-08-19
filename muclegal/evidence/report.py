@@ -13,8 +13,10 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
         from reportlab.platypus import (
+            Image,
             KeepTogether,
             Paragraph,
+            PageBreak,
             SimpleDocTemplate,
             Spacer,
             Table,
@@ -54,7 +56,7 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
     evidence = report["evidence"]
     story = [
         Paragraph("MucLegal Prüfbericht", styles["TitleCustom"]),
-        paragraph("Synthetischer Demonstrationsfall - keine abschließende Rechtsentscheidung", "Warning"),
+        paragraph("Prüfentwurf - keine abschließende Rechtsentscheidung", "Warning"),
         Spacer(1, 6 * mm),
         Table(
             [
@@ -110,10 +112,16 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
         paragraph(assessment["staerkstes_gegenargument"]),
         Paragraph("Unsicherheit", styles["H2Custom"]),
         paragraph(assessment["unsicherheit"]),
-        Paragraph("Beweiskette", styles["H2Custom"]),
+        PageBreak(),
+        Paragraph("Dokumentationskette", styles["H2Custom"]),
         Table(
             [
                 [paragraph("WARC", "SmallCustom"), paragraph(evidence["warc_status"])],
+                [paragraph("Aufnahmebezug", "SmallCustom"), paragraph(evidence.get("capture_relation", "nicht geprüft"))],
+                [paragraph("Snapshot-Payload", "SmallCustom"), paragraph(evidence.get("snapshot_payload_sha256", "nicht ausgewiesen"))],
+                [paragraph("WARC-Payload", "SmallCustom"), paragraph(evidence.get("warc_payload_sha256") or "nicht ausgewiesen")],
+                [paragraph("Screenshot", "SmallCustom"), paragraph(evidence.get("screenshot_status", "nicht erzeugt"))],
+                [paragraph("Screenshot SHA-256", "SmallCustom"), paragraph(evidence.get("screenshot_sha256") or "nicht ausgewiesen")],
                 [paragraph("Manifest", "SmallCustom"), paragraph(evidence["manifest_sha256"])],
                 [paragraph("Hashkette", "SmallCustom"), paragraph(evidence["chain_head_sha256"])],
                 [paragraph("RFC 3161", "SmallCustom"), paragraph(evidence["timestamp_status"])],
@@ -135,11 +143,39 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
         ),
         Spacer(1, 5 * mm),
         paragraph(
+            "Ein RFC-3161-Zeitstempel und Hashes belegen Integrität und zeitliche Einordnung "
+            "der gespeicherten Dateien. Sie ersetzen nicht die menschliche Prüfung von "
+            "Herkunft, Vollständigkeit und rechtlicher Bedeutung.",
+            "SmallCustom",
+        ),
+        Spacer(1, 3 * mm),
+        paragraph(
             "Die Modellbewertung ist eine Entscheidungshilfe. freigabe_durch_mensch bleibt null, "
-            "bis eine berechtigte Person im Prüfschritt entscheidet.",
+            "bis eine berechtigte Person im Prüfschritt entscheidet. Vertragsstrafe und "
+            "gerichtliche Ordnungsmittel werden nicht automatisch festgesetzt.",
             "Warning",
         ),
     ]
+
+    screenshot_path = evidence.get("screenshot_path")
+    if screenshot_path and Path(screenshot_path).is_file():
+        screenshot = Image(str(Path(screenshot_path).resolve()))
+        max_width, max_height = 174 * mm, 205 * mm
+        scale = min(max_width / screenshot.imageWidth, max_height / screenshot.imageHeight, 1)
+        screenshot.drawWidth = screenshot.imageWidth * scale
+        screenshot.drawHeight = screenshot.imageHeight * scale
+        story.extend(
+            [
+                PageBreak(),
+                Paragraph("Gespeicherter Seitenzustand", styles["H2Custom"]),
+                paragraph(
+                    "Full-Page-Screenshot des separat gerenderten, öffentlich sichtbaren Seitenzustands.",
+                    "SmallCustom",
+                ),
+                Spacer(1, 3 * mm),
+                screenshot,
+            ]
+        )
 
     def footer(canvas, doc):  # noqa: ANN001
         canvas.saveState()
@@ -147,7 +183,7 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
         canvas.line(18 * mm, 13 * mm, 192 * mm, 13 * mm)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(colors.HexColor("#4B5563"))
-        canvas.drawString(18 * mm, 8.5 * mm, "MucLegal - synthetischer Demonstrationsfall")
+        canvas.drawString(18 * mm, 8.5 * mm, "MucLegal - Prüfentwurf zur menschlichen Freigabe")
         canvas.drawRightString(192 * mm, 8.5 * mm, f"Seite {doc.page}")
         canvas.restoreState()
 

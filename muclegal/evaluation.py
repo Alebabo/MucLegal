@@ -24,6 +24,35 @@ _METRIC_NAMES = (
 )
 
 
+class ExpectedFixtureAnalyzer:
+    """Deterministic expected response for an inline synthetic eval case."""
+
+    mode = "offline_expected_fixture"
+    model = "fixture-kein-modell"
+
+    def __init__(self, case: dict[str, Any], tenor: dict[str, Any]) -> None:
+        self.case = case
+        self.tenor = tenor
+
+    def analyze(self, model_input: dict[str, Any]) -> dict[str, Any]:
+        del model_input
+        return {
+            "ergebnis": self.case["expected_result"],
+            "begruendung": self.case["expected_reason"],
+            "tatsachenbasis": [self.case["input"]["nachher"]],
+            "rechtsquellen": [
+                {"fundstelle": source, "status": "nicht_verifiziert"}
+                for source in self.tenor.get("rechtsgrundlage", [])
+            ],
+            "staerkstes_gegenargument": self.case["strongest_counterargument"],
+            "unsicherheit": self.case.get(
+                "uncertainty", "Die tatsächlichen Umstände sind menschlich zu verifizieren."
+            ),
+            "confidence": float(self.case.get("fixture_confidence", 0.7)),
+            "freigabe_durch_mensch": None,
+        }
+
+
 @dataclass(frozen=True)
 class EvalCaseResult:
     case_id: str
@@ -87,16 +116,18 @@ def run_evaluation(
     }
     for case in suite["cases"]:
         case_id = case["id"]
-        case_input = _read_json_below(suite_root, case["input_path"])
+        case_input = (
+            case["input"]
+            if isinstance(case.get("input"), dict)
+            else _read_json_below(suite_root, case["input_path"])
+        )
         model_input = build_model_input(
             tenor,
             case_input["vorher"],
             case_input["nachher"],
             case_input["belegte_metadaten"],
         )
-        analyzer = shared_analyzer or OfflineAnalyzer(
-            _resolve_below(suite_root, case["offline_response_path"])
-        )
+        analyzer = shared_analyzer or _offline_analyzer(suite_root, case, tenor)
         started = time.perf_counter()
         run = analyze_and_store(model_input, analyzer, output_directory / "cases" / case_id)
         duration_ms = round((time.perf_counter() - started) * 1000)
@@ -147,8 +178,8 @@ def run_evaluation(
     }
     gates = {name: float(suite["gates"][name]) for name in _METRIC_NAMES}
     gate_results = {name: metrics[name] >= gates[name] for name in _METRIC_NAMES}
-    analyzer_for_metadata = shared_analyzer or OfflineAnalyzer(
-        _resolve_below(suite_root, suite["cases"][0]["offline_response_path"])
+    analyzer_for_metadata = shared_analyzer or _offline_analyzer(
+        suite_root, suite["cases"][0], tenor
     )
     created_at = datetime.now(timezone.utc).isoformat()
     json_path = output_directory / "eval-results.json"
@@ -202,9 +233,23 @@ def _validate_suite(suite: Any) -> None:
         seen.add(case_id)
         if case.get("expected_result") not in RESULTS:
             raise ValueError(f"Unzulässiges erwartetes Ergebnis für {case_id}.")
-        for field in ("input_path", "offline_response_path"):
-            if not isinstance(case.get(field), str) or not case[field]:
-                raise ValueError(f"{case_id} benötigt {field}.")
+        if not isinstance(case.get("input"), dict):
+            if not isinstance(case.get("input_path"), str) or not case["input_path"]:
+                raise ValueError(f"{case_id} benötigt input oder input_path.")
+        else:
+            if set(case["input"]) != {"vorher", "nachher", "belegte_metadaten"}:
+                raise ValueError(f"Inline-Input für {case_id} ist unvollständig.")
+        if not isinstance(case.get("offline_response_path"), str):
+            for field in ("expected_reason", "strongest_counterargument"):
+                if not isinstance(case.get(field), str) or not case[field].strip():
+                    raise ValueError(f"{case_id} benötigt {field} für das Offline-Fixture.")
+
+
+def _offline_analyzer(root: Path, case: dict[str, Any], tenor: dict[str, Any]) -> Analyzer:
+    response_path = case.get("offline_response_path")
+    if isinstance(response_path, str):
+        return OfflineAnalyzer(_resolve_below(root, response_path))
+    return ExpectedFixtureAnalyzer(case, tenor)
 
 
 def _resolve_below(root: Path, relative_path: str) -> Path:

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
+from io import BytesIO
+from http import HTTPStatus
+from datetime import datetime
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -16,6 +21,7 @@ class WarcResult:
     warc_path: str
     cdx_path: str
     validation_output: str
+    response_payload_sha256: str | None = None
 
 
 def capture_warc(
@@ -65,7 +71,93 @@ def capture_warc(
     if not warc_path.is_file() or not cdx_path.is_file():
         raise RuntimeError("Wget hat WARC oder CDX nicht erzeugt.")
     validation_output = validate_warc(warc_path, warcio_path=warcio_path)
-    return WarcResult(str(warc_path), str(cdx_path), validation_output)
+    payload_sha256 = response_payload_sha256(warc_path, url)
+    return WarcResult(str(warc_path), str(cdx_path), validation_output, payload_sha256)
+
+
+def capture_snapshot_warc(
+    url: str,
+    output_directory: str | Path,
+    *,
+    raw_html_path: str | Path,
+    response_headers_path: str | Path,
+    final_url: str,
+    fetched_at: str,
+    status_code: int,
+    basename: str = "capture",
+    warcio_path: str | None = None,
+) -> WarcResult:
+    """Create the primary WARC from the exact response bytes already vetted and stored."""
+    try:
+        from warcio.statusandheaders import StatusAndHeaders
+        from warcio.warcwriter import WARCWriter
+    except ImportError as exc:
+        raise RuntimeError("WARC-Erzeugung benötigt `pip install -e .[demo]`.") from exc
+    output = Path(output_directory).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    body = Path(raw_html_path).read_bytes()
+    headers_value = json.loads(Path(response_headers_path).read_text(encoding="utf-8"))
+    headers = [(str(name), str(value)) for name, value in headers_value]
+    try:
+        phrase = HTTPStatus(status_code).phrase
+    except ValueError:
+        phrase = "Response"
+    http_headers = StatusAndHeaders(
+        f"{status_code} {phrase}", headers, protocol="HTTP/1.1"
+    )
+    warc_path = output / f"{basename}.warc.gz"
+    with warc_path.open("wb") as stream:
+        writer = WARCWriter(stream, gzip=True)
+        record = writer.create_warc_record(
+            final_url or url,
+            "response",
+            payload=BytesIO(body),
+            http_headers=http_headers,
+            warc_headers_dict={"WARC-Date": fetched_at},
+        )
+        try:
+            writer.write_record(record)
+        finally:
+            record.raw_stream.close()
+    digest = hashlib.sha256(body).hexdigest()
+    try:
+        timestamp = datetime.fromisoformat(fetched_at.replace("Z", "+00:00")).strftime(
+            "%Y%m%d%H%M%S"
+        )
+    except ValueError:
+        timestamp = "-"
+    cdx_path = output / f"{basename}.cdx"
+    cdx_path.write_text(
+        " CDX N b a m s k r M S V g\n"
+        f"{final_url or url} {timestamp} {final_url or url} text/html {status_code} "
+        f"sha256:{digest} - - - - {warc_path.name}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    validation_output = validate_warc(warc_path, warcio_path=warcio_path)
+    return WarcResult(str(warc_path), str(cdx_path), validation_output, digest)
+
+
+def response_payload_sha256(warc_path: str | Path, target_url: str) -> str | None:
+    """Hash the captured HTTP response body for the requested URL, if present."""
+    try:
+        from warcio.archiveiterator import ArchiveIterator
+    except ImportError as exc:
+        raise RuntimeError("WARC-Auswertung benötigt `pip install -e .[demo]`.") from exc
+    target = parse.urlsplit(target_url)
+    path_match: str | None = None
+    with Path(warc_path).open("rb") as stream:
+        for record in ArchiveIterator(stream):
+            if record.rec_type != "response":
+                continue
+            uri = record.rec_headers.get_header("WARC-Target-URI")
+            digest = hashlib.sha256(record.content_stream().read()).hexdigest()
+            if uri == target_url:
+                return digest
+            parsed = parse.urlsplit(uri or "")
+            if (parsed.path, parsed.query) == (target.path, target.query):
+                path_match = digest
+    return path_match
 
 
 def _wsl_has_wget() -> bool:

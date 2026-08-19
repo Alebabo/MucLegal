@@ -10,6 +10,24 @@ from muclegal.llm.schema import (
     LegalAssessment,
     validate_assessment,
 )
+from muclegal.llm.tenor import (
+    AnthropicTenorAnalyzer,
+    DeterministicTenorAnalyzer,
+    TENOR_DRAFT_JSON_SCHEMA,
+    TENOR_PROMPT_SHA256,
+    TENOR_PROMPT_VERSION,
+    TenorDraft,
+    TenorDraftValidationError,
+    build_tenor_input,
+    create_tenor_draft,
+    validate_tenor_draft,
+)
+from muclegal.llm.classification import (
+    CLASSIFICATIONS,
+    CONFIDENCE_LEVELS,
+    ClauseClassification,
+    validate_clause_classification,
+)
 
 __all__ = [
     "ASSESSMENT_JSON_SCHEMA",
@@ -20,5 +38,19 @@ __all__ = [
     "OfflineAnalyzer",
     "analyze_and_store",
     "validate_assessment",
+    "AnthropicTenorAnalyzer",
+    "DeterministicTenorAnalyzer",
+    "TENOR_DRAFT_JSON_SCHEMA",
+    "TENOR_PROMPT_SHA256",
+    "TENOR_PROMPT_VERSION",
+    "TenorDraft",
+    "TenorDraftValidationError",
+    "build_tenor_input",
+    "create_tenor_draft",
+    "validate_tenor_draft",
+    "CLASSIFICATIONS",
+    "CONFIDENCE_LEVELS",
+    "ClauseClassification",
+    "validate_clause_classification",
 ]
 

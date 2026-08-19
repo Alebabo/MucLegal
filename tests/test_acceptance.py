@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from muclegal.fetch import FetchFailure, FetchPolicy, HttpFetcher
-from muclegal.normalize import NormalizationConfig, normalize_html
+from muclegal.normalize import NormalizationConfig, NormalizationError, VolatileRule, normalize_html
 from muclegal.pipeline import check_url
 from muclegal.storage import SnapshotRepository
 
@@ -120,6 +120,32 @@ class NormalizationAcceptanceTests(unittest.TestCase):
         self.assertNotEqual(baseline.sha256, changed.sha256)
         self.assertIn("20 % Rabatt", baseline.text)
         self.assertIn("30 % Rabatt", changed.text)
+
+    def test_include_selector_must_match_exactly_once(self) -> None:
+        for source in (
+            b"<html><body><p>Kein Hauptinhalt</p></body></html>",
+            b"<html><main>Eins</main><main>Zwei</main></html>",
+        ):
+            with self.subTest(source=source):
+                with self.assertRaises(NormalizationError):
+                    normalize_html(source, NormalizationConfig(include_selector="main"))
+
+    def test_configured_session_value_is_replaced_but_claim_remains(self) -> None:
+        config = NormalizationConfig(
+            include_selector="main",
+            volatile_rules=(VolatileRule(".session", "[SESSION]"),),
+        )
+        first = normalize_html(
+            b'<main><h1>Angebot</h1><p>Nur heute 20 Prozent Rabatt auf alle Moebel.</p>'
+            b'<p class="session">abc-123</p><p>Lieferung in zwei Werktagen.</p></main>', config
+        )
+        second = normalize_html(
+            b'<main><h1>Angebot</h1><p>Nur heute 20 Prozent Rabatt auf alle Moebel.</p>'
+            b'<p class="session">xyz-999</p><p>Lieferung in zwei Werktagen.</p></main>', config
+        )
+        self.assertEqual(first.sha256, second.sha256)
+        self.assertIn("Nur heute", first.text)
+        self.assertIn("[SESSION]", first.text)
 
 
 class PipelineAcceptanceTests(unittest.TestCase):

@@ -11,8 +11,9 @@ from pathlib import Path
 from muclegal.evidence import (
     OpenSslTsaClient,
     build_pdf_report,
-    capture_warc,
+    capture_snapshot_warc,
     create_manifest,
+    sha256_file,
     verify_manifest,
 )
 from muclegal.evidence.wayback import record_wayback_unavailable
@@ -62,7 +63,7 @@ class _DemoHandler(BaseHTTPRequestHandler):
 
 class _DemoServer:
     def __enter__(self):
-        self.server = ThreadingHTTPServer(("0.0.0.0", 0), _DemoHandler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), _DemoHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.url = f"http://127.0.0.1:{self.server.server_port}/page"
@@ -107,9 +108,17 @@ def run_demo(
         outcome = check_url(server.url, config, repository, fetcher)
         if not outcome.changed or not outcome.diff_path:
             raise RuntimeError("Demo-Änderung wurde nicht erkannt.")
-        warc = capture_warc(server.url, capture_dir)
-
     snapshot = repository.snapshot_artifacts(outcome.snapshot_id)
+    warc = capture_snapshot_warc(
+        server.url,
+        capture_dir,
+        raw_html_path=snapshot.raw_html_path,
+        response_headers_path=snapshot.response_headers_path,
+        final_url=snapshot.final_url,
+        fetched_at=snapshot.fetched_at,
+        status_code=snapshot.status_code,
+    )
+    snapshot_payload_sha256 = sha256_file(snapshot.raw_html_path)
     tenor = json.loads((fixtures / "tenor.json").read_text(encoding="utf-8"))
     case_input = json.loads((fixtures / f"llm-input-{case_name}.json").read_text(encoding="utf-8"))
     case_input["belegte_metadaten"].update(
@@ -170,6 +179,9 @@ def run_demo(
             "chain_head_sha256": manifest.chain_head_sha256,
             "timestamp_status": timestamp.status,
             "wayback_status": wayback.status,
+            "snapshot_payload_sha256": snapshot_payload_sha256,
+            "warc_payload_sha256": warc.response_payload_sha256,
+            "capture_relation": "exact_payload",
         },
     }
     report_destination = Path(report_output) if report_output else bundle / "pruefbericht.pdf"
