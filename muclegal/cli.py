@@ -24,6 +24,10 @@ def _parser() -> argparse.ArgumentParser:
     demo.add_argument("--case", choices=["kerngleich", "nicht-umfasst"], default="kerngleich")
     demo.add_argument("--store", type=Path, default=Path(".muclegal-demo"))
     demo.add_argument("--report", type=Path)
+    evaluation = subparsers.add_parser("eval", help="Juristische Eval-Suite ausführen")
+    evaluation.add_argument("--suite", type=Path, default=Path("fixtures/eval-suite.json"))
+    evaluation.add_argument("--output", type=Path, default=Path("output/eval"))
+    evaluation.add_argument("--live", action="store_true", help="Anthropic statt Offline-Fixtures")
     return parser
 
 
@@ -39,6 +43,16 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps(result.__dict__, ensure_ascii=False, indent=2))
         return 0
+    if args.command == "eval":
+        from muclegal.evaluation import run_evaluation
+
+        try:
+            report = run_evaluation(args.suite, args.output, live=args.live)
+        except Exception as exc:
+            print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+            return 2
+        print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if report.passed else 4
     if args.command != "check":
         return 2
     try:

@@ -70,3 +70,20 @@ lokale `wget` verwendet. `warcio check -v` ist immer ein harter Prüfschritt.
 Für eine Live-Vorprüfung ist `ANTHROPIC_API_KEY` erforderlich. Der Adapter nutzt
 `claude-sonnet-5` und schema-erzwungene Ausgaben; die Demo benötigt keinen Key.
 
+## Eval-Auswertung
+
+Die versionierte Eval-Suite prüft beide juristischen Golden-Path-Fälle gegen
+harte Qualitäts-Gates. Der Standardlauf verwendet die gekennzeichneten
+Offline-Antworten und verändert den eingefrorenen Prompt nicht:
+
+```powershell
+python -m muclegal eval --suite fixtures/eval-suite.json --output output/eval
+```
+
+Erzeugt werden `eval-results.json` für Maschinen und `eval-report.md` für die
+fachliche Sichtung. Gemessen werden Schema-Validität, erwartetes Ergebnis,
+Begründung, stärkstes Gegenargument und `freigabe_durch_mensch: null`. Mit
+gesetztem `ANTHROPIC_API_KEY` führt `--live` dieselbe Suite gegen
+`claude-sonnet-5` aus. Offline-Ergebnisse sind ausdrücklich keine Aussage über
+die Live-Modellgenauigkeit.
+
