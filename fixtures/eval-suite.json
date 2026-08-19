@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "muclegal-golden-path-v1",
+  "tenor_path": "tenor.json",
+  "gates": {
+    "schema_valid_rate": 1.0,
+    "result_accuracy": 1.0,
+    "human_release_null_rate": 1.0,
+    "reasoning_rate": 1.0,
+    "counterargument_rate": 1.0
+  },
+  "cases": [
+    {
+      "id": "kerngleiche-restmengenanzeige",
+      "input_path": "llm-input-kerngleich.json",
+      "offline_response_path": "llm-output-kerngleich.json",
+      "expected_result": "kerngleich_umfasst"
+    },
+    {
+      "id": "echte-befristete-aktion",
+      "input_path": "llm-input-nicht-umfasst.json",
+      "offline_response_path": "llm-output-nicht-umfasst.json",
+      "expected_result": "nicht_umfasst"
+    }
+  ]
+}
+

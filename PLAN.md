@@ -114,6 +114,15 @@ app.py            # eine kleine Prüf- und Freigabeansicht
 - [x] Die UI zeigt keinen Fall als endgültig entschieden, solange keine menschliche Freigabe vorliegt.
 - [x] Die Demo funktioniert auch dann nachvollziehbar, wenn LLM, freeTSA oder Wayback kurzfristig nicht erreichbar sind.
 
+## Nach dem Golden Path – Eval-Auswertung
+
+- [x] Eine versionierte Eval-Suite für `kerngleich_umfasst` und `nicht_umfasst` anlegen.
+- [x] Qualitäts-Gates für Schema-Validität, erwartetes Ergebnis, Begründung, Gegenargument und menschliche Freigabe definieren.
+- [x] Prompt-Version und Prompt-SHA-256 in jedem Eval-Bericht festhalten, ohne den Prompt zu verändern.
+- [x] Maschinenlesbares JSON und einen kurzen Markdown-Bericht erzeugen.
+- [x] Einen fehlgeschlagenen Gate-Fall automatisiert testen, damit die Eval nicht nur Erfolge bestätigt.
+- [ ] Vor dem Feature-Freeze einmal mit `ANTHROPIC_API_KEY` als Live-Baseline ausführen und Ergebnis sichern.
+
 ## Testmatrix
 
 | Fall | Erwartung |
