@@ -121,7 +121,7 @@ app.py            # eine kleine Prüf- und Freigabeansicht
 - [x] Prompt-Version und Prompt-SHA-256 in jedem Eval-Bericht festhalten, ohne den Prompt zu verändern.
 - [x] Maschinenlesbares JSON und einen kurzen Markdown-Bericht erzeugen.
 - [x] Einen fehlgeschlagenen Gate-Fall automatisiert testen, damit die Eval nicht nur Erfolge bestätigt.
-- [ ] Vor dem Feature-Freeze einmal mit `ANTHROPIC_API_KEY` als Live-Baseline ausführen und Ergebnis sichern.
+- [x] Vor dem Feature-Freeze einmal mit `ANTHROPIC_API_KEY` als Live-Baseline ausführen und Ergebnis sichern ([Bericht](reference/LIVE_EVAL_BASELINE_2026-08-19.md)).
 
 ## Testmatrix
 
