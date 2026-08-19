@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -36,6 +37,15 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             body = b'<html><form><input type="password"></form></html>'
             content_type = "text/html; charset=utf-8"
             status = 200
+        elif self.path == "/captcha":
+            body = b'<html><main><div class="g-recaptcha">Verify you are human</div></main></html>'
+            content_type = "text/html; charset=utf-8"
+            status = 200
+        elif self.path == "/slow":
+            time.sleep(0.2)
+            body = b"<html><main>Zu spaet</main></html>"
+            content_type = "text/html; charset=utf-8"
+            status = 200
         else:
             body = b"not found"
             content_type = "text/plain; charset=utf-8"
@@ -44,7 +54,10 @@ class _FixtureHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         return
@@ -83,6 +96,23 @@ class NormalizationAcceptanceTests(unittest.TestCase):
         self.assertEqual(baseline.text, changed.text)
         self.assertEqual(baseline.sha256, changed.sha256)
         self.assertIn("[COUNTDOWN]", baseline.text)
+
+    def test_added_cookie_banner_keeps_same_hash_when_selector_is_configured(self) -> None:
+        config = NormalizationConfig(
+            include_selector="main",
+            remove_selectors=(".cookie-banner",),
+        )
+        baseline = normalize_html(
+            b"<html><main><h1>Angebot</h1><p>Nur heute 20 % Rabatt.</p></main></html>",
+            config,
+        )
+        changed = normalize_html(
+            b'<html><main><div class="cookie-banner">Cookies akzeptieren</div>'
+            b"<h1>Angebot</h1><p>Nur heute 20 % Rabatt.</p></main></html>",
+            config,
+        )
+        self.assertEqual(baseline.text, changed.text)
+        self.assertEqual(baseline.sha256, changed.sha256)
 
     def test_legal_statement_changes_hash(self) -> None:
         baseline = normalize_html((FIXTURES / "baseline.html").read_bytes(), load_config())
@@ -171,6 +201,52 @@ class PipelineAcceptanceTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertEqual(("failure", 404, "http_error"), attempt)
+        self.assertEqual(0, snapshot_count)
+
+    def test_timeout_is_recorded_without_snapshot(self) -> None:
+        timeout_fetcher = HttpFetcher(
+            FetchPolicy(timeout_seconds=0.05, max_attempts=1, retry_backoff_seconds=0)
+        )
+        with FixtureServer() as server:
+            with self.assertRaises(FetchFailure) as caught:
+                check_url(
+                    server.base_url + "/slow",
+                    load_config(),
+                    self.repository,
+                    timeout_fetcher,
+                )
+        self.assertEqual("network_error", caught.exception.code)
+        connection = sqlite3.connect(self.repository.database_path)
+        try:
+            attempts = connection.execute(
+                "SELECT outcome, error_code FROM fetch_attempts"
+            ).fetchall()
+            snapshot_count = connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual([("failure", "network_error")], attempts)
+        self.assertEqual(0, snapshot_count)
+
+    def test_captcha_page_is_saved_as_manual_failure_not_snapshot(self) -> None:
+        with FixtureServer() as server:
+            with self.assertRaises(FetchFailure) as caught:
+                check_url(
+                    server.base_url + "/captcha",
+                    load_config(),
+                    self.repository,
+                    self.fetcher,
+                )
+        self.assertEqual("protected_or_login_page", caught.exception.code)
+        self.assertTrue(caught.exception.manual_review)
+        connection = sqlite3.connect(self.repository.database_path)
+        try:
+            attempts = connection.execute(
+                "SELECT outcome, error_code, manual_review FROM fetch_attempts"
+            ).fetchall()
+            snapshot_count = connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual([("failure", "protected_or_login_page", 1)], attempts)
         self.assertEqual(0, snapshot_count)
 
     def test_robots_disallow_stops_before_page_fetch(self) -> None:

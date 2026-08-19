@@ -7,6 +7,7 @@ from pathlib import Path
 
 from muclegal.llm import OfflineAnalyzer, analyze_and_store, validate_assessment
 from muclegal.llm.analyzer import build_model_input
+from muclegal.llm.prompt import PROMPT_SHA256, PROMPT_VERSION
 from muclegal.llm.schema import AssessmentValidationError
 
 
@@ -15,6 +16,13 @@ FIXTURES = ROOT / "fixtures"
 
 
 class LlmAssessmentTests(unittest.TestCase):
+    def test_frozen_prompt_version_and_hash_are_unchanged(self) -> None:
+        self.assertEqual("2026-08-19-freeze-candidate-1", PROMPT_VERSION)
+        self.assertEqual(
+            "6c0e6c09e73faa18cc2c1ea196a7e18d1bdc01ec67708c463e8a3ca037be9289",
+            PROMPT_SHA256,
+        )
+
     def _run_fixture(self, case_name: str):
         tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
         case = json.loads((FIXTURES / f"llm-input-{case_name}.json").read_text(encoding="utf-8"))

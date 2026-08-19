@@ -125,16 +125,19 @@ app.py            # eine kleine Prüf- und Freigabeansicht
 
 ## Testmatrix
 
-| Fall | Erwartung |
-|---|---|
-| Identisches HTML zweimal | gleicher normalisierter Text, gleicher Hash, kein LLM-Aufruf |
-| Nur Countdown geändert | gleicher Hash |
-| Cookie-Banner hinzugefügt | gleicher Hash, sofern der konfigurierte Selektor greift |
-| Preis oder Werbeaussage geändert | neuer Hash und sichtbarer Diff |
-| HTTP-Fehler oder Timeout | nachvollziehbarer Fehlerstatus, kein alter Inhalt als neuer Snapshot |
-| CAPTCHA oder Login-Seite | Abbruch und Kennzeichnung zur manuellen Prüfung |
-| Ungültige Modellantwort | keine juristische Bewertung, Validierungsfehler gespeichert |
-| TSA nicht erreichbar | Artefakte und lokaler Hash bleiben vollständig, Zeitstempelstatus offen |
+| Fall | Erwartung | Automatisiert belegt |
+|---|---|---|
+| Identisches HTML zweimal | gleicher normalisierter Text, gleicher Hash, kein LLM-Aufruf | ja |
+| Nur Countdown geändert | gleicher Hash | ja |
+| Cookie-Banner hinzugefügt | gleicher Hash, sofern der konfigurierte Selektor greift | ja |
+| Preis oder Werbeaussage geändert | neuer Hash und sichtbarer Diff | ja |
+| HTTP-Fehler oder Timeout | nachvollziehbarer Fehlerstatus, kein alter Inhalt als neuer Snapshot | ja, beide Varianten |
+| CAPTCHA oder Login-Seite | Abbruch und Kennzeichnung zur manuellen Prüfung | ja, beide Varianten |
+| Ungültige Modellantwort | keine juristische Bewertung, Validierungsfehler gespeichert | ja |
+| TSA nicht erreichbar | Artefakte und lokaler Hash bleiben vollständig, Zeitstempelstatus offen | ja |
+
+Die Prompt-Version und ihr SHA-256 sind zusätzlich durch einen Regressionstest gesperrt.
+Eine unbeabsichtigte Prompt-Änderung vor oder nach dem Freeze lässt damit die Tests fehlschlagen.
 
 ## Bewusste Kürzungen
 
