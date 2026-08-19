@@ -17,6 +17,7 @@ from muclegal.llm.schema import (
 
 SONNET_MODEL = "claude-sonnet-5"
 PREFILTER_MODEL = "claude-haiku-4-5"
+MAX_OUTPUT_TOKENS = 4800
 ALLOWED_METADATA = {"fall_id", "url", "erkannt_am", "snapshot_sha256"}
 
 
@@ -82,7 +83,7 @@ class AnthropicAnalyzer:
     def analyze(self, model_input: dict[str, Any]) -> Any:
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=2400,
+            max_tokens=MAX_OUTPUT_TOKENS,
             system=SYSTEM_PROMPT,
             messages=[
                 {
@@ -94,6 +95,11 @@ class AnthropicAnalyzer:
                 "format": {"type": "json_schema", "schema": ASSESSMENT_JSON_SCHEMA}
             },
         )
+        if response.stop_reason != "end_turn":
+            raise RuntimeError(
+                "Anthropic-Antwort wurde nicht regulär beendet "
+                f"(stop_reason={response.stop_reason!r})."
+            )
         text_blocks = [block.text for block in response.content if block.type == "text"]
         if len(text_blocks) != 1:
             raise RuntimeError("Anthropic-Antwort enthält nicht genau einen Textblock.")

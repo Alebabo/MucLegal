@@ -4,11 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from muclegal.llm import OfflineAnalyzer, analyze_and_store, validate_assessment
-from muclegal.llm.analyzer import build_model_input
+from muclegal.llm.analyzer import AnthropicAnalyzer, MAX_OUTPUT_TOKENS, build_model_input
 from muclegal.llm.prompt import PROMPT_SHA256, PROMPT_VERSION
-from muclegal.llm.schema import AssessmentValidationError
+from muclegal.llm.schema import ASSESSMENT_JSON_SCHEMA, AssessmentValidationError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,29 @@ class LlmAssessmentTests(unittest.TestCase):
             "6c0e6c09e73faa18cc2c1ea196a7e18d1bdc01ec67708c463e8a3ca037be9289",
             PROMPT_SHA256,
         )
+
+    def test_schema_describes_counterargument_as_nonempty(self) -> None:
+        description = ASSESSMENT_JSON_SCHEMA["properties"]["staerkstes_gegenargument"][
+            "description"
+        ]
+        self.assertIn("Nichtleeres", description)
+
+    def test_live_analyzer_rejects_truncated_structured_output_before_parsing(self) -> None:
+        class FakeMessages:
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return SimpleNamespace(
+                    stop_reason="max_tokens",
+                    content=[SimpleNamespace(type="text", text='{"unvollstaendig":')],
+                )
+
+        messages = FakeMessages()
+        analyzer = AnthropicAnalyzer.__new__(AnthropicAnalyzer)
+        analyzer.client = SimpleNamespace(messages=messages)
+
+        with self.assertRaisesRegex(RuntimeError, "stop_reason='max_tokens'"):
+            analyzer.analyze({"test": True})
+        self.assertEqual(MAX_OUTPUT_TOKENS, messages.kwargs["max_tokens"])
 
     def _run_fixture(self, case_name: str):
         tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))

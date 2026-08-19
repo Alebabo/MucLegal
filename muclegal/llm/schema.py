@@ -22,23 +22,42 @@ ASSESSMENT_JSON_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
     "properties": {
         "ergebnis": {"type": "string", "enum": sorted(RESULTS)},
-        "begruendung": {"type": "string"},
-        "tatsachenbasis": {"type": "array", "items": {"type": "string"}},
+        "begruendung": {
+            "type": "string",
+            "description": "Nichtleere Begründung der Schlussfolgerung.",
+        },
+        "tatsachenbasis": {
+            "type": "array",
+            "description": "Mindestens eine nichtleere, ausschließlich im Input belegte Tatsache.",
+            "items": {"type": "string"},
+        },
         "rechtsquellen": {
             "type": "array",
             "items": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "fundstelle": {"type": "string"},
+                    "fundstelle": {
+                        "type": "string",
+                        "description": "Nichtleere Fundstelle; keine Quelle erfinden.",
+                    },
                     "status": {"type": "string", "enum": sorted(SOURCE_STATUSES)},
                 },
                 "required": ["fundstelle", "status"],
             },
         },
-        "staerkstes_gegenargument": {"type": "string"},
-        "unsicherheit": {"type": "string"},
-        "confidence": {"type": "number"},
+        "staerkstes_gegenargument": {
+            "type": "string",
+            "description": "Nichtleeres stärkstes Gegenargument, auch bei eindeutigem Ergebnis.",
+        },
+        "unsicherheit": {
+            "type": "string",
+            "description": "Nichtleere Beschreibung der verbleibenden Unsicherheit.",
+        },
+        "confidence": {
+            "type": "number",
+            "description": "Konfidenz als Zahl zwischen 0 und 1.",
+        },
         "freigabe_durch_mensch": {"type": "null"},
     },
     "required": sorted(REQUIRED_KEYS),
