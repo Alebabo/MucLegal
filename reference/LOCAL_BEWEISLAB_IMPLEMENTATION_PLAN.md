@@ -31,12 +31,33 @@ externen Grenzen. Es bedeutet nicht, CAPTCHA, Login, Paywall oder Bot-Schutz zu 
 
 ## 2. Harte Grenzen
 
-- `robots.txt` wird vor HTTP- **und** Browser-Abruf geprüft.
+- `robots.txt` wird vor HTTP- **und** Browser-Abruf geprüft. Ist die Datei nicht
+  erreichbar, lesbar oder eindeutig auswertbar, wird mit deutlich ausgewiesenem
+  ungeprüftem Status und Disclaimer fortgefahren. Eine eindeutige Untersagung wird
+  standardmäßig respektiert und nur auf ausdrückliche, fallbezogene Nutzeranweisung
+  mit protokollierter Abweichung und Disclaimer übersteuert.
 - Projekt-User-Agent mit Kontaktangabe auch im Browser; `navigator.webdriver` bleibt `true`.
 - Kein Stealth-Paket, kein Proxy, keine rotierende IP, kein persistentes Browserprofil und kein
   wiederverwendeter `storageState`.
 - Frischer Browser-Context pro Zielseite. Keine Clearance-Cookies zwischen Läufen.
-- CAPTCHA, Login, Paywall und technische Schutzmaßnahme werden nicht gelöst oder umgangen.
+- CAPTCHA, Login und Paywall werden nicht gelöst oder umgangen. Sonstige technische
+  Zugriffshindernisse werden standardmäßig respektiert; eine eng begrenzte Abweichung
+  setzt eine ausdrückliche, fallbezogene Nutzeranweisung, einen vorherigen Disclaimer
+  und die vollständige Protokollierung von Ziel, Art, Zeitpunkt und Anweisung voraus.
+- Optionaler **God Mode** als explizit aktivierter lokaler Demonstrationsmodus und
+  umfassende technische Vollmacht des Challenge-Gebers für dessen bereitgestellte
+  Challenge-Infrastruktur sowie synthetische, eigene oder anderweitig nachweislich
+  autorisierte Ziele. In diesem Geltungsbereich sind alle technisch verfügbaren
+  Erfassungs-, Browser-, Interaktions- und Umgehungsfunktionen erlaubt, einschließlich
+  des Ignorierens von `robots.txt` und des Überwindens eigens eingerichteter
+  Challenge-Schutzmechanismen. Die Vollmacht erstreckt sich nicht auf fremde reale
+  Systeme ohne entsprechende Autorisierung und erlaubt dort insbesondere keine
+  fremden Zugangsdaten, keine Überwindung von Logins oder Paywalls, kein Lösen von
+  CAPTCHAs, keine Ausnutzung von Schwachstellen und keine Identitätstäuschung.
+  Sämtliche Ausgaben werden sichtbar mit
+  `GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR` markiert, getrennt von
+  regulären Beweisen gespeichert und von Kerngleichheitsprüfung sowie juristischer
+  Verwertung ausgeschlossen.
 - Cookie-Interaktion ist ausschließlich für eindeutig datensparsame Optionen zulässig. Niemals
   `Alle akzeptieren` anklicken und niemals ein Overlay per CSS/JavaScript löschen.
 - Roh-HTML, Header, DOM, Screenshot und WARC werden nicht über fremde Extraktions-APIs geleitet.

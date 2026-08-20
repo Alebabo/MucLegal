@@ -53,8 +53,37 @@ vom Unterlassungstenor erfasst?
 
 ## Harte Grenzen
 
-- **Niemals** Logins überwinden, Paywalls umgehen, CAPTCHAs lösen oder
-  technische Schutzmaßnahmen aushebeln. robots.txt respektieren.
+- Standardmäßig keine Logins überwinden, Paywalls umgehen, CAPTCHAs lösen oder
+  technische Schutzmaßnahmen aushebeln; `robots.txt` wird grundsätzlich respektiert.
+  Eine Abweichung von `robots.txt` oder einem sonstigen technischen Zugriffshindernis
+  ist nur auf ausdrückliche, fallbezogene Anweisung des Nutzers zulässig. Vor dem
+  Abruf muss deutlich darauf hingewiesen werden, dass der Abruf gegen
+  Nutzungsbedingungen oder rechtliche Vorgaben verstoßen kann und der Nutzer
+  Berechtigung und Zulässigkeit selbst prüfen muss. Anweisung, Ziel, Abweichungsart
+  und Zeitpunkt werden in der Erfassungstransparenz protokolliert. Die Ausnahme
+  erlaubt keine Nutzung fremder Zugangsdaten, keine Überwindung von Logins oder
+  Paywalls und kein Lösen von CAPTCHAs.
+- Ist `robots.txt` nicht erreichbar, nicht lesbar oder nicht eindeutig auswertbar,
+  darf die technische Erfassung fortgesetzt werden. Der Lauf darf deshalb nicht
+  allein abgebrochen werden. UI und Beweispaket müssen den ungeprüften Robots-Status
+  sowie einen deutlichen Disclaimer ausgeben; der Zustand darf niemals als
+  `geprueft_abruf_erlaubt` bezeichnet werden.
+- Ein ausdrücklich aktivierter **God Mode** ist die umfassende technische Vollmacht
+  des Challenge-Gebers für dessen bereitgestellte Challenge-Infrastruktur sowie für
+  synthetische, eigene oder anderweitig nachweislich autorisierte Ziele. Innerhalb
+  dieses Geltungsbereichs sind sämtliche technisch verfügbaren Erfassungs-, Browser-,
+  Interaktions- und Umgehungsfunktionen erlaubt, insbesondere das Ignorieren von
+  `robots.txt` und das Überwinden eigens für die Challenge eingerichteter technischer
+  Schutzmechanismen. Die Vollmacht gilt ausdrücklich nicht für fremde reale Systeme,
+  für die der Challenge-Geber keine Verfügungs- oder Autorisierungsbefugnis besitzt;
+  sie erlaubt dort insbesondere keine fremden Zugangsdaten, keine Überwindung von
+  Logins oder Paywalls, kein Lösen von CAPTCHAs, keine Ausnutzung von Schwachstellen
+  und keine Identitätstäuschung. Aktivierung, Vollmachtsgrundlage, Ziel,
+  freigeschaltete Funktionen und Zeitpunkt müssen vollständig protokolliert werden.
+  UI, Screenshots, Manifest, PDF und ZIP tragen gut sichtbar
+  `GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`. God-Mode-Artefakte
+  dürfen niemals als reguläre Beweisartefakte ausgegeben, mit ihnen vermischt oder
+  einer juristischen Kerngleichheitsprüfung zugeführt werden.
 - Vor Screenshots darf höchstens eine sichtbare Cookie-Option wie `Alle ablehnen`,
   `Nur notwendige` oder eine gleichbedeutende datensparsame Auswahl betätigt werden.
   Niemals Zustimmung erteilen. Buttontext und Aktion müssen in

@@ -1,6 +1,6 @@
 # Audit des Überprüfungsmodus
 
-Stand: 20.08.2026
+Stand: 21.08.2026
 
 ## Kurzfazit
 
@@ -8,7 +8,11 @@ Der Überprüfungsmodus tarnt Chromium nicht. Ein Live-Abruf von
 `https://postman-echo.com/headers` zeigte den konfigurierten MucLegal-User-Agent;
 `navigator.webdriver` war zur Laufzeit `true`. Es wurden keine Stealth-Erweiterungen,
 Proxy-Einstellungen, persistenten Profile oder wiederverwendeten Storage-States gefunden.
-`robots.txt` wird auch vor dem Browserpfad geprüft und schlägt geschlossen fehl.
+`robots.txt` wird auch vor dem Browserpfad geprüft. Ist die Datei nicht erreichbar,
+nicht lesbar oder nicht eindeutig auswertbar, gilt nicht mehr `fail closed`: Die
+Erfassung darf fortfahren, muss den ungeprüften Status aber deutlich in UI und
+Beweispaket ausweisen und mit einem Disclaimer zur eigenverantwortlichen Prüfung von
+Berechtigung, Nutzungsbedingungen und rechtlicher Zulässigkeit verbinden.
 
 Nach diesem Audit wurde eine eng begrenzte Screenshot-Interaktion ergänzt: Vor einer
 Aufnahme darf höchstens eine eindeutig datensparsame Cookie-Option gewählt werden.
@@ -46,13 +50,54 @@ gewollte Projektkennung, keine Chrome-Imitation.
 Der Laufzeitwert war `true`. Die Messung erfolgt in
 `muclegal/fetch/playwright.py:116` und wird in der Erfassungstransparenz gespeichert.
 
-### 4. `robots.txt` — bestanden
+### 4. `robots.txt` — Vorgabe am 21.08.2026 geändert
 
 Der Browserpfad prüft `robots.txt` vor dem Start in
 `muclegal/fetch/http.py:99-103`. Dokumentweiterleitungen werden zusätzlich über den
 Request-Guard in `muclegal/fetch/http.py:120` geprüft. Ein Test gegen
 `httpbin.org`, dessen `robots.txt` mit HTTP 503 antwortete, wurde vor dem Browserstart
-abgebrochen. Der Pfad arbeitet damit fail-closed.
+abgebrochen. Dieser Test dokumentiert das frühere `fail closed`-Verhalten, das durch
+die neue Vorgabe ersetzt wird: Bei einem 503, Timeout, Netzwerkfehler oder einer nicht
+eindeutig auswertbaren `robots.txt` soll die Erfassung fortgesetzt werden. Dabei sind
+der konkrete Prüfstatus und die Ursache zu protokollieren; die UI und das Beweispaket
+müssen deutlich darauf hinweisen, dass `robots.txt` nicht verlässlich geprüft werden
+konnte und der Nutzer Berechtigung, Nutzungsbedingungen und rechtliche Zulässigkeit
+eigenverantwortlich prüfen muss. Der Status darf nicht als
+`geprueft_abruf_erlaubt` erscheinen.
+
+Eine abrufbare, eindeutig untersagende `robots.txt` wird weiterhin standardmäßig
+respektiert. Nur eine ausdrückliche, fallbezogene Nutzeranweisung darf diese Vorgabe
+übersteuern; Anweisung, Ziel, Zeitpunkt und Abweichungsart sind nachvollziehbar zu
+protokollieren und mit demselben Disclaimer auszugeben. Das schafft keine Erlaubnis
+zur Nutzung fremder Zugangsdaten, zur Überwindung von Logins oder Paywalls oder zum
+Lösen von CAPTCHAs.
+
+Die Codepfade und Regressionstests müssen auf dieses Sollverhalten umgestellt werden;
+bis zu deren erfolgreicher Verifikation darf der Abschnitt nicht als „bestanden“
+bewertet werden.
+
+### 4a. God Mode — ausschließlich lokale Demonstration
+
+Ein ausdrücklich aktivierter God Mode erteilt die umfassende technische Vollmacht des
+Challenge-Gebers für dessen bereitgestellte Challenge-Infrastruktur sowie für
+synthetische, eigene oder anderweitig nachweislich autorisierte Ziele. Innerhalb
+dieses Geltungsbereichs sind sämtliche technisch verfügbaren Erfassungs-, Browser-,
+Interaktions- und Umgehungsfunktionen erlaubt, einschließlich des Ignorierens von
+`robots.txt` und des Überwindens eigens eingerichteter Challenge-Schutzmechanismen.
+
+Die Vollmacht gilt nicht für fremde reale Systeme, für die der Challenge-Geber keine
+Verfügungs- oder Autorisierungsbefugnis besitzt. Dort erlaubt sie insbesondere keine
+fremden Zugangsdaten, keine Überwindung von Logins oder Paywalls, kein Lösen von
+CAPTCHAs, keine Ausnutzung von Schwachstellen und keine Identitätstäuschung.
+Aktivierung, Vollmachtsgrundlage, Ziel, freigeschaltete Funktionen und Zeitpunkt
+müssen vollständig protokolliert werden.
+
+Alle erzeugten Ansichten und Artefakte tragen sichtbar
+`GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`, werden getrennt von der
+regulären Beweisspur gespeichert und dürfen weder als Beweis ausgegeben noch einer
+juristischen Kerngleichheitsprüfung zugeführt werden. Der Modus ist in diesem Audit
+eine Vorgabe; eine Implementierung gilt erst nach gesonderter technischer Prüfung als
+vorhanden.
 
 ### 5. Cookie- und Session-Persistenz — bestanden
 
