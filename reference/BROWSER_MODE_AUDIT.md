@@ -10,6 +10,11 @@ Der Überprüfungsmodus tarnt Chromium nicht. Ein Live-Abruf von
 Proxy-Einstellungen, persistenten Profile oder wiederverwendeten Storage-States gefunden.
 `robots.txt` wird auch vor dem Browserpfad geprüft und schlägt geschlossen fehl.
 
+Nach diesem Audit wurde eine eng begrenzte Screenshot-Interaktion ergänzt: Vor einer
+Aufnahme darf höchstens eine eindeutig datensparsame Cookie-Option gewählt werden.
+Die Aktion wird in `screenshot_interactions.json` dokumentiert und in das Manifest
+aufgenommen. Sie ändert nichts am Stealth-, Session-, Proxy- oder robots.txt-Befund.
+
 Ein Prozesspunkt ist noch offen: Die Anwendung serialisiert Prüfläufe, erzwingt aber
 keine dauerhafte Obergrenze von einem Abruf je URL und Kalendertag.
 
@@ -54,6 +59,11 @@ abgebrochen. Der Pfad arbeitet damit fail-closed.
 Für jeden Aufruf werden Browser und Context neu erzeugt
 (`muclegal/fetch/playwright.py:65-67`). Es werden weder `storage_state` noch ein
 Profilverzeichnis übergeben. Der Browser wird nach der Aufnahme geschlossen.
+
+Cookie-Banner dürfen nur über `Alle ablehnen`, `Nur notwendige` oder eine eindeutig
+gleichbedeutende Option geschlossen werden. Es werden keine Zustimmungen oder
+Clearance-Token übernommen; jeder Screenshot läuft weiterhin in einem frischen Context.
+Buttontext und Aktionsklasse werden pro Screenshot beweisbar gespeichert.
 
 ### 6. Frequenz und Parallelität — teilweise bestanden
 

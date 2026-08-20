@@ -88,6 +88,12 @@ Treffer. Das ist beweisfreundlich, weicht aber von der vorgesehenen Kosten- und 
    waren unter Wget 1.25.0 sporadisch nicht valide. Das nicht beweisrelevante Wget-Protokoll wird
    nun nicht mehr in das WARC eingebettet; Request, Response, CDX und strikte Validierung bleiben.
 
+   **Nachtrag 20.08.2026:** Der vollständige Testlauf zeigte trotz
+   `--no-warc-keep-log` erneut einen sporadischen Digestfehler in `metadata`- und
+   `resource`-Records und bestand direkt danach. Dieser Punkt ist deshalb nur für den
+   produktiven `capture_snapshot_warc`-Pfad gelöst; der separate Wget-Re-Capture-Pfad
+   bleibt versionsabhängig und muss strikt fehlschlagen, statt den Fehler zu kaschieren.
+
 ## Offene Punkte vor dem Frontend
 
 ### P0 – Kanonischen Backendpfad festlegen
