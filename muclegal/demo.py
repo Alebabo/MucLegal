@@ -19,8 +19,14 @@ from muclegal.evidence import (
 from muclegal.evidence.wayback import record_wayback_unavailable
 from muclegal.fetch import FetchPolicy, HttpFetcher
 from muclegal.llm import OfflineAnalyzer, analyze_and_store
+from muclegal.llm import (
+    CLAUSE_PROMPT_VERSION,
+    DeterministicClauseAnalyzer,
+    analyze_clause_pairs_and_store,
+)
 from muclegal.llm.analyzer import build_model_input
-from muclegal.normalize import NormalizationConfig
+from muclegal.normalize import NormalizationConfig, split_clauses
+from muclegal.clause_diff import pair_clause_changes
 from muclegal.pipeline import check_url
 from muclegal.storage import SnapshotRepository
 
@@ -142,6 +148,40 @@ def run_demo(
     if not analysis.valid or analysis.assessment is None:
         raise RuntimeError(f"Offline-Demoantwort ist ungültig: {analysis.validation_error}")
 
+    before_text = Path(outcome.previous_normalized_text_path).read_text(encoding="utf-8")
+    after_text = Path(outcome.normalized_text_path).read_text(encoding="utf-8")
+    clause_pairs = pair_clause_changes(split_clauses(before_text), split_clauses(after_text))
+    clause_analysis = analyze_clause_pairs_and_store(
+        tenor,
+        clause_pairs,
+        DeterministicClauseAnalyzer(),
+        analysis_dir,
+    )
+    current_records = {
+        item.ordinal: item for item in repository.clauses_for_snapshot(outcome.snapshot_id)
+    }
+    previous_records = {
+        item.ordinal: item
+        for item in repository.clauses_for_snapshot(outcome.previous_snapshot_id)
+    } if outcome.previous_snapshot_id is not None else {}
+    persisted_findings = []
+    for finding in clause_analysis.findings:
+        record = repository.save_finding(
+            snapshot_id=outcome.snapshot_id,
+            classification=finding.result,
+            model=clause_analysis.model,
+            prompt_version=CLAUSE_PROMPT_VERSION,
+            clause_id=(
+                current_records[finding.current_ordinal].id
+                if finding.current_ordinal in current_records else None
+            ),
+            prev_clause_id=(
+                previous_records[finding.previous_ordinal].id
+                if finding.previous_ordinal in previous_records else None
+            ),
+        )
+        persisted_findings.append({**finding.to_dict(), "finding_id": record.id})
+
     source_artifacts = {
         "raw_html": Path(snapshot.raw_html_path),
         "response_headers": Path(snapshot.response_headers_path),
@@ -149,6 +189,8 @@ def run_demo(
         "diff": Path(snapshot.diff_path),
         "model_input": Path(analysis.input_path),
         "model_output": Path(analysis.output_path),
+        "clause_model_input": Path(clause_analysis.input_path),
+        "clause_model_output": Path(clause_analysis.output_path),
         "warc": Path(warc.warc_path),
         "cdx": Path(warc.cdx_path),
     }
@@ -172,7 +214,10 @@ def run_demo(
         "erkannt_am": model_input["belegte_metadaten"]["erkannt_am"],
         "vorher": model_input["aenderung"]["vorher"],
         "nachher": model_input["aenderung"]["nachher"],
-        "assessment": analysis.assessment.to_dict(),
+        "assessment": clause_analysis.assessment.to_dict(),
+        "legacy_assessment": analysis.assessment.to_dict(),
+        "clause_findings": persisted_findings,
+        "clause_schema_valid": clause_analysis.valid,
         "evidence": {
             "warc_status": "valide (warcio check)",
             "manifest_sha256": manifest.manifest_sha256,
@@ -189,7 +234,8 @@ def run_demo(
     case_record = {
         **report_data,
         "case_name": case_name,
-        "analysis_mode": analysis.mode,
+        "analysis_mode": clause_analysis.mode,
+        "schema_valid": clause_analysis.valid,
         "freigabe_durch_mensch": None,
         "artifacts": {
             **{label: str(path) for label, path in bundled_artifacts.items()},

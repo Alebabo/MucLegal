@@ -98,10 +98,19 @@ Für die Offline-Demo ist kein API-Schlüssel erforderlich. Die optionale Live-V
 
 ## Lokaler Unterlassungs- und Umsetzungsmonitor
 
-Die Ein-Seiten-Oberfläche führt vom Tenor-Entwurf über die Überwachung bis zur menschlichen
-Entscheidung. Sie akzeptiert genau eine öffentliche Webadresse. Der erste Abruf speichert
-nur eine kostenlose Baseline. Erst wenn ein späterer Abruf eine relevante Änderung erkennt,
-werden Anthropic und anschließend die Beweiskette gestartet.
+Die Ein-Seiten-Oberfläche führt von der manuellen Fallerfassung über die Überwachung bis zur
+menschlichen Entscheidung. MucLegal sucht ausdrücklich keine Erstverstöße. Eine Juristin erfasst
+einen bereits geprüften Verstoß mit Domain, genauer Fundstelle, Tenorelement und Monitoringziel;
+optional kann sie den ursprünglichen Screenshot als lokalen Beleg hochladen. Der Screenshot wird
+nicht per OCR oder Vision ausgewertet. Erst nach menschlicher Fallfreigabe kann ein Lauf über die
+zugehörige `case_id` gestartet werden.
+
+Der fallbezogene Lauf prüft die gemeldete Fundstelle, eine öffentliche Sitemap und priorisierte
+interne Links innerhalb eines festen Budgets. AGB werden als HTML oder öffentlich verlinktes PDF
+gesichert. Gemeldete Buttons und andere Elemente werden im gerenderten DOM anhand sichtbarer und
+zugänglicher Eigenschaften geprüft. Ein fehlender Treffer heißt ausschließlich
+`nicht_gefunden_im_pruefumfang`; bei Sperren oder unvollständiger Abdeckung lautet das Ergebnis
+`pruefung_unvollstaendig`.
 
 Den Schlüssel ausschließlich in der lokalen Serverumgebung setzen. Er wird nicht im Browser
 eingegeben und darf nicht in das Repository geschrieben werden:
@@ -111,8 +120,8 @@ $env:ANTHROPIC_API_KEY = Read-Host -MaskInput "Neuer Anthropic API-Key"
 python -m uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
-Danach `http://127.0.0.1:8000` öffnen, eine öffentliche URL eintragen und die erste Baseline
-anlegen. Bei einem späteren erneuten Klick gilt:
+Danach `http://127.0.0.1:8000` öffnen, den bekannten Erstverstoß erfassen, menschlich freigeben
+und den Fall im Monitoring auswählen. Für die bestehende Einzel-URL-Demo gilt weiterhin:
 
 - unveränderter Hash: Ende ohne Anthropic-Aufruf,
 - veränderter Hash: Vorher-/Nachher-Ausschnitt, Anthropic-Vorprüfung, WARC, Manifest,
@@ -124,6 +133,11 @@ aus belegten Tatsachen ein strikt validierter Prüfentwurf erzeugt werden. Erst 
 Freigabe speichert ihn als aktiven Monitoring-Tenor; der Modelloutput selbst kann dies nicht.
 Rohes HTML und Dokumentationsartefakte bleiben lokal; nur der normalisierte Änderungsausschnitt wird an
 Anthropic gesendet. Laufdaten liegen im ignorierten Verzeichnis `.muclegal-ui/`.
+
+Die versionierte API stellt dafür `POST /api/v1/cases`,
+`POST /api/v1/cases/{case_id}/review` und `POST /api/v1/runs` mit genau einer freigegebenen
+`case_id` bereit. Erstverstöße tragen unveränderlich
+`erstverstoss_festgestellt_durch: "verbraucherzentrale"` und `system_detected: false`.
 
 Die linke Seite zeigt den juristischen Ablauf und den technischen Pipeline- und Hashstatus. In der intern
 scrollbaren Proof-Seitenleiste lassen sich alle vollständigen Dokumentationspakete nach URL und Zeitpunkt

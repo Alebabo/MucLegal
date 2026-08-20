@@ -14,6 +14,7 @@ class CheckOutcome:
     status: str
     url: str
     snapshot_id: int
+    previous_snapshot_id: int | None
     sha256: str
     previous_sha256: str | None
     changed: bool
@@ -86,6 +87,7 @@ def check_url(
         ),
         url=url,
         snapshot_id=record.id,
+        previous_snapshot_id=previous.id if previous else None,
         sha256=record.normalized_sha256,
         previous_sha256=record.previous_sha256,
         changed=changed,

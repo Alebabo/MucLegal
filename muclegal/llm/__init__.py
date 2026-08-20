@@ -23,10 +23,20 @@ from muclegal.llm.tenor import (
     validate_tenor_draft,
 )
 from muclegal.llm.classification import (
+    CLAUSE_CLASSIFICATION_JSON_SCHEMA,
     CLASSIFICATIONS,
     CONFIDENCE_LEVELS,
     ClauseClassification,
     validate_clause_classification,
+)
+from muclegal.llm.clause_analysis import (
+    AnthropicClauseAnalyzer,
+    CLAUSE_PROMPT_SHA256,
+    CLAUSE_PROMPT_VERSION,
+    ClauseAnalysisRun,
+    DeterministicClauseAnalyzer,
+    analyze_clause_pairs_and_store,
+    tenor_elements_from_tenor,
 )
 
 __all__ = [
@@ -49,8 +59,16 @@ __all__ = [
     "create_tenor_draft",
     "validate_tenor_draft",
     "CLASSIFICATIONS",
+    "CLAUSE_CLASSIFICATION_JSON_SCHEMA",
     "CONFIDENCE_LEVELS",
     "ClauseClassification",
     "validate_clause_classification",
+    "AnthropicClauseAnalyzer",
+    "CLAUSE_PROMPT_SHA256",
+    "CLAUSE_PROMPT_VERSION",
+    "ClauseAnalysisRun",
+    "DeterministicClauseAnalyzer",
+    "analyze_clause_pairs_and_store",
+    "tenor_elements_from_tenor",
 ]
 

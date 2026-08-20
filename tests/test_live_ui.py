@@ -173,6 +173,11 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn("20 % Rabatt", sent["aenderung"]["vorher"])
         self.assertIn("30 % Rabatt", sent["aenderung"]["nachher"])
         self.assertIsNone(case["assessment"]["freigabe_durch_mensch"])
+        self.assertTrue(case["clause_findings"])
+        self.assertIn(
+            case["clause_findings"][0]["classification"],
+            {"beseitigt", "kerngleich", "neuer_sachverhalt", "unsicher"},
+        )
         self.assertTrue(manifest_valid)
 
     def test_warc_failure_keeps_result_and_marks_warning(self) -> None:

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 from urllib.parse import parse_qs, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
@@ -21,6 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from muclegal.live import PIPELINE_STEPS, LiveMonitorWorkflow
+from muclegal.domain_monitor import CaseDomainMonitor
+from muclegal.monitoring_cases import (
+    MonitoringCaseError,
+    MonitoringCaseRepository,
+)
 from muclegal.llm.tenor import (
     DeterministicTenorAnalyzer,
     TenorAnalyzer,
@@ -34,6 +39,9 @@ from muclegal.llm.tenor import (
 DECISIONS = {"freigegeben", "abgelehnt", "weitere_pruefung"}
 TERMINAL_RUN_STATUSES = {
     "baseline_created", "unchanged", "completed", "completed_with_warnings", "failed",
+    "referenzzustand_dokumentiert", "unveraendert_fortbestehend", "beseitigt",
+    "kerngleich_wiederaufgetreten", "neuer_sachverhalt", "unsicher",
+    "pruefung_unvollstaendig",
 }
 MAX_TEXT_PREVIEW_BYTES = 512 * 1024
 CASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -45,6 +53,8 @@ ARTIFACT_DEFINITIONS = {
     "diff": ("Abruf", "Diff", "text"),
     "model_input": ("Analyse", "Modellinput", "text"),
     "model_output": ("Analyse", "Validierter Modelloutput", "text"),
+    "clause_model_input": ("Analyse", "Klauselpaar-Inputs", "text"),
+    "clause_model_output": ("Analyse", "Vierklassen-Output", "text"),
     "screenshot": ("Beweis", "Full-Page-Screenshot", "image"),
     "warc": ("Beweis", "WARC", "binary"),
     "cdx": ("Beweis", "CDX", "binary"),
@@ -60,7 +70,33 @@ ARTIFACT_DEFINITIONS = {
 
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    url: str = Field(min_length=1, max_length=2048)
+    url: str | None = Field(default=None, max_length=2048)
+    case_id: str | None = Field(default=None, max_length=128)
+
+
+class ScreenshotInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    filename: str = Field(min_length=1, max_length=255)
+    media_type: Literal["image/png", "image/jpeg", "image/webp"]
+    data_base64: str = Field(min_length=1)
+
+
+class MonitoringCaseCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    fall_id: str = Field(min_length=1, max_length=200)
+    domain: str = Field(min_length=1, max_length=253)
+    source_url: str = Field(min_length=1, max_length=2048)
+    violation_type: Literal["klausel", "element"]
+    description: str = Field(min_length=1, max_length=4000)
+    tenor_element: str = Field(min_length=1, max_length=8000)
+    monitoring_target: str = Field(min_length=1, max_length=4000)
+    relevant_page_types: list[str] = Field(min_length=1, max_length=20)
+    clause_text: str | None = Field(default=None, max_length=12000)
+    element_label: str | None = Field(default=None, max_length=1000)
+    element_function: str | None = Field(default=None, max_length=2000)
+    element_error: str | None = None
+    allowed_subdomains: list[str] = Field(default_factory=list, max_length=20)
+    screenshot: ScreenshotInput | None = None
 
 
 class TenorDraftRequest(BaseModel):
@@ -80,6 +116,7 @@ class RunState:
     current_step: str = "queued"
     message: str = "Prüfung wurde eingeplant."
     result_available: bool = False
+    monitoring_result: dict | None = None
     steps: dict[str, str] = field(default_factory=lambda: {step: "waiting" for step in PIPELINE_STEPS})
 
     def to_dict(self) -> dict:
@@ -87,20 +124,43 @@ class RunState:
 
 
 class RunCoordinator:
-    def __init__(self, workflow: LiveMonitorWorkflow) -> None:
+    def __init__(
+        self,
+        workflow: LiveMonitorWorkflow,
+        *,
+        case_repository: MonitoringCaseRepository | None = None,
+        domain_monitor: CaseDomainMonitor | None = None,
+    ) -> None:
         self.workflow = workflow
+        self.case_repository = case_repository
+        self.domain_monitor = domain_monitor
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="muclegal-run")
         self._lock = threading.Lock()
         self._runs: dict[str, RunState] = {}
         self._active_run_id: str | None = None
 
-    def start(self, url: str) -> RunState:
+    def start(self, url: str | None = None, *, case_id: str | None = None) -> RunState:
         with self._lock:
             if self._active_run_id:
                 active = self._runs[self._active_run_id]
                 if active.status not in TERMINAL_RUN_STATUSES:
                     raise RuntimeError("Es läuft bereits eine Prüfung.")
-            run = RunState(run_id=uuid.uuid4().hex, url=url.strip())
+            if self.case_repository is not None:
+                if not case_id or url:
+                    raise ValueError("Der Monitoringlauf erwartet ausschließlich eine freigegebene case_id.")
+                try:
+                    monitoring_case = self.case_repository.get(case_id)
+                except KeyError as exc:
+                    raise ValueError("Monitoringfall nicht gefunden.") from exc
+                if not monitoring_case.approved:
+                    raise PermissionError("Monitoring startet erst nach menschlicher Freigabe des Falls.")
+                target_url = monitoring_case.source_url
+            else:
+                if not url:
+                    raise ValueError("Eine Webadresse ist erforderlich.")
+                target_url = url.strip()
+            run = RunState(run_id=uuid.uuid4().hex, url=target_url)
+            run.monitoring_result = {"case_id": case_id} if case_id else None
             self._runs[run.run_id] = run
             self._active_run_id = run.run_id
             self._executor.submit(self._execute, run.run_id)
@@ -127,15 +187,32 @@ class RunCoordinator:
 
         with self._lock:
             url = self._runs[run_id].url
+            case_id = (self._runs[run_id].monitoring_result or {}).get("case_id")
         try:
-            result = self.workflow.run(url, progress)
+            if case_id and self.case_repository is not None and self.domain_monitor is not None:
+                domain_result = self.domain_monitor.run(self.case_repository.get(case_id), progress)
+                result = None
+            else:
+                domain_result = None
+                result = self.workflow.run(url, progress)
             with self._lock:
                 run = self._runs[run_id]
-                run.status = result.status
-                run.message = result.message
-                run.result_available = result.case_path is not None
-                if result.step_states:
-                    run.steps = dict(result.step_states)
+                if domain_result is not None:
+                    run.status = domain_result.status
+                    run.message = f"Fallbezogenes Monitoring abgeschlossen: {domain_result.status}."
+                    run.monitoring_result = domain_result.to_dict()
+                    run.result_available = True
+                    for step in ("fetch", "normalize", "screenshot", "compare"):
+                        run.steps[step] = "success"
+                    for step in ("anthropic", "warc", "manifest", "timestamp"):
+                        run.steps[step] = "skipped"
+                else:
+                    assert result is not None
+                    run.status = result.status
+                    run.message = result.message
+                    run.result_available = result.case_path is not None
+                    if result.step_states:
+                        run.steps = dict(result.step_states)
                 reached = [step for step in PIPELINE_STEPS if run.steps[step] != "skipped"]
                 run.current_step = reached[-1] if reached else "compare"
         except Exception as exc:
@@ -245,12 +322,26 @@ class CaseArchive:
         evidence = record.get("evidence", {})
         assessment = record.get("assessment", {})
         warnings = record.get("warnings", [])
+        clause_findings = record.get("clause_findings", [])
+        if not isinstance(clause_findings, list):
+            clause_findings = []
+        class_counts: dict[str, int] = {}
+        for finding in clause_findings:
+            if isinstance(finding, dict) and isinstance(finding.get("classification"), str):
+                label = finding["classification"]
+                class_counts[label] = class_counts.get(label, 0) + 1
         return {
             "case_id": case_id, "url": record.get("url", ""),
             "erkannt_am": record.get("erkannt_am", ""), "fall_id": record.get("fall_id", ""),
             "status": "completed_with_warnings" if warnings else "completed",
             "result_code": assessment.get("ergebnis"), "confidence": assessment.get("confidence"),
             "schema_valid": record.get("schema_valid", True),
+            "clause_schema_valid": record.get("clause_schema_valid", False),
+            "clause_pair_count": len(clause_findings),
+            "four_class_result": ", ".join(
+                f"{label} ({count})" for label, count in sorted(class_counts.items())
+            ) or None,
+            "clause_findings": clause_findings,
             "snapshot_sha256": record.get("snapshot_sha256"),
             "previous_snapshot_sha256": record.get("previous_snapshot_sha256"),
             "manifest_sha256": evidence.get("manifest_sha256"),
@@ -401,13 +492,19 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                workflow: LiveMonitorWorkflow | None = None, anthropic_ready: bool = True,
                asset_directory: str | Path | None = None,
                tenor_analyzer_factory: Callable[[], TenorAnalyzer] = DeterministicTenorAnalyzer,
-               allowed_hosts: list[str] | None = None) -> FastAPI:
+               allowed_hosts: list[str] | None = None,
+               monitoring_cases: MonitoringCaseRepository | None = None,
+               domain_monitor: CaseDomainMonitor | None = None) -> FastAPI:
     case_path = Path(case_path).resolve()
     store_root = case_path.parent
     templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "templates")
     reviews = HumanReviewRepository(review_database)
     tenor_drafts = TenorDraftRepository(review_database)
-    coordinator = RunCoordinator(workflow) if workflow else None
+    coordinator = RunCoordinator(
+        workflow,
+        case_repository=monitoring_cases,
+        domain_monitor=domain_monitor,
+    ) if workflow else None
     archive = CaseArchive(store_root)
     app = FastAPI(
         title="MucLegal Unterlassungs- und Umsetzungsmonitor",
@@ -428,7 +525,8 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     async def security_headers(request: Request, call_next):
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             content_length = request.headers.get("content-length")
-            if content_length and content_length.isdigit() and int(content_length) > 64 * 1024:
+            size_limit = 14 * 1024 * 1024 if request.url.path == "/api/v1/cases" else 64 * 1024
+            if content_length and content_length.isdigit() and int(content_length) > size_limit:
                 return JSONResponse({"detail": "Anfrage ist zu groß."}, status_code=413)
             origin = request.headers.get("origin")
             if origin:
@@ -465,6 +563,12 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             "anthropic_ready": anthropic_ready,
             "tenor_draft": tenor_drafts.latest(),
             "active_tenor": workflow.tenor if workflow else None,
+            "monitoring_cases": [item.to_dict() for item in monitoring_cases.list()] if monitoring_cases else [],
+            "case_intake_enabled": monitoring_cases is not None,
+            "element_errors": [
+                "fehlt", "nicht_sichtbar", "nicht_leicht_zugaenglich",
+                "falsches_ziel", "zusaetzliche_huerde",
+            ],
         })
 
     def generate_tenor(payload: TenorDraftRequest) -> dict:
@@ -538,19 +642,62 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             raise HTTPException(422, str(exc)) from exc
         return RedirectResponse("/", status_code=303)
 
+    @app.post("/api/v1/cases")
+    async def create_monitoring_case(payload: MonitoringCaseCreateRequest):
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
+        value = payload.model_dump(exclude={"screenshot"})
+        screenshot = payload.screenshot.model_dump() if payload.screenshot else None
+        try:
+            record = monitoring_cases.create(value, screenshot)
+        except MonitoringCaseError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return JSONResponse(record.to_dict(), status_code=201)
+
+    @app.get("/api/v1/monitoring-cases")
+    async def list_monitoring_cases():
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
+        return {"cases": [item.to_dict() for item in monitoring_cases.list()]}
+
+    @app.get("/api/v1/monitoring-cases/{case_id}")
+    async def get_monitoring_case(case_id: str):
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
+        try:
+            return monitoring_cases.get(case_id).to_dict()
+        except KeyError as exc:
+            raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
+
+    @app.post("/api/v1/cases/{case_id}/review")
+    async def review_monitoring_case(case_id: str, request: Request):
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
+        payload = await request.json()
+        if not isinstance(payload, dict) or set(payload) != {"decision"}:
+            raise HTTPException(422, "Genau eine menschliche Fallentscheidung wird erwartet.")
+        try:
+            return monitoring_cases.review(case_id, payload["decision"]).to_dict()
+        except KeyError as exc:
+            raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
+        except (MonitoringCaseError, TypeError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     @app.post("/api/v1/runs")
     @app.post("/api/runs", include_in_schema=False)
     async def start_run(payload: RunRequest):
         if coordinator is None:
             raise HTTPException(404, "Live-Prüfung ist nicht konfiguriert.")
-        if not anthropic_ready:
+        if monitoring_cases is None and not anthropic_ready:
             raise HTTPException(503, "ANTHROPIC_API_KEY fehlt am Server.")
-        if not payload.url.strip():
-            raise HTTPException(422, "Eine Webadresse ist erforderlich.")
         try:
-            run = coordinator.start(payload.url)
+            run = coordinator.start(payload.url, case_id=payload.case_id)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
         return JSONResponse(run.to_dict(), status_code=202)
 
     @app.get("/api/v1/runs/{run_id}")
@@ -566,11 +713,19 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     @app.get("/api/v1/cases")
     @app.get("/api/cases", include_in_schema=False)
     async def list_cases():
-        return {"cases": archive.list()}
+        result = {"cases": archive.list()}
+        if monitoring_cases is not None:
+            result["monitoring_cases"] = [item.to_dict() for item in monitoring_cases.list()]
+        return result
 
     @app.get("/api/v1/cases/{case_id}")
     @app.get("/api/cases/{case_id}", include_in_schema=False)
     async def get_case(case_id: str):
+        if monitoring_cases is not None:
+            try:
+                return monitoring_cases.get(case_id).to_dict()
+            except KeyError:
+                pass
         return archive.detail(case_id)
 
     @app.get("/api/v1/cases/{case_id}/preview/{label}")

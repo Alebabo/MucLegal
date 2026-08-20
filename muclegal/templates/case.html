@@ -29,6 +29,7 @@
     .sidebar-toggle { display:none; }
     .workspace { min-height:0; display:grid; grid-template-columns:minmax(0,1.62fr) minmax(360px,1fr); }
     .control { min-height:0; overflow:hidden; padding:clamp(10px,1.6vh,18px) clamp(12px,1.6vw,24px); display:flex; flex-direction:column; gap:clamp(8px,1.25vh,14px); }
+    .control.intake-mode { overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
     .proof { min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; background:#fff; border-left:1px solid var(--border); }
     .proof-inner { min-height:100%; padding:clamp(12px,1.6vw,22px); }
     .card { border:1px solid var(--border); border-radius:var(--radius); background:var(--card); box-shadow:var(--shadow); }
@@ -48,6 +49,10 @@
     .tenor-draft { margin-top:8px; padding:8px; border-left:3px solid var(--primary); background:var(--muted-bg); font-size:11px; }
     .tenor-draft p { margin-top:3px; }
     .tenor-actions { display:flex; align-items:center; gap:6px; margin-top:7px; }
+    .case-list { display:grid; gap:6px; margin-top:9px; }
+    .case-row { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--muted-bg); font-size:11px; }
+    .case-row small { display:block; color:var(--muted); margin-top:2px; }
+    .conditional[hidden] { display:none; }
     .input,.select { height:36px; width:100%; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; color:var(--foreground); padding:0 10px; box-shadow:0 1px 1px rgb(15 23 42 / .03); }
     .button { height:36px; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; color:var(--foreground); padding:0 13px; font-weight:650; cursor:pointer; white-space:nowrap; }
     .button:hover { background:var(--muted-bg); }
@@ -58,7 +63,7 @@
     .alert.warning { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
     .pipeline-card { padding:clamp(10px,1.25vh,14px); }
     .section-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px; }
-    .steps { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+    .steps { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:5px; }
     .step { position:relative; min-width:0; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; padding:7px 5px; text-align:center; color:var(--muted); }
     .step-dot { display:block; width:7px; height:7px; margin:0 auto 4px; border:1px solid #94a3b8; border-radius:50%; background:#fff; }
     .step-name { display:block; overflow:hidden; font-size:10px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
@@ -148,9 +153,40 @@
   </header>
 
   <div class="workspace">
-    <main class="control">
+    <main class="control{% if case_intake_enabled %} intake-mode{% endif %}">
+      {% if case_intake_enabled %}
+      <details class="card card-pad tenor-panel" open>
+        <summary>1 · Bekannten Erstverstoß erfassen</summary>
+        <p style="margin-top:7px;color:var(--muted);font-size:11px">Die Verbraucherzentrale meldet den bereits geprüften Verstoß. MucLegal sucht keine Erstverstöße; ein Screenshot dient nur als Beleg und wird nicht visuell ausgewertet.</p>
+        <form id="case-intake-form" class="tenor-grid">
+          <input id="intake-fall-id" class="input" required maxlength="200" placeholder="Fall-ID" aria-label="Fall-ID">
+          <input id="intake-domain" class="input" required maxlength="253" placeholder="example.de" aria-label="Domain">
+          <input id="intake-source-url" class="input wide" type="url" required maxlength="2048" placeholder="https://example.de/agb" aria-label="Konkrete Fundstellen-URL">
+          <select id="intake-type" class="select" aria-label="Verstoßtyp"><option value="klausel">Klausel</option><option value="element">Button / Element</option></select>
+          <input id="intake-pages" class="input" required value="AGB, Startseite" aria-label="Relevante Seitentypen">
+          <textarea id="intake-description" class="input wide" required maxlength="4000" placeholder="Von der Verbraucherzentrale festgestellter Verstoß" aria-label="Beschreibung"></textarea>
+          <textarea id="intake-tenor" class="input wide" required maxlength="8000" placeholder="Freigegebener Tenor oder tragendes Tenorelement" aria-label="Tenorelement"></textarea>
+          <textarea id="intake-target" class="input wide" required maxlength="4000" placeholder="Was soll künftig gefunden oder vermisst werden?" aria-label="Monitoringziel"></textarea>
+          <textarea id="intake-clause" class="input wide conditional" required maxlength="12000" placeholder="Beanstandeter Wortlaut der Klausel" aria-label="Beanstandeter Klauselwortlaut"></textarea>
+          <div id="intake-element-fields" class="wide tenor-grid conditional" hidden>
+            <input id="intake-element-label" class="input" maxlength="1000" placeholder="Bezeichnung des Elements" aria-label="Elementbezeichnung">
+            <select id="intake-element-error" class="select" aria-label="Fehlerart">{% for error in element_errors %}<option value="{{ error }}">{{ error }}</option>{% endfor %}</select>
+            <textarea id="intake-element-function" class="input wide" maxlength="2000" placeholder="Erwartete Funktion des Elements" aria-label="Elementfunktion"></textarea>
+          </div>
+          <label class="input wide" style="display:block">Optionaler Screenshot des Erstverstoßes · nur Beweismittel<input id="intake-screenshot" type="file" accept="image/png,image/jpeg,image/webp" style="display:block;margin-top:5px"></label>
+          <button class="button primary" type="submit">Fall zur menschlichen Prüfung speichern</button>
+          <span id="intake-status" class="status-chip">noch nicht gespeichert</span>
+        </form>
+        <div id="monitoring-case-list" class="case-list">
+          {% for item in monitoring_cases %}
+          <div class="case-row" data-case-id="{{ item.case_id }}"><div><strong>{{ item.fall_id }} · {{ item.violation_type }}</strong><small>Erstverstoß: Verbraucherzentrale · {{ item.source_url }}</small></div><div><span class="status-chip{% if item.decision == 'freigegeben' %} ok{% endif %}">{{ item.decision }}</span>{% if item.decision != 'freigegeben' %}<button class="button case-review" type="button" data-decision="freigegeben">Fall freigeben</button>{% endif %}</div></div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+
       <details class="card card-pad tenor-panel"{% if not active_tenor or (tenor_draft and tenor_draft.decision != 'freigegeben') %} open{% endif %}>
-        <summary>1 · Unterlassungstenor prüfen und freigeben</summary>
+        <summary>{% if case_intake_enabled %}2{% else %}1{% endif %} · Unterlassungstenor prüfen und freigeben</summary>
         {% if workflow_enabled %}
         <form method="post" action="/tenor-draft" class="tenor-grid">
           <input class="input" name="fall_id" required maxlength="200" value="VZ-2024-0417" aria-label="Fall-ID">
@@ -176,15 +212,19 @@
 
       <section class="card card-pad">
         <div class="url-head">
-          <div><h1>2 · Umsetzung auf öffentlicher URL überwachen</h1><p>Der erste Abruf speichert die Baseline. Nur eine relevante spätere Änderung startet die juristische Vorprüfung und Beweissicherung.</p></div>
+          <div><h1>{% if case_intake_enabled %}3 · Umsetzung überwachen{% else %}2 · Umsetzung auf öffentlicher URL überwachen{% endif %}</h1><p>{% if case_intake_enabled %}Nur ein von der Verbraucherzentrale gemeldeter und menschlich freigegebener Fall kann gestartet werden.{% else %}Der erste Abruf speichert die Baseline. Nur eine relevante spätere Änderung startet die juristische Vorprüfung und Beweissicherung.{% endif %}</p></div>
           <span class="badge">Mensch entscheidet</span>
         </div>
         {% if workflow_enabled %}
         <form id="run-form" class="url-form">
+          {% if case_intake_enabled %}
+          <select id="monitoring-case" class="select" required aria-label="Freigegebenen Monitoringfall wählen"><option value="">Freigegebenen Fall wählen</option>{% for item in monitoring_cases if item.decision == 'freigegeben' %}<option value="{{ item.case_id }}">{{ item.fall_id }} · {{ item.domain }}</option>{% endfor %}</select>
+          {% else %}
           <input id="url" class="input" name="url" type="url" required placeholder="https://www.beispiel.de/angebote" aria-label="Webadresse">
-          <button id="run-button" class="button primary" type="submit"{% if not anthropic_ready %} disabled{% endif %}>Monitoring starten</button>
+          {% endif %}
+          <button id="run-button" class="button primary" type="submit"{% if not anthropic_ready and not case_intake_enabled %} disabled{% endif %}>Monitoring starten</button>
         </form>
-        {% if not anthropic_ready %}<div class="alert warning">ANTHROPIC_API_KEY fehlt am Server. Ein Schlüssel wird nie im Browser eingegeben.</div>{% endif %}
+        {% if not anthropic_ready and not case_intake_enabled %}<div class="alert warning">ANTHROPIC_API_KEY fehlt am Server. Ein Schlüssel wird nie im Browser eingegeben.</div>{% endif %}
         {% else %}<div class="alert">Offline-Demolauf – Live-Abruf ist in dieser Ansicht deaktiviert.</div>{% endif %}
       </section>
 
@@ -202,7 +242,9 @@
         <section class="card metric-card">
           <div class="metric-head"><h2>4 · Juristische Vorprüfung</h2><span id="schema-chip" class="status-chip">kein Ergebnis</span></div>
           <dl class="metric-list">
-            <div class="metric"><dt>Ergebniscode</dt><dd id="result-code">{{ case.assessment.ergebnis if case else "—" }}</dd></div>
+            <div class="metric"><dt>Vierklassen-Befund</dt><dd id="four-class-result">{% if case and case.clause_findings %}{{ case.clause_findings[0].classification }}{% else %}—{% endif %}</dd></div>
+            <div class="metric"><dt>Klauselpaare</dt><dd id="clause-pair-count">{{ case.clause_findings|length if case and case.clause_findings else "—" }}</dd></div>
+            <div class="metric"><dt>Aggregat</dt><dd id="result-code">{{ case.assessment.ergebnis if case else "—" }}</dd></div>
             <div class="metric"><dt>Confidence</dt><dd id="confidence">{% if case %}{{ "%.0f"|format(case.assessment.confidence * 100) }} %{% else %}—{% endif %}</dd></div>
             <div class="metric"><dt>Schema</dt><dd id="schema-valid">{% if case %}valide{% else %}—{% endif %}</dd></div>
             <div class="metric"><dt>Modus</dt><dd id="analysis-mode">{{ case.analysis_mode if case else "—" }}</dd></div>
@@ -250,7 +292,7 @@
 
 <script>
 (() => {
-  const terminal = new Set(["baseline_created","unchanged","completed","completed_with_warnings","failed"]);
+  const terminal = new Set(["baseline_created","unchanged","completed","completed_with_warnings","failed","referenzzustand_dokumentiert","unveraendert_fortbestehend","beseitigt","kerngleich_wiederaufgetreten","neuer_sachverhalt","unsicher","pruefung_unvollstaendig"]);
   const stateLabels = {waiting:"wartend",active:"aktiv",success:"erfolgreich",skipped:"übersprungen",warning:"Warnung",failed:"fehlgeschlagen"};
   const runForm = document.getElementById("run-form");
   const runButton = document.getElementById("run-button");
@@ -285,7 +327,9 @@
   if (runForm) runForm.addEventListener("submit", async event => {
     event.preventDefault(); runButton.disabled = true; setSteps();
     try {
-      let run = await api("/api/runs", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:document.getElementById("url").value})});
+      const caseSelect=document.getElementById("monitoring-case"), urlInput=document.getElementById("url");
+      const payload=caseSelect?{case_id:caseSelect.value}:{url:urlInput.value};
+      let run = await api("/api/runs", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       setRun(run);
       while (!terminal.has(run.status)) { await new Promise(resolve => setTimeout(resolve,450)); run = await api(`/api/runs/${run.run_id}`); setRun(run); }
       if (run.result_available) await loadCases(true);
@@ -294,6 +338,32 @@
       document.getElementById("run-message").textContent = error.message;
     } finally { runButton.disabled = false; }
   });
+
+  const intakeForm=document.getElementById("case-intake-form"), intakeType=document.getElementById("intake-type");
+  function toggleIntakeType() {
+    if (!intakeType) return; const element=intakeType.value==="element";
+    document.getElementById("intake-clause").hidden=element; document.getElementById("intake-clause").required=!element;
+    document.getElementById("intake-element-fields").hidden=!element;
+    ["intake-element-label","intake-element-function","intake-element-error"].forEach(id=>document.getElementById(id).required=element);
+  }
+  if (intakeType) { intakeType.addEventListener("change",toggleIntakeType); toggleIntakeType(); }
+  async function screenshotPayload(file) {
+    if (!file) return null; const bytes=new Uint8Array(await file.arrayBuffer()); let binary="";
+    for(let offset=0;offset<bytes.length;offset+=0x8000) binary+=String.fromCharCode(...bytes.subarray(offset,offset+0x8000));
+    return {filename:file.name,media_type:file.type,data_base64:btoa(binary)};
+  }
+  if (intakeForm) intakeForm.addEventListener("submit",async event=>{
+    event.preventDefault(); const status=document.getElementById("intake-status"); status.textContent="wird gespeichert";
+    try {
+      const type=intakeType.value, file=document.getElementById("intake-screenshot").files[0];
+      const payload={fall_id:document.getElementById("intake-fall-id").value,domain:document.getElementById("intake-domain").value,source_url:document.getElementById("intake-source-url").value,violation_type:type,description:document.getElementById("intake-description").value,tenor_element:document.getElementById("intake-tenor").value,monitoring_target:document.getElementById("intake-target").value,relevant_page_types:document.getElementById("intake-pages").value.split(",").map(v=>v.trim()).filter(Boolean),clause_text:type==="klausel"?document.getElementById("intake-clause").value:null,element_label:type==="element"?document.getElementById("intake-element-label").value:null,element_function:type==="element"?document.getElementById("intake-element-function").value:null,element_error:type==="element"?document.getElementById("intake-element-error").value:null,allowed_subdomains:[],screenshot:await screenshotPayload(file)};
+      const created=await api("/api/v1/cases",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}); status.textContent=`${created.fall_id} · menschliche Prüfung offen`; location.reload();
+    } catch(error) { status.textContent=error.message; status.className="status-chip warn"; }
+  });
+  document.querySelectorAll(".case-review").forEach(button=>button.addEventListener("click",async()=>{
+    const caseId=button.closest("[data-case-id]").dataset.caseId;
+    try { await api(`/api/v1/cases/${encodeURIComponent(caseId)}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:button.dataset.decision})}); location.reload(); } catch(error) { alert(error.message); }
+  }));
 
   const urlSelect = document.getElementById("url-select");
   const runSelect = document.getElementById("run-select");
@@ -328,6 +398,7 @@
     }); summary.append(grid);
   }
   function renderTechnical(data) {
+    text("four-class-result",data.four_class_result); text("clause-pair-count",data.clause_pair_count);
     text("result-code",data.result_code); text("confidence",data.confidence == null ? "—" : `${Math.round(data.confidence*100)} %`);
     text("schema-valid",data.schema_valid ? "valide" : "ungültig"); text("current-hash",data.snapshot_sha256); text("previous-hash",data.previous_snapshot_sha256);
     text("warc-status",data.warc_status); text("capture-relation",data.capture_relation); text("manifest-status",data.manifest_sha256 ? "verifiziert" : "fehlt"); text("tsa-status",`${data.timestamp_status||"—"} / ${data.artifacts.some(a=>a.label==="report"&&a.available)?"erzeugt":"fehlt"}`);

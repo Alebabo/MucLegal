@@ -94,10 +94,10 @@ Regeln entfernt.
 
 ## Bekannte Lücken
 
-- Die neue klauselscharfe Vierklassen-Validierung ist implementiert und getestet, aber der
-  bestehende Live-Golden-Path übergibt an die abschließende Modellprüfung noch einen
-  Vorher-/Nachher-Seitenausschnitt. Die vollständige Paar-für-Paar-Orchestrierung ist der nächste
-  Backend-Schritt.
+- Die klauselscharfe Vierklassen-Validierung ist in Demo und Live-Golden-Path verdrahtet. Geänderte
+  Klauseln werden strukturell gepaart, einzeln klassifiziert, schema-validiert, als append-only
+  Findings gespeichert und mit eigenen Modellartefakten im UI ausgewiesen. Das bisherige
+  Assessment-Format bleibt als deterministisches Aggregat für PDF und Kompatibilität erhalten.
 - Keine automatische Entdeckung von AGB-, Widerrufs- oder Checkout-URLs.
 - Keine visuelle Interpretation des Screenshots; er ist nur Dokumentationsartefakt.
 - Kein Login, keine Paywall, kein CAPTCHA, keine App- oder Newsletter-Erfassung.

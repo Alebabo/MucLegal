@@ -22,6 +22,10 @@ class GoldenPathTests(unittest.TestCase):
             case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
             self.assertEqual("pending", result.timestamp_status)
             self.assertEqual("kerngleich_umfasst", case["assessment"]["ergebnis"])
+            self.assertEqual("kerngleich", case["clause_findings"][0]["classification"])
+            self.assertTrue(case["clause_schema_valid"])
+            self.assertTrue(Path(case["artifacts"]["clause_model_input"]).is_file())
+            self.assertTrue(Path(case["artifacts"]["clause_model_output"]).is_file())
             self.assertIsNone(case["assessment"]["freigabe_durch_mensch"])
             self.assertIsNone(case["freigabe_durch_mensch"])
             self.assertTrue(verify_manifest(case["artifacts"]["manifest"]).valid)
@@ -55,6 +59,11 @@ class GoldenPathTests(unittest.TestCase):
             not_covered_case = json.loads(Path(not_covered.case_path).read_text(encoding="utf-8"))
         self.assertEqual("kerngleich_umfasst", covered_case["assessment"]["ergebnis"])
         self.assertEqual("nicht_umfasst", not_covered_case["assessment"]["ergebnis"])
+        self.assertEqual("kerngleich", covered_case["clause_findings"][0]["classification"])
+        self.assertEqual(
+            "neuer_sachverhalt",
+            not_covered_case["clause_findings"][0]["classification"],
+        )
 
 
 if __name__ == "__main__":

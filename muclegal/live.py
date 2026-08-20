@@ -21,8 +21,14 @@ from muclegal.evidence.wayback import WaybackClient
 from muclegal.llm.tenor import TenorDraft
 from muclegal.fetch import FetchPolicy, HttpFetcher, ScreenshotCapture
 from muclegal.llm import AnthropicAnalyzer, analyze_and_store
+from muclegal.llm import (
+    CLAUSE_PROMPT_VERSION,
+    DeterministicClauseAnalyzer,
+    analyze_clause_pairs_and_store,
+)
 from muclegal.llm.analyzer import build_model_input
-from muclegal.normalize import NormalizationConfig
+from muclegal.normalize import NormalizationConfig, split_clauses
+from muclegal.clause_diff import pair_clause_changes
 from muclegal.pipeline import check_url
 from muclegal.storage import SnapshotRepository
 
@@ -76,6 +82,7 @@ class LiveMonitorWorkflow:
         config: NormalizationConfig | None = None,
         fetcher: HttpFetcher | None = None,
         analyzer_factory: Callable[[], Any] = AnthropicAnalyzer,
+        clause_analyzer_factory: Callable[[], Any] = DeterministicClauseAnalyzer,
         warc_capturer: Callable[..., Any] | None = None,
         tsa_client: OpenSslTsaClient | None = None,
         report_builder: Callable[[dict[str, Any], str | Path], str] = build_pdf_report,
@@ -95,6 +102,7 @@ class LiveMonitorWorkflow:
             FetchPolicy(timeout_seconds=10, max_attempts=2, require_public_network=True)
         )
         self.analyzer_factory = analyzer_factory
+        self.clause_analyzer_factory = clause_analyzer_factory
         self.warc_capturer = warc_capturer
         self.tsa_client = tsa_client or OpenSslTsaClient()
         self.report_builder = report_builder
@@ -188,6 +196,38 @@ class LiveMonitorWorkflow:
         if not analysis.valid or analysis.assessment is None:
             raise RuntimeError(f"Anthropic-Antwort wurde sicher verworfen: {analysis.validation_error}")
 
+        clause_pairs = pair_clause_changes(split_clauses(before_text), split_clauses(after_text))
+        clause_analysis = analyze_clause_pairs_and_store(
+            self.tenor,
+            clause_pairs,
+            self.clause_analyzer_factory(),
+            analysis_dir,
+        )
+        current_records = {
+            item.ordinal: item for item in self.repository.clauses_for_snapshot(outcome.snapshot_id)
+        }
+        previous_records = {
+            item.ordinal: item
+            for item in self.repository.clauses_for_snapshot(outcome.previous_snapshot_id)
+        } if outcome.previous_snapshot_id is not None else {}
+        persisted_findings = []
+        for finding in clause_analysis.findings:
+            record = self.repository.save_finding(
+                snapshot_id=outcome.snapshot_id,
+                classification=finding.result,
+                model=clause_analysis.model,
+                prompt_version=CLAUSE_PROMPT_VERSION,
+                clause_id=(
+                    current_records[finding.current_ordinal].id
+                    if finding.current_ordinal in current_records else None
+                ),
+                prev_clause_id=(
+                    previous_records[finding.previous_ordinal].id
+                    if finding.previous_ordinal in previous_records else None
+                ),
+            )
+            persisted_findings.append({**finding.to_dict(), "finding_id": record.id})
+
         progress("warc", "Die lokale WARC-/CDX-Beweisspur wird erzeugt.")
         source_artifacts = {
             "raw_html": Path(snapshot.raw_html_path),
@@ -197,6 +237,8 @@ class LiveMonitorWorkflow:
             "diff": Path(outcome.diff_path),
             "model_input": Path(analysis.input_path),
             "model_output": Path(analysis.output_path),
+            "clause_model_input": Path(clause_analysis.input_path),
+            "clause_model_output": Path(clause_analysis.output_path),
         }
         if screenshot is not None:
             source_artifacts["screenshot"] = Path(screenshot.path)
@@ -264,7 +306,10 @@ class LiveMonitorWorkflow:
             "erkannt_am": snapshot.fetched_at,
             "vorher": before_excerpt,
             "nachher": after_excerpt,
-            "assessment": analysis.assessment.to_dict(),
+            "assessment": clause_analysis.assessment.to_dict(),
+            "legacy_assessment": analysis.assessment.to_dict(),
+            "clause_findings": persisted_findings,
+            "clause_schema_valid": clause_analysis.valid,
             "evidence": {
                 "warc_status": warc_status,
                 "manifest_sha256": manifest.manifest_sha256,
@@ -284,8 +329,8 @@ class LiveMonitorWorkflow:
         case_record = {
             **report_data,
             "tenor": self.tenor,
-            "analysis_mode": analysis.mode,
-            "schema_valid": True,
+            "analysis_mode": clause_analysis.mode,
+            "schema_valid": clause_analysis.valid,
             "snapshot_sha256": snapshot.normalized_sha256,
             "previous_snapshot_sha256": outcome.previous_sha256,
             "freigabe_durch_mensch": None,

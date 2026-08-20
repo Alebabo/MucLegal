@@ -16,6 +16,19 @@ REQUIRED_FIELDS = {
     "reasoning",
 }
 
+CLAUSE_CLASSIFICATION_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "classification": {"type": "string", "enum": sorted(CLASSIFICATIONS)},
+        "tenor_element_id": {"type": "string"},
+        "confidence": {"type": "string", "enum": sorted(CONFIDENCE_LEVELS)},
+        "evidence_quote": {"type": "string", "minLength": 1},
+        "reasoning": {"type": "string", "minLength": 1},
+    },
+    "required": sorted(REQUIRED_FIELDS),
+}
+
 
 @dataclass(frozen=True)
 class ClauseClassification:

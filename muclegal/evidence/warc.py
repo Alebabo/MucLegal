@@ -161,13 +161,16 @@ def response_payload_sha256(warc_path: str | Path, target_url: str) -> str | Non
 
 
 def _wsl_has_wget() -> bool:
-    probe = subprocess.run(
-        ["wsl.exe", "-e", "sh", "-lc", "command -v wget"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
+    try:
+        probe = subprocess.run(
+            ["wsl.exe", "-e", "sh", "-lc", "command -v wget"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return probe.returncode == 0
 
 
