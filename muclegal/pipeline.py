@@ -4,7 +4,7 @@ import difflib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from muclegal.fetch import FetchFailure, HttpFetcher
+from muclegal.fetch import FetchFailure, FetchResult, HttpFetcher
 from muclegal.normalize import NormalizationConfig, normalize_html, split_clauses
 from muclegal.storage import SnapshotRepository
 
@@ -25,6 +25,8 @@ class CheckOutcome:
     clause_count: int
     extraction_ok: bool
     warning: str | None
+    fetch_mode: str
+    browser_metadata: dict[str, object] | None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -35,13 +37,15 @@ def check_url(
     config: NormalizationConfig,
     repository: SnapshotRepository,
     fetcher: HttpFetcher | None = None,
+    fetched: FetchResult | None = None,
 ) -> CheckOutcome:
     fetcher = fetcher or HttpFetcher()
-    try:
-        fetched = fetcher.fetch(url)
-    except FetchFailure as failure:
-        repository.save_failure(url, failure)
-        raise
+    if fetched is None:
+        try:
+            fetched = fetcher.fetch(url)
+        except FetchFailure as failure:
+            repository.save_failure(url, failure)
+            raise
 
     normalized = normalize_html(fetched.decoded_html, config)
     previous = repository.latest_compatible(
@@ -98,5 +102,7 @@ def check_url(
         clause_count=len(clauses),
         extraction_ok=extraction_ok,
         warning=warning,
+        fetch_mode=fetched.fetch_mode,
+        browser_metadata=fetched.browser_metadata,
     )
 

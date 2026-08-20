@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import threading
 import time
 import unittest
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,8 +15,16 @@ from fastapi.testclient import TestClient
 
 from muclegal.evidence import verify_manifest
 from muclegal.fetch import FetchFailure, FetchPolicy, HttpFetcher
-from muclegal.live import LiveMonitorWorkflow, LiveWorkflowResult, changed_excerpts
-from muclegal.ui import TERMINAL_RUN_STATUSES, create_app
+from muclegal.fetch.playwright import _cookie_rejection_action
+from muclegal.live import (
+    LiveMonitorWorkflow,
+    LiveWorkflowResult,
+    _capture_transparency,
+    _legal_subpage_candidates,
+    _select_legal_link,
+    changed_excerpts,
+)
+from muclegal.ui import CaseArchive, TERMINAL_RUN_STATUSES, create_app
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -131,6 +141,44 @@ def poll(client: TestClient, run_id: str) -> dict:
 
 
 class LiveWorkflowTests(unittest.TestCase):
+    def test_browser_transparency_records_non_stealth_runtime_values(self) -> None:
+        outcome = SimpleNamespace(
+            fetch_mode="browser_review",
+            url="https://example.org/terms",
+            browser_metadata={
+                "user_agent": "MucLegal-Monitor/0.1 (+https://example.org/contact)",
+                "navigator_webdriver": True,
+                "automation_flags": [],
+                "proxy": "keiner",
+                "context": "frisch_pro_lauf",
+                "robots_txt": "geprueft_abruf_erlaubt",
+                "document_request_count": 1,
+            },
+        )
+        transparency = _capture_transparency(
+            outcome=outcome,
+            configured_user_agent="unused",
+            requested_url="https://example.org",
+            protection_type="Art des Seitenschutzes: JavaScript-Challenge.",
+        )
+
+        self.assertTrue(transparency["navigator.webdriver"])
+        self.assertEqual([], transparency["automation_flags"])
+        self.assertEqual("keiner", transparency["proxy"])
+        self.assertEqual("https://example.org", transparency["angefragte_url"])
+        self.assertEqual(
+            "https://example.org/terms", transparency["tatsaechlich_erfasste_url"]
+        )
+
+    def test_general_privacy_link_is_preferred_over_special_program(self) -> None:
+        links = [
+            {"label": "Datenschutzhinweise myMediaMarkt/myMediaMarkt+", "url": "https://shop.test/privacy/member", "same_domain": True},
+            {"label": "Datenschutzhinweise Shop", "url": "https://shop.test/privacy/shop", "same_domain": True},
+            {"label": "Datenschutzhinweise Terminvereinbarung", "url": "https://shop.test/privacy/terminvereinbarung", "same_domain": True},
+        ]
+        selected = _select_legal_link(links, "datenschutz")
+        self.assertEqual("Datenschutzhinweise Shop", selected["label"])
+
     def test_changed_excerpts_only_contains_relevant_text(self) -> None:
         before, after = changed_excerpts("Kopf\nAlt\nFuß", "Kopf\nNeu\nFuß", context_lines=0)
         self.assertEqual("Alt", before)
@@ -180,6 +228,79 @@ class LiveWorkflowTests(unittest.TestCase):
         )
         self.assertTrue(manifest_valid)
 
+    def test_capture_baseline_adds_agb_and_privacy_screenshots(self) -> None:
+        captured_urls: list[str] = []
+
+        def fake_screenshot(url: str, destination: str | Path):
+            captured_urls.append(url)
+            path = Path(destination)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"\x89PNG\r\n\x1a\n" + url.encode("utf-8"))
+            return SimpleNamespace(
+                path=str(path),
+                sha256="1" * 64,
+                size_bytes=path.stat().st_size,
+                capture_state="page_content",
+                state_reason=None,
+                interactions=(
+                    {
+                        "type": "cookie_banner",
+                        "action": "alle_optionalen_cookies_abgelehnt",
+                        "button_text": "Alle ablehnen",
+                    },
+                ),
+            )
+
+        page = b"""<html><main><h1>Shop</h1></main><footer>
+          <a href='/agb'>Allgemeine Geschaeftsbedingungen</a>
+          <a href='/privacy'>Datenschutzerklaerung</a>
+        </footer></html>"""
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.page = page
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+                screenshot_capturer=fake_screenshot,
+            )
+            result = workflow.run(server.url, capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            manifest_valid = verify_manifest(case["artifacts"]["manifest"]).valid
+            detail = CaseArchive(output).detail(Path(case["artifacts"]["manifest"]).parent.name)
+            interactions = json.loads(
+                Path(case["artifacts"]["screenshot_interactions"]).read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertIn(f"{server.url.rsplit('/', 1)[0]}/agb", captured_urls)
+        self.assertIn(f"{server.url.rsplit('/', 1)[0]}/privacy", captured_urls)
+        self.assertIn("agb_screenshot", case["artifacts"])
+        self.assertIn("privacy_screenshot", case["artifacts"])
+        self.assertEqual(
+            interactions["screenshots"]["agb_screenshot"][0]["button_text"],
+            "Alle ablehnen",
+        )
+        self.assertTrue(manifest_valid)
+        artifacts = {item["label"]: item for item in detail["artifacts"]}
+        self.assertTrue(artifacts["agb_screenshot"]["available"])
+        self.assertTrue(artifacts["privacy_screenshot"]["available"])
+
+    def test_cookie_rejection_action_never_accepts_consent(self) -> None:
+        self.assertEqual(
+            _cookie_rejection_action("Alle ablehnen", "Wir verwenden Cookies"),
+            "alle_optionalen_cookies_abgelehnt",
+        )
+        self.assertEqual(
+            _cookie_rejection_action("Ablehnen", "Cookie-Einwilligung"),
+            "optionale_cookies_abgelehnt",
+        )
+        self.assertIsNone(_cookie_rejection_action("Ablehnen", "Newsletter bestellen"))
+        self.assertIsNone(_cookie_rejection_action("Alle akzeptieren", "Cookie-Banner"))
+
     def test_warc_failure_keeps_result_and_marks_warning(self) -> None:
         analyzer = RecordingAnalyzer()
 
@@ -209,6 +330,41 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn("unvollständig", case["evidence"]["warc_status"])
         self.assertEqual("pending", case["evidence"]["timestamp_status"])
         self.assertTrue(warc_status_exists)
+
+    def test_capture_baseline_creates_legal_page_artifact_without_llm(self) -> None:
+        analyzer = RecordingAnalyzer()
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.page = b"""<html><body><main>Start</main><footer>
+                <a href='/agb'>Allgemeine Geschaeftsbedingungen</a>
+                <a href='/datenschutz'>Datenschutzerklaerung</a>
+                </footer></body></html>"""
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                analyzer_factory=lambda: analyzer,
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            result = workflow.run(server.url, capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            legal_pages = json.loads(
+                Path(case["artifacts"]["legal_pages"]).read_text(encoding="utf-8")
+            )
+            transparency = Path(case["artifacts"]["capture_transparency"]).read_text(
+                encoding="utf-8"
+            )
+
+        self.assertEqual("completed", result.status)
+        self.assertEqual("capture_only", case["analysis_mode"])
+        self.assertEqual([], analyzer.calls)
+        self.assertEqual("http", legal_pages["agb"][0]["url"].split(":", 1)[0])
+        self.assertTrue(legal_pages["agb"][0]["url"].endswith("/agb"))
+        self.assertTrue(legal_pages["datenschutz"][0]["url"].endswith("/datenschutz"))
+        self.assertIn('erfassungsmodus: "direkter_http_abruf"', transparency)
+        self.assertIn("automation_flags: []", transparency)
+        self.assertIn("model_output", case["not_applicable_artifacts"])
 
     def test_mismatched_warc_is_never_presented_as_identical_capture(self) -> None:
         analyzer = RecordingAnalyzer()
@@ -254,6 +410,45 @@ class LiveWorkflowTests(unittest.TestCase):
 
 
 class LiveUiTests(unittest.TestCase):
+    def test_verification_mode_is_explicit_and_forwarded_only_when_enabled(self) -> None:
+        class VerificationWorkflow:
+            tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
+
+            def run(self, url, progress, *, capture_baseline=False, browser_mode=False):
+                self.browser_mode = browser_mode
+                progress("browser", "Browsermodus geprüft")
+                return LiveWorkflowResult("protected", "SEITENSCHUTZ ERKANNT")
+
+        with tempfile.TemporaryDirectory() as output:
+            workflow = VerificationWorkflow()
+            app = create_app(
+                Path(output) / "latest-case.json",
+                Path(output) / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                page = client.get("/beweis-labor")
+                started = client.post(
+                    "/api/v1/evidence-runs",
+                    json={"url": "https://example.org", "verification_mode": True},
+                ).json()
+                for _ in range(100):
+                    result = client.get(
+                        f"/api/v1/evidence-runs/{started['run_id']}"
+                    ).json()
+                    if result["status"] in TERMINAL_RUN_STATUSES:
+                        break
+                    time.sleep(0.01)
+
+        self.assertIn('id="verification-mode"', page.text)
+        self.assertIn("Überprüfungsmodus", page.text)
+        self.assertNotIn("Grau-Modus", page.text)
+        self.assertIn("keine Tarntechniken", page.text)
+        self.assertTrue(started["verification_mode"])
+        self.assertTrue(workflow.browser_mode)
+
     def test_missing_key_disables_form_and_rejects_api(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             workflow = LiveMonitorWorkflow(
@@ -365,6 +560,7 @@ class LiveUiTests(unittest.TestCase):
                 listed = client.get("/api/cases")
                 case_id = listed.json()["cases"][0]["case_id"]
                 detail = client.get(f"/api/cases/{case_id}")
+                download = client.get(f"/api/v1/cases/{case_id}/download")
                 preview = client.get(f"/api/cases/{case_id}/preview/raw_html")
                 binary_preview = client.get(f"/api/cases/{case_id}/preview/warc")
                 traversal = client.get("/api/cases/%2E%2E")
@@ -384,6 +580,11 @@ class LiveUiTests(unittest.TestCase):
         self.assertEqual(1, len({item["url"] for item in listed.json()["cases"]}))
         self.assertNotIn("assessment", listed.text)
         self.assertEqual(200, detail.status_code)
+        self.assertEqual(200, download.status_code)
+        self.assertEqual("application/zip", download.headers["content-type"])
+        with zipfile.ZipFile(io.BytesIO(download.content)) as package:
+            self.assertIn("case.json", package.namelist())
+            self.assertTrue(any(name.startswith("artefakte/raw_html") for name in package.namelist()))
         self.assertNotIn("begruendung", detail.text)
         self.assertIn("<html", preview.json()["content"].lower())
         self.assertEqual(415, binary_preview.status_code)
@@ -462,6 +663,118 @@ class LiveUiTests(unittest.TestCase):
                 poll(client, first.json()["run_id"])
         self.assertEqual(202, first.status_code)
         self.assertEqual(409, second.status_code)
+
+    def test_evidence_lab_exposes_direct_url_run_and_audit_log(self) -> None:
+        class AuditWorkflow:
+            tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
+
+            def run(self, url, progress, *, capture_baseline=False):
+                self.url = url
+                self.capture_baseline = capture_baseline
+                progress("fetch", "robots.txt geprüft und Seite abgerufen")
+                progress("normalize", "flüchtige Inhalte entfernt")
+                progress("compare", "SHA-256 mit Referenz verglichen")
+                return LiveWorkflowResult(
+                    "unchanged",
+                    "Keine relevante Änderung erkannt.",
+                    step_states={
+                        "fetch": "success", "normalize": "success",
+                        "screenshot": "skipped", "compare": "success",
+                        "anthropic": "skipped", "warc": "skipped",
+                        "manifest": "skipped", "timestamp": "skipped",
+                    },
+                )
+
+        with tempfile.TemporaryDirectory() as output:
+            workflow = AuditWorkflow()
+            app = create_app(
+                Path(output) / "latest-case.json",
+                Path(output) / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                page = client.get("/beweis-labor")
+                started = client.post(
+                    "/api/v1/evidence-runs", json={"url": "https://example.org/angebote"}
+                )
+                run_id = started.json()["run_id"]
+                for _ in range(100):
+                    result = client.get(f"/api/v1/evidence-runs/{run_id}").json()
+                    if result["status"] in TERMINAL_RUN_STATUSES:
+                        break
+                    time.sleep(0.01)
+
+        self.assertEqual(200, page.status_code)
+        self.assertNotIn("Eine URL. Eine nachvollziehbare Beweisspur.", page.text)
+        self.assertIn("Prüfverlauf", page.text)
+        self.assertNotIn("ANTHROPIC_API_KEY", page.text)
+        self.assertNotIn("Anthropic wurde nicht aufgerufen", page.text)
+        self.assertIn("Beweispaket herunterladen", page.text)
+        self.assertIn("SEITENSCHUTZ ERKANNT", page.text)
+        self.assertEqual(202, started.status_code)
+        self.assertEqual("https://example.org/angebote", workflow.url)
+        self.assertTrue(workflow.capture_baseline)
+        self.assertEqual("unchanged", result["status"])
+        self.assertEqual(
+            ["queued", "fetch", "normalize", "compare", "compare"],
+            [event["step"] for event in result["audit_log"]],
+        )
+
+    def test_evidence_lab_stream_reports_real_backend_progress(self) -> None:
+        class StreamingWorkflow:
+            tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
+
+            def run(self, url, progress, *, capture_baseline=False):
+                del url, capture_baseline
+                progress("fetch", "Seite wird abgerufen")
+                progress("normalize", "Inhalt wird aufbereitet")
+                return LiveWorkflowResult(
+                    "unchanged",
+                    "Keine relevante Änderung erkannt.",
+                    step_states={
+                        "fetch": "success", "normalize": "success",
+                        "screenshot": "skipped", "compare": "success",
+                        "anthropic": "skipped", "warc": "skipped",
+                        "manifest": "skipped", "timestamp": "skipped",
+                    },
+                )
+
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                workflow=StreamingWorkflow(),
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/v1/evidence-runs/stream",
+                    json={"url": "https://example.org/"},
+                )
+
+        self.assertEqual(200, response.status_code)
+        self.assertTrue(response.headers["content-type"].startswith("application/x-ndjson"))
+        messages = [json.loads(line) for line in response.text.splitlines() if line]
+        self.assertEqual("run", messages[0]["type"])
+        self.assertEqual("complete", messages[-1]["type"])
+        observed_steps = {
+            event["step"]
+            for message in messages
+            for event in message["run"].get("audit_log", [])
+        }
+        self.assertIn("fetch", observed_steps)
+        self.assertIn("normalize", observed_steps)
+
+    def test_legal_fallback_candidates_keep_origin_and_locale(self) -> None:
+        candidates = _legal_subpage_candidates("https://www.temu.com/de")
+        self.assertIn("https://www.temu.com/de/terms-of-use.html", candidates)
+        self.assertIn("https://www.temu.com/de/privacy-policy.html", candidates)
+        self.assertIn("https://www.temu.com/de-en/privacy-policy.html", candidates)
+        self.assertTrue(all(url.startswith("https://www.temu.com/") for url in candidates))
 
 
 if __name__ == "__main__":

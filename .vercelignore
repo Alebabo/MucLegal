@@ -1,0 +1,15 @@
+.git/
+.muclegal*/
+.playwright-cli/
+.pytest_cache/
+__pycache__/
+build/
+output/
+reference/
+tests/
+tmp/
+playwright-browsers/
+playwright-libs/
+playwright-rpms/
+*.pdf
+*.odp

@@ -4,10 +4,12 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
-from muclegal.fetch.http import DEFAULT_USER_AGENT
+from muclegal.fetch.http import DEFAULT_USER_AGENT, FetchFailure, FetchResult, _detect_block_page
 
 
 class PlaywrightUnavailable(RuntimeError):
@@ -23,6 +25,9 @@ class ScreenshotCapture:
     path: str
     sha256: str
     size_bytes: int
+    capture_state: str = "page_content"
+    state_reason: str | None = None
+    interactions: tuple[dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -38,13 +43,159 @@ class DomInspectionCapture:
     safe_path: dict | None = None
 
 
+def fetch_rendered_public_page(
+    url: str,
+    *,
+    user_agent: str = DEFAULT_USER_AGENT,
+    timeout_seconds: float = 20.0,
+    request_guard: Callable[[str, str], None] | None = None,
+) -> FetchResult:
+    """Load a public page in Chromium and return its rendered DOM without stealth or interaction."""
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise PlaywrightUnavailable(
+            "Der Überprüfungsmodus benötigt Playwright und einen installierten Chromium-Browser."
+        ) from exc
+
+    blocked_requests: list[str] = []
+    request_count = 0
+    document_request_count = 0
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--disable-dev-shm-usage"],
+            )
+            try:
+                context = browser.new_context(
+                    viewport={"width": 1440, "height": 900},
+                    user_agent=user_agent,
+                    locale="de-DE",
+                )
+
+                def route_request(route) -> None:  # noqa: ANN001
+                    nonlocal request_count, document_request_count
+                    browser_request = route.request
+                    request_count += 1
+                    if browser_request.resource_type == "document":
+                        document_request_count += 1
+                    if browser_request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+                        route.abort()
+                        return
+                    try:
+                        if request_guard is not None:
+                            request_guard(browser_request.url, browser_request.resource_type)
+                    except Exception as exc:  # Guard failures must abort, never escape the callback.
+                        blocked_requests.append(str(exc))
+                        route.abort()
+                        return
+                    route.continue_()
+
+                context.route("**/*", route_request)
+                page = context.new_page()
+                response = page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=int(timeout_seconds * 1000),
+                )
+                page.wait_for_timeout(1800)
+                if response is None:
+                    detail = blocked_requests[0] if blocked_requests else "keine HTTP-Antwort"
+                    raise FetchFailure(
+                        "browser_navigation_failed",
+                        f"Browser-Abruf fehlgeschlagen: {detail}.",
+                        manual_review=True,
+                    )
+                if response.status >= 400:
+                    raise FetchFailure(
+                        "browser_http_error",
+                        f"Browser-Abruf endete mit HTTP {response.status}.",
+                        status_code=response.status,
+                        manual_review=response.status in {401, 403, 407, 429},
+                    )
+                rendered_html = page.content()
+                final_url = page.url
+                runtime_user_agent = page.evaluate("navigator.userAgent")
+                navigator_webdriver = page.evaluate("navigator.webdriver")
+                if request_guard is not None:
+                    request_guard(final_url, "document")
+                protection = _detect_block_page(rendered_html)
+                if protection:
+                    raise FetchFailure(
+                        "protected_or_login_page",
+                        f"Browser-Abruf abgebrochen: {protection}",
+                        status_code=response.status,
+                        body=rendered_html.encode("utf-8"),
+                        manual_review=True,
+                    )
+                response_headers = [
+                    (name, value)
+                    for name, value in response.all_headers().items()
+                    if name.lower() not in {"content-length", "content-encoding", "content-type"}
+                ]
+                response_headers.extend(
+                    [
+                        ("Content-Type", "text/html; charset=utf-8"),
+                        ("X-MucLegal-Capture-Mode", "browser-rendered-dom"),
+                    ]
+                )
+                redirect_chain: list[str] = []
+                redirected_request = response.request
+                while redirected_request.redirected_from is not None:
+                    redirect_chain.append(redirected_request.url)
+                    redirected_request = redirected_request.redirected_from
+                redirect_chain.reverse()
+            finally:
+                browser.close()
+    except FetchFailure:
+        raise
+    except PlaywrightError as exc:
+        raise FetchFailure(
+            "browser_navigation_failed",
+            f"Browser-Abruf fehlgeschlagen: {exc}",
+            manual_review=True,
+        ) from exc
+
+    body = rendered_html.encode("utf-8")
+    return FetchResult(
+        requested_url=url,
+        final_url=final_url,
+        fetched_at=fetched_at,
+        status_code=response.status,
+        headers=tuple(response_headers),
+        redirect_chain=tuple(redirect_chain),
+        body=body,
+        decoded_html=rendered_html,
+        fetch_mode="browser_review",
+        browser_metadata={
+            "erfassungsmodus": "browsergestuetzt",
+            "user_agent": runtime_user_agent,
+            "navigator_webdriver": navigator_webdriver,
+            "automation_flags": [],
+            "proxy": "keiner",
+            "context": "frisch_pro_lauf",
+            "storage_state": "keiner",
+            "profilverzeichnis": "keines",
+            "browser_engine": "Chromium",
+            "request_count": request_count,
+            "document_request_count": document_request_count,
+            "blocked_request_count": len(blocked_requests),
+        },
+    )
+
+
 def capture_page_screenshot(
     url: str,
     destination: str | Path,
     *,
     timeout_seconds: float = 20.0,
+    user_agent: str = DEFAULT_USER_AGENT,
+    request_guard: Callable[[str, str], None] | None = None,
 ) -> ScreenshotCapture:
-    """Render a public page and store an unmodified full-page PNG locally."""
+    """Render a public page and store a full-page PNG with documented consent handling."""
     try:
         from playwright.sync_api import Error as PlaywrightError
         from playwright.sync_api import sync_playwright
@@ -58,13 +209,30 @@ def capture_page_screenshot(
     temporary = destination.with_name(f".{destination.stem}.tmp{destination.suffix}")
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--disable-dev-shm-usage"],
+            )
             try:
                 context = browser.new_context(
                     viewport={"width": 1440, "height": 900},
-                    user_agent=DEFAULT_USER_AGENT,
+                    user_agent=user_agent,
                     locale="de-DE",
                 )
+                if request_guard is not None:
+                    def route_request(route) -> None:  # noqa: ANN001
+                        browser_request = route.request
+                        if browser_request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+                            route.abort()
+                            return
+                        try:
+                            request_guard(browser_request.url, browser_request.resource_type)
+                        except Exception:
+                            route.abort()
+                            return
+                        route.continue_()
+
+                    context.route("**/*", route_request)
                 page = context.new_page()
                 response = page.goto(
                     url,
@@ -77,7 +245,37 @@ def capture_page_screenshot(
                     raise ScreenshotCaptureError(
                         f"Browsernavigation endete mit HTTP {response.status}."
                     )
-                page.screenshot(path=str(temporary), full_page=True, type="png")
+                interactions = _dismiss_cookie_banner(page)
+                _wait_for_visual_capture(page, timeout_seconds=timeout_seconds)
+                visible_text = page.locator("body").inner_text(timeout=2_000)
+                normalized_visible_text = " ".join(visible_text.lower().split())
+                connectivity_markers = (
+                    "keine verbindung",
+                    "überprüfe deine internetverbindung",
+                    "check your internet connection",
+                    "you appear to be offline",
+                )
+                site_reports_connectivity_error = any(
+                    marker in normalized_visible_text for marker in connectivity_markers
+                )
+                page_width = int(page.evaluate("document.documentElement.scrollWidth || 1440"))
+                page_height = int(page.evaluate("document.documentElement.scrollHeight || 900"))
+                maximum_height = 8_000
+                capture_truncated = page_height > maximum_height
+                if capture_truncated:
+                    page.screenshot(
+                        path=str(temporary),
+                        full_page=False,
+                        clip={
+                            "x": 0,
+                            "y": 0,
+                            "width": min(max(page_width, 1), 1440),
+                            "height": maximum_height,
+                        },
+                        type="png",
+                    )
+                else:
+                    page.screenshot(path=str(temporary), full_page=True, type="png")
             finally:
                 browser.close()
         temporary.replace(destination)
@@ -96,7 +294,176 @@ def capture_page_screenshot(
         path=str(destination),
         sha256=hashlib.sha256(payload).hexdigest(),
         size_bytes=len(payload),
+        capture_state=("site_connectivity_error" if site_reports_connectivity_error else (
+            "page_content_truncated" if capture_truncated else "page_content"
+        )),
+        state_reason=(
+            "Die Website selbst zeigte statt des Hauptinhalts einen Verbindungsfehler."
+            if site_reports_connectivity_error else (
+                "Die Seite war höher als 8.000 Pixel; die Aufnahme enthält den oberen Seitenbereich."
+                if capture_truncated else None
+            )
+        ),
+        interactions=interactions,
     )
+
+
+_COOKIE_CONTEXT_MARKERS = (
+    "cookie",
+    "consent",
+    "datenschutz",
+    "privacy",
+    "tracking",
+    "einwilligung",
+)
+_COOKIE_REJECTION_LABELS = (
+    ("nur notwendige", "nur_notwendige_cookies"),
+    ("nur erforderliche", "nur_notwendige_cookies"),
+    ("notwendige cookies", "nur_notwendige_cookies"),
+    ("erforderliche cookies", "nur_notwendige_cookies"),
+    ("essential only", "nur_notwendige_cookies"),
+    ("necessary only", "nur_notwendige_cookies"),
+    ("optionale cookies ablehnen", "optionale_cookies_abgelehnt"),
+    ("optionale ablehnen", "optionale_cookies_abgelehnt"),
+    ("reject optional", "optionale_cookies_abgelehnt"),
+    ("alle ablehnen", "alle_optionalen_cookies_abgelehnt"),
+    ("alles ablehnen", "alle_optionalen_cookies_abgelehnt"),
+    ("reject all", "alle_optionalen_cookies_abgelehnt"),
+    ("decline all", "alle_optionalen_cookies_abgelehnt"),
+    ("ohne zustimmung fortfahren", "ohne_optionale_zustimmung_fortgefahren"),
+    ("continue without accepting", "ohne_optionale_zustimmung_fortgefahren"),
+)
+
+
+def _cookie_rejection_action(label: str, context: str = "") -> str | None:
+    """Return a privacy-preserving action only for an unambiguous consent control."""
+    normalized_label = " ".join(label.casefold().split())
+    normalized_context = " ".join(context.casefold().split())
+    if not normalized_label or any(
+        marker in normalized_label
+        for marker in ("akzept", "accept", "zustimmen", "allow all")
+    ):
+        return None
+    for phrase, action in _COOKIE_REJECTION_LABELS:
+        if phrase in normalized_label:
+            return action
+    if normalized_label in {"ablehnen", "reject", "decline"} and any(
+        marker in normalized_context for marker in _COOKIE_CONTEXT_MARKERS
+    ):
+        return "optionale_cookies_abgelehnt"
+    return None
+
+
+def _dismiss_cookie_banner(page) -> tuple[dict[str, str], ...]:  # noqa: ANN001
+    """Click at most one visible reject/necessary-only control and record the action."""
+    from playwright.sync_api import Error as PlaywrightError
+
+    candidates: list[tuple[int, object, str, str]] = []
+    for frame in page.frames:
+        try:
+            controls = frame.locator(
+                "button, [role='button'], input[type='button'], input[type='submit'], a"
+            )
+            count = min(controls.count(), 200)
+        except PlaywrightError:
+            continue
+        for index in range(count):
+            control = controls.nth(index)
+            try:
+                if not control.is_visible(timeout=100):
+                    continue
+                label = " ".join(
+                    filter(
+                        None,
+                        (
+                            control.inner_text(timeout=200).strip(),
+                            control.get_attribute("value") or "",
+                            control.get_attribute("aria-label") or "",
+                            control.get_attribute("title") or "",
+                        ),
+                    )
+                ).strip()
+                context = control.evaluate(
+                    """element => {
+                      const root = element.closest(
+                        '#onetrust-banner-sdk, [role="dialog"], [aria-modal="true"], '
+                        + '[id*="cookie" i], [class*="cookie" i], '
+                        + '[id*="consent" i], [class*="consent" i], '
+                        + '[id*="privacy" i], [class*="privacy" i]'
+                      );
+                      return (root?.innerText || '').slice(0, 4000);
+                    }"""
+                )
+                action = _cookie_rejection_action(label, str(context or ""))
+                if action is None:
+                    continue
+                priority = next(
+                    (
+                        position
+                        for position, (phrase, _) in enumerate(_COOKIE_REJECTION_LABELS)
+                        if phrase in label.casefold()
+                    ),
+                    len(_COOKIE_REJECTION_LABELS),
+                )
+                candidates.append((priority, control, label[:300], action))
+            except PlaywrightError:
+                continue
+    for _, control, label, action in sorted(candidates, key=lambda item: item[0]):
+        try:
+            control.click(timeout=1_500)
+            page.wait_for_timeout(500)
+            return (
+                {
+                    "type": "cookie_banner",
+                    "action": action,
+                    "button_text": label,
+                },
+            )
+        except PlaywrightError:
+            continue
+    return ()
+
+
+def _wait_for_visual_capture(page, *, timeout_seconds: float) -> None:  # noqa: ANN001
+    """Wait for dynamic layout and trigger lazy loading after consent handling."""
+    from playwright.sync_api import Error as PlaywrightError
+
+    settle_timeout = min(int(timeout_seconds * 1000), 7_000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=settle_timeout)
+    except PlaywrightError:
+        # Long-lived analytics connections are common and do not make a screenshot invalid.
+        pass
+
+    for _ in range(5):
+        try:
+            state = page.evaluate(
+                """() => ({
+                  textLength: (document.body?.innerText || '').trim().length,
+                  width: document.documentElement?.scrollWidth || 0,
+                  height: document.documentElement?.scrollHeight || 0
+                })"""
+            )
+        except PlaywrightError:
+            state = {"textLength": 0, "width": 0, "height": 0}
+        if state["textLength"] >= 80 and state["width"] > 0 and state["height"] > 0:
+            break
+        page.wait_for_timeout(700)
+
+    try:
+        page_height = int(page.evaluate("document.documentElement.scrollHeight || 0"))
+        viewport_height = int(page.evaluate("window.innerHeight || 900"))
+        if page_height > viewport_height:
+            steps = min(14, max(2, page_height // max(viewport_height, 1)))
+            for index in range(1, steps + 1):
+                target = int((page_height - viewport_height) * index / steps)
+                page.evaluate("y => window.scrollTo(0, y)", target)
+                page.wait_for_timeout(120)
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(500)
+    except PlaywrightError:
+        # A navigation during settling is reported by the later screenshot operation if fatal.
+        pass
 
 
 def fetch_with_playwright(url: str) -> None:
@@ -138,7 +505,10 @@ def inspect_expected_element(
 
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--disable-dev-shm-usage"],
+            )
             try:
                 context = browser.new_context(
                     viewport={"width": 1440, "height": 900},

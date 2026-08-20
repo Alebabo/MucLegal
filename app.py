@@ -1,8 +1,9 @@
 import os
+import tempfile
 from pathlib import Path
 
 from muclegal.live import LiveMonitorWorkflow
-from muclegal.fetch import capture_page_screenshot, inspect_expected_element
+from muclegal.fetch import FetchPolicy, HttpFetcher, inspect_expected_element
 from muclegal.domain_monitor import CaseDomainMonitor
 from muclegal.monitoring_cases import MonitoringCaseRepository
 from muclegal.evidence.wayback import WaybackClient
@@ -12,16 +13,39 @@ from muclegal.ui import create_app
 
 
 ROOT = Path(__file__).resolve().parent
-STORE = (ROOT / ".muclegal-ui").resolve()
+if os.environ.get("VERCEL"):
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / "playwright-browsers")
+    bundled_libraries = ":".join(
+        (
+            str(ROOT / "playwright-libs"),
+            str(ROOT / "playwright-libs" / "usr" / "lib64"),
+        )
+    )
+    inherited_libraries = os.environ.get("LD_LIBRARY_PATH", "")
+    os.environ["LD_LIBRARY_PATH"] = ":".join(
+        value for value in (bundled_libraries, inherited_libraries) if value
+    )
+STORE = Path(
+    os.environ.get(
+        "MUCLEGAL_STORE",
+        str(Path(tempfile.gettempdir()) / "muclegal-ui")
+        if os.environ.get("VERCEL")
+        else str(ROOT / ".muclegal-ui"),
+    )
+).resolve()
 ANTHROPIC_READY = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+FETCHER = HttpFetcher(
+    FetchPolicy(timeout_seconds=10, max_attempts=2, require_public_network=True)
+)
 WORKFLOW = LiveMonitorWorkflow(
     STORE,
     ROOT / "fixtures" / "tenor.json",
+    fetcher=FETCHER,
     wayback_client=WaybackClient(
         access_key=os.environ.get("WAYBACK_ACCESS_KEY"),
         secret_key=os.environ.get("WAYBACK_SECRET_KEY"),
     ),
-    screenshot_capturer=capture_page_screenshot,
+    screenshot_capturer=FETCHER.capture_screenshot,
     clause_analyzer_factory=(
         AnthropicClauseAnalyzer if ANTHROPIC_READY else DeterministicClauseAnalyzer
     ),
@@ -41,5 +65,11 @@ app = create_app(
     tenor_analyzer_factory=(AnthropicTenorAnalyzer if ANTHROPIC_READY else DeterministicTenorAnalyzer),
     monitoring_cases=MONITORING_CASES,
     domain_monitor=DOMAIN_MONITOR,
+    allowed_hosts=[
+        "127.0.0.1",
+        "localhost",
+        "testserver",
+        "*.vercel.app",
+    ],
 )
 

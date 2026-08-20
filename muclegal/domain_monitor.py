@@ -155,7 +155,8 @@ class CaseDomainMonitor:
             element_findings, dom_reasons = self._inspect_elements(case, pages, dom_root)
             manual_reasons.extend(dom_reasons)
 
-        complete = not budget_exhausted and not blocked
+        dom_incomplete = case.violation_type == "element" and not element_findings
+        complete = not budget_exhausted and not blocked and not dom_incomplete
         monitoring_status = _monitoring_status(case, document_findings, element_findings, complete, self._has_history(case.case_id))
         coverage = {
             "strategy": "fundstelle+sitemap+priorisierte_interne_links",
@@ -164,6 +165,7 @@ class CaseDomainMonitor:
             "visited_urls": visited,
             "skipped_urls": skipped,
             "blocked_urls": blocked,
+            "dom_inspection_incomplete": dom_incomplete,
             "budget_exhausted": budget_exhausted,
             "complete_within_scope": complete,
             "duration_seconds": round(time.monotonic() - started, 3),

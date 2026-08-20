@@ -4,6 +4,7 @@ from muclegal.fetch.playwright import (
     ScreenshotCapture,
     ScreenshotCaptureError,
     capture_page_screenshot,
+    fetch_rendered_public_page,
     inspect_expected_element,
 )
 
@@ -16,5 +17,6 @@ __all__ = [
     "ScreenshotCapture",
     "ScreenshotCaptureError",
     "capture_page_screenshot",
+    "fetch_rendered_public_page",
     "inspect_expected_element",
 ]

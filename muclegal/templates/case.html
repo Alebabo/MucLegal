@@ -26,6 +26,8 @@
     .badge { display:inline-flex; align-items:center; gap:5px; width:max-content; border:1px solid var(--border); border-radius:999px; padding:3px 8px; background:#fff; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
     .badge::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--primary); }
     .topbar .badge { margin-left:auto; }
+    .lab-link { display:inline-flex; align-items:center; min-height:30px; border:1px solid var(--border); border-radius:7px; padding:0 10px; color:var(--foreground); font-size:10px; font-weight:700; text-decoration:none; white-space:nowrap; }
+    .lab-link:hover { background:var(--muted-bg); }
     .sidebar-toggle { display:none; }
     .workspace { min-height:0; display:grid; grid-template-columns:minmax(0,1.62fr) minmax(360px,1fr); }
     .control { min-height:0; overflow:hidden; padding:clamp(10px,1.6vh,18px) clamp(12px,1.6vw,24px); display:flex; flex-direction:column; gap:clamp(8px,1.25vh,14px); }
@@ -149,6 +151,7 @@
     <div class="separator"></div>
     <div class="brand-copy"><strong>Unterlassungs- und Umsetzungsmonitor</strong><span>Juristische Vorprüfung mit menschlicher Entscheidung</span></div>
     <span class="badge">Hackathon-Prototyp</span>
+    <a class="lab-link" href="/beweis-labor">Beweislabor</a>
     <button id="sidebar-toggle" class="button sidebar-toggle" type="button">Proof</button>
   </header>
 

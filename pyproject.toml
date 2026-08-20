@@ -8,20 +8,25 @@ version = "0.1.0"
 description = "Deterministischer Unterlassungs- und Umsetzungsmonitor"
 requires-python = ">=3.11"
 dependencies = [
+  "fastapi==0.115.6",
+  "jinja2==3.1.5",
+  "lxml==6.1.1",
+  "playwright==1.59.0",
+  "pypdf==6.16.1",
+  "reportlab==4.5.1",
   "trafilatura==2.2.0",
+  "uvicorn==0.34.0",
+  "vercel==0.10.0",
+  "warcio==1.8.1",
 ]
 
 [project.optional-dependencies]
 demo = [
   "anthropic==0.122.0",
-  "fastapi==0.115.6",
-  "jinja2==3.1.5",
-  "playwright==1.59.0",
-  "pypdf==6.16.1",
-  "reportlab==4.5.1",
-  "uvicorn==0.34.0",
-  "warcio==1.8.1",
 ]
+
+[tool.vercel.scripts]
+build = "PLAYWRIGHT_BROWSERS_PATH=./playwright-browsers playwright install chromium --only-shell && mkdir -p playwright-libs playwright-rpms && dnf install -y 'dnf-command(download)' rpm cpio && dnf download --resolve --destdir playwright-rpms nspr nss && for browser_package in playwright-rpms/*.rpm; do rpm2cpio \"$browser_package\" | (cd playwright-libs && cpio -idmu); done && find playwright-browsers -type f -name chrome-headless-shell -exec ldd {} \\; | awk '$3 ~ /^\\// {print $3}' | sort -u | xargs -r -I{} cp -L {} playwright-libs/"
 
 [project.scripts]
 muclegal = "muclegal.cli:main"

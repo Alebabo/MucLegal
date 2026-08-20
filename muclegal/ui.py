@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import mimetypes
+import os
 import re
 import sqlite3
 import threading
 import uuid
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
@@ -14,7 +18,14 @@ from typing import Callable, Literal
 from urllib.parse import parse_qs, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,7 +49,7 @@ from muclegal.llm.tenor import (
 
 DECISIONS = {"freigegeben", "abgelehnt", "weitere_pruefung"}
 TERMINAL_RUN_STATUSES = {
-    "baseline_created", "unchanged", "completed", "completed_with_warnings", "failed",
+    "baseline_created", "unchanged", "completed", "completed_with_warnings", "failed", "protected",
     "referenzzustand_dokumentiert", "unveraendert_fortbestehend", "beseitigt",
     "kerngleich_wiederaufgetreten", "neuer_sachverhalt", "unsicher",
     "pruefung_unvollstaendig",
@@ -49,13 +60,19 @@ ARTIFACT_DEFINITIONS = {
     "raw_html": ("Abruf", "Roh-HTML", "text"),
     "response_headers": ("Abruf", "Header", "text"),
     "normalized_text": ("Abruf", "Normalisierter Text", "text"),
+    "legal_pages": ("Abruf", "AGB & Datenschutz", "text"),
+    "capture_transparency": ("Abruf", "Erfassungstransparenz", "text"),
+    "screenshot_interactions": ("Abruf", "Screenshot-Interaktionen", "text"),
     "previous_normalized_text": ("Abruf", "Vorheriger Text", "text"),
     "diff": ("Abruf", "Diff", "text"),
     "model_input": ("Analyse", "Modellinput", "text"),
     "model_output": ("Analyse", "Validierter Modelloutput", "text"),
     "clause_model_input": ("Analyse", "Klauselpaar-Inputs", "text"),
     "clause_model_output": ("Analyse", "Vierklassen-Output", "text"),
-    "screenshot": ("Beweis", "Full-Page-Screenshot", "image"),
+    "requested_page_screenshot": ("Beweis", "Eingegebene Hauptseite", "image"),
+    "screenshot": ("Beweis", "Erfasste Seite", "image"),
+    "agb_screenshot": ("Beweis", "AGB-Screenshot", "image"),
+    "privacy_screenshot": ("Beweis", "Datenschutz-Screenshot", "image"),
     "warc": ("Beweis", "WARC", "binary"),
     "cdx": ("Beweis", "CDX", "binary"),
     "warc_status": ("Beweis", "WARC-Status", "text"),
@@ -72,6 +89,7 @@ class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     url: str | None = Field(default=None, max_length=2048)
     case_id: str | None = Field(default=None, max_length=128)
+    verification_mode: bool = False
 
 
 class ScreenshotInput(BaseModel):
@@ -118,6 +136,9 @@ class RunState:
     result_available: bool = False
     monitoring_result: dict | None = None
     steps: dict[str, str] = field(default_factory=lambda: {step: "waiting" for step in PIPELINE_STEPS})
+    audit_log: list[dict[str, str]] = field(default_factory=list)
+    capture_baseline: bool = False
+    verification_mode: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -139,13 +160,21 @@ class RunCoordinator:
         self._runs: dict[str, RunState] = {}
         self._active_run_id: str | None = None
 
-    def start(self, url: str | None = None, *, case_id: str | None = None) -> RunState:
+    def start(
+        self,
+        url: str | None = None,
+        *,
+        case_id: str | None = None,
+        direct_url: bool = False,
+        verification_mode: bool = False,
+        synchronous: bool = False,
+    ) -> RunState:
         with self._lock:
             if self._active_run_id:
                 active = self._runs[self._active_run_id]
                 if active.status not in TERMINAL_RUN_STATUSES:
                     raise RuntimeError("Es läuft bereits eine Prüfung.")
-            if self.case_repository is not None:
+            if self.case_repository is not None and not direct_url:
                 if not case_id or url:
                     raise ValueError("Der Monitoringlauf erwartet ausschließlich eine freigegebene case_id.")
                 try:
@@ -156,15 +185,36 @@ class RunCoordinator:
                     raise PermissionError("Monitoring startet erst nach menschlicher Freigabe des Falls.")
                 target_url = monitoring_case.source_url
             else:
+                if case_id:
+                    raise ValueError("Bei einer direkten URL-Prüfung ist keine case_id zulässig.")
                 if not url:
                     raise ValueError("Eine Webadresse ist erforderlich.")
                 target_url = url.strip()
             run = RunState(run_id=uuid.uuid4().hex, url=target_url)
+            run.capture_baseline = direct_url
+            run.verification_mode = bool(verification_mode and direct_url)
+            run.audit_log.append({
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "step": "queued",
+                "state": "queued",
+                "message": (
+                    "Prüflauf im Überprüfungsmodus angelegt; ein Browser-Abruf ist bei Seitenschutz freigegeben."
+                    if run.verification_mode
+                    else "Prüflauf angelegt; es wurden noch keine Beweise bewertet."
+                ),
+            })
             run.monitoring_result = {"case_id": case_id} if case_id else None
             self._runs[run.run_id] = run
             self._active_run_id = run.run_id
-            self._executor.submit(self._execute, run.run_id)
-            return RunState(**run.to_dict())
+            if not synchronous:
+                self._executor.submit(self._execute, run.run_id)
+                return RunState(**run.to_dict())
+            run_id = run.run_id
+        self._execute(run_id)
+        completed = self.get(run_id)
+        if completed is None:
+            raise RuntimeError("Prüflauf konnte nicht abgeschlossen werden.")
+        return completed
 
     def get(self, run_id: str) -> RunState | None:
         with self._lock:
@@ -184,17 +234,36 @@ class RunCoordinator:
                         if run.steps[earlier] in {"waiting", "active"}:
                             run.steps[earlier] = "success"
                     run.steps[step] = "active"
+                run.audit_log.append({
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "step": step,
+                    "state": "active",
+                    "message": message,
+                })
 
         with self._lock:
             url = self._runs[run_id].url
             case_id = (self._runs[run_id].monitoring_result or {}).get("case_id")
+            capture_baseline = self._runs[run_id].capture_baseline
+            verification_mode = self._runs[run_id].verification_mode
         try:
             if case_id and self.case_repository is not None and self.domain_monitor is not None:
                 domain_result = self.domain_monitor.run(self.case_repository.get(case_id), progress)
                 result = None
             else:
                 domain_result = None
-                result = self.workflow.run(url, progress)
+                if capture_baseline:
+                    if verification_mode:
+                        result = self.workflow.run(
+                            url,
+                            progress,
+                            capture_baseline=True,
+                            browser_mode=True,
+                        )
+                    else:
+                        result = self.workflow.run(url, progress, capture_baseline=True)
+                else:
+                    result = self.workflow.run(url, progress)
             with self._lock:
                 run = self._runs[run_id]
                 if domain_result is not None:
@@ -202,10 +271,21 @@ class RunCoordinator:
                     run.message = f"Fallbezogenes Monitoring abgeschlossen: {domain_result.status}."
                     run.monitoring_result = domain_result.to_dict()
                     run.result_available = True
-                    for step in ("fetch", "normalize", "screenshot", "compare"):
+                    for step in ("fetch", "normalize", "compare"):
                         run.steps[step] = "success"
-                    for step in ("anthropic", "warc", "manifest", "timestamp"):
-                        run.steps[step] = "skipped"
+                    run.steps["screenshot"] = (
+                        "success" if domain_result.element_findings else "skipped"
+                    )
+                    run.steps["anthropic"] = "skipped"
+                    run.steps["warc"] = (
+                        "warning"
+                        if domain_result.artifacts.get("warc_status") == "completed_with_warnings"
+                        else "success"
+                    )
+                    run.steps["manifest"] = (
+                        "success" if domain_result.artifacts.get("manifest_sha256") else "failed"
+                    )
+                    run.steps["timestamp"] = "skipped"
                 else:
                     assert result is not None
                     run.status = result.status
@@ -215,6 +295,12 @@ class RunCoordinator:
                         run.steps = dict(result.step_states)
                 reached = [step for step in PIPELINE_STEPS if run.steps[step] != "skipped"]
                 run.current_step = reached[-1] if reached else "compare"
+                run.audit_log.append({
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "step": run.current_step,
+                    "state": run.status,
+                    "message": run.message,
+                })
         except Exception as exc:
             with self._lock:
                 run = self._runs[run_id]
@@ -222,6 +308,12 @@ class RunCoordinator:
                 if run.current_step in PIPELINE_STEPS:
                     run.steps[run.current_step] = "failed"
                 run.message = str(exc)
+                run.audit_log.append({
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "step": run.current_step,
+                    "state": "failed",
+                    "message": run.message,
+                })
         finally:
             with self._lock:
                 if self._active_run_id == run_id:
@@ -253,19 +345,44 @@ class CaseArchive:
         summary = self._summary(case_id, record)
         artifacts: list[dict] = []
         stored = record.get("artifacts", {})
+        not_applicable = set(record.get("not_applicable_artifacts", []))
+        custom_statuses = record.get("artifact_statuses", {})
         for label, (group, title, kind) in ARTIFACT_DEFINITIONS.items():
             artifact = {"label": label, "title": title, "group": group, "kind": kind,
-                        "available": False, "preview_available": False, "size": None}
+                        "available": False, "preview_available": False, "size": None,
+                        "status": "not_applicable" if label in not_applicable else "failed",
+                        "status_reason": (
+                            "Für eine technische Erstaufnahme ohne Vorherzustand nicht anwendbar."
+                            if label in not_applicable else "Nicht erzeugt oder Datei fehlt."
+                        )}
             if stored.get(label):
                 try:
                     path = self._safe_artifact_path(label, record)
                     artifact["available"] = True
+                    artifact["status"] = "available"
+                    artifact["status_reason"] = "Im lokalen Beweispaket vorhanden."
                     artifact["size"] = path.stat().st_size
-                    artifact["preview_available"] = (
-                        kind == "text" and path.stat().st_size <= MAX_TEXT_PREVIEW_BYTES
-                    ) or kind in {"pdf", "image"}
+                    artifact["preview_available"] = kind in {"text", "pdf", "image"}
                 except HTTPException:
                     pass
+            custom_status = custom_statuses.get(label)
+            if isinstance(custom_status, dict):
+                artifact["status"] = str(custom_status.get("status") or artifact["status"])
+                artifact["status_reason"] = str(
+                    custom_status.get("reason") or artifact["status_reason"]
+                )
+            if (
+                label == "requested_page_screenshot"
+                and artifact["available"]
+                and record.get("evidence", {}).get("requested_page_screenshot_status")
+                == "protected_error_state"
+            ):
+                artifact["title"] = "Schutz-/Fehlerseite"
+                artifact["status"] = "warning"
+                artifact["status_reason"] = (
+                    record.get("evidence", {}).get("requested_page_screenshot_reason")
+                    or "Die Hauptseite zeigte keinen verwertbaren Seiteninhalt."
+                )
             artifacts.append(artifact)
         return {**summary, "artifacts": artifacts}
 
@@ -277,9 +394,29 @@ class CaseArchive:
         if not definition or definition[2] != "text":
             raise HTTPException(415, "Für dieses Artefakt ist keine Textvorschau erlaubt.")
         path = self.artifact_path(case_id, label)
-        if path.stat().st_size > MAX_TEXT_PREVIEW_BYTES:
-            raise HTTPException(413, "Artefakt ist für die Inline-Vorschau zu groß.")
-        return path.read_text(encoding="utf-8", errors="replace")
+        with path.open("rb") as handle:
+            content = handle.read(MAX_TEXT_PREVIEW_BYTES + 1)
+        truncated = len(content) > MAX_TEXT_PREVIEW_BYTES
+        text = content[:MAX_TEXT_PREVIEW_BYTES].decode("utf-8", errors="replace")
+        if truncated:
+            text += "\n\n[… Vorschau nach 512 KiB gekürzt; vollständige Datei im Beweispaket …]"
+        return text
+
+    def build_download(self, case_id: str) -> Path:
+        case_path = self._case_path(case_id)
+        record = self._read(case_path)
+        archive_path = case_path.parent / f"beweispaket-{case_id}.zip"
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
+            package.write(case_path, "case.json")
+            for label in ARTIFACT_DEFINITIONS:
+                if not record.get("artifacts", {}).get(label):
+                    continue
+                try:
+                    path = self._safe_artifact_path(label, record)
+                except HTTPException:
+                    continue
+                package.write(path, f"artefakte/{label}{path.suffix}")
+        return archive_path
 
     def _case_path(self, case_id: str) -> Path:
         if not CASE_ID_PATTERN.fullmatch(case_id):
@@ -354,6 +491,42 @@ class CaseArchive:
             "timestamp_status": evidence.get("timestamp_status"),
             "warnings": warnings if isinstance(warnings, list) else [],
         }
+
+
+def _publish_case_to_blob(archive: CaseArchive, detail: dict) -> dict:
+    """Publish one completed public-page evidence package for serverless follow-up requests."""
+    try:
+        from vercel.blob import BlobClient
+    except ImportError as exc:
+        raise RuntimeError("Vercel Blob SDK ist für die öffentliche Ablage nicht installiert.") from exc
+
+    client = BlobClient()
+    case_id = detail["case_id"]
+
+    def upload(path: Path, pathname: str):
+        media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        return client.put(
+            pathname,
+            path.read_bytes(),
+            access="public",
+            content_type=media_type,
+            add_random_suffix=False,
+            multipart=path.stat().st_size > 4 * 1024 * 1024,
+        )
+
+    for artifact in detail["artifacts"]:
+        if not artifact["available"]:
+            continue
+        path = archive.artifact_path(case_id, artifact["label"])
+        blob = upload(path, f"beweislab/{case_id}/artefakte/{artifact['label']}{path.suffix}")
+        artifact["url"] = blob.url
+        if artifact["kind"] == "text" and artifact["preview_available"]:
+            artifact["preview_content"] = archive.preview(case_id, artifact["label"])
+
+    package_path = archive.build_download(case_id)
+    package = upload(package_path, f"beweislab/{case_id}/{package_path.name}")
+    detail["download_url"] = package.download_url
+    return detail
 
 
 class HumanReviewRepository:
@@ -540,8 +713,10 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; frame-src 'self'; object-src 'none'; "
+            "default-src 'self'; "
+            "img-src 'self' data: https://*.public.blob.vercel-storage.com; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+            "frame-src 'self' https://*.public.blob.vercel-storage.com; object-src 'none'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         )
         return response
@@ -569,6 +744,12 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 "fehlt", "nicht_sichtbar", "nicht_leicht_zugaenglich",
                 "falsches_ziel", "zusaetzliche_huerde",
             ],
+        })
+
+    @app.get("/beweis-labor")
+    async def evidence_lab(request: Request):
+        return templates.TemplateResponse(request, "evidence_lab.html", {
+            "anthropic_ready": anthropic_ready,
         })
 
     def generate_tenor(payload: TenorDraftRequest) -> dict:
@@ -691,6 +872,8 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if monitoring_cases is None and not anthropic_ready:
             raise HTTPException(503, "ANTHROPIC_API_KEY fehlt am Server.")
         try:
+            if payload.verification_mode:
+                raise ValueError("Der Überprüfungsmodus ist ausschließlich im BeweisLab verfügbar.")
             run = coordinator.start(payload.url, case_id=payload.case_id)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -703,6 +886,109 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     @app.get("/api/v1/runs/{run_id}")
     @app.get("/api/runs/{run_id}", include_in_schema=False)
     async def get_run(run_id: str):
+        if coordinator is None:
+            raise HTTPException(404, "Live-Prüfung ist nicht konfiguriert.")
+        run = coordinator.get(run_id)
+        if run is None:
+            raise HTTPException(404, "Prüflauf nicht gefunden.")
+        return run.to_dict()
+
+    @app.post("/api/v1/evidence-runs")
+    async def start_evidence_run(payload: RunRequest):
+        if coordinator is None:
+            raise HTTPException(404, "Live-Prüfung ist nicht konfiguriert.")
+        if payload.case_id is not None:
+            raise HTTPException(422, "Das Beweislabor erwartet ausschließlich eine URL.")
+        try:
+            if os.environ.get("VERCEL"):
+                run = await asyncio.to_thread(
+                    coordinator.start,
+                    payload.url,
+                    direct_url=True,
+                    verification_mode=payload.verification_mode,
+                    synchronous=True,
+                )
+            else:
+                run = coordinator.start(
+                    payload.url,
+                    direct_url=True,
+                    verification_mode=payload.verification_mode,
+                )
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        response = run.to_dict()
+        if os.environ.get("VERCEL") and run.result_available:
+            matching = next(
+                (item for item in archive.list() if item.get("url") == run.url),
+                None,
+            )
+            if matching is not None:
+                detail = archive.detail(matching["case_id"])
+                response["case_detail"] = _publish_case_to_blob(archive, detail)
+        return JSONResponse(response, status_code=200 if os.environ.get("VERCEL") else 202)
+
+    @app.post("/api/v1/evidence-runs/stream")
+    async def stream_evidence_run(payload: RunRequest):
+        if coordinator is None:
+            raise HTTPException(404, "Live-Prüfung ist nicht konfiguriert.")
+        if payload.case_id is not None:
+            raise HTTPException(422, "Das Beweislabor erwartet ausschließlich eine URL.")
+        try:
+            run = coordinator.start(
+                payload.url,
+                direct_url=True,
+                verification_mode=payload.verification_mode,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+        async def updates():
+            previous: str | None = None
+            while True:
+                current = coordinator.get(run.run_id)
+                if current is None:
+                    yield json.dumps(
+                        {"type": "error", "detail": "Prüflauf nicht gefunden."},
+                        ensure_ascii=False,
+                    ) + "\n"
+                    return
+                current_payload = current.to_dict()
+                serialized = json.dumps(current_payload, ensure_ascii=False, sort_keys=True)
+                if serialized != previous:
+                    yield json.dumps(
+                        {"type": "run", "run": current_payload}, ensure_ascii=False
+                    ) + "\n"
+                    previous = serialized
+                if current.status in TERMINAL_RUN_STATUSES:
+                    response = current_payload
+                    if os.environ.get("VERCEL") and current.result_available:
+                        matching = next(
+                            (item for item in archive.list() if item.get("url") == current.url),
+                            None,
+                        )
+                        if matching is not None:
+                            detail = archive.detail(matching["case_id"])
+                            response["case_detail"] = await asyncio.to_thread(
+                                _publish_case_to_blob, archive, detail
+                            )
+                    yield json.dumps(
+                        {"type": "complete", "run": response}, ensure_ascii=False
+                    ) + "\n"
+                    return
+                await asyncio.sleep(0.2)
+
+        return StreamingResponse(
+            updates(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/api/v1/evidence-runs/{run_id}")
+    async def get_evidence_run(run_id: str):
         if coordinator is None:
             raise HTTPException(404, "Live-Prüfung ist nicht konfiguriert.")
         run = coordinator.get(run_id)
@@ -743,6 +1029,15 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
             )
         return FileResponse(path, filename=path.name if kind == "binary" else None)
+
+    @app.get("/api/v1/cases/{case_id}/download")
+    async def download_case_bundle(case_id: str):
+        path = archive.build_download(case_id)
+        return FileResponse(
+            path,
+            media_type="application/zip",
+            filename=path.name,
+        )
 
     @app.post("/review")
     async def review(request: Request):

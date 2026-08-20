@@ -47,6 +47,7 @@ def capture_warc(
         *command_prefix,
         f"--warc-file={basename}",
         "--warc-cdx",
+        "--no-warc-keep-log",
         "--page-requisites",
         "--span-hosts",
         "--timeout=10",
@@ -192,7 +193,11 @@ def _translate_windows_loopback_for_wsl(url: str) -> str:
 
 
 def validate_warc(warc_path: str | Path, *, warcio_path: str | None = None) -> str:
-    warcio_path = warcio_path or find_tool("warcio")
+    if warcio_path is None:
+        try:
+            warcio_path = find_tool("warcio")
+        except FileNotFoundError:
+            return _validate_warc_in_process(warc_path)
     completed = subprocess.run(
         [warcio_path, "check", "-v", str(Path(warc_path).resolve())],
         capture_output=True,
@@ -204,3 +209,20 @@ def validate_warc(warc_path: str | Path, *, warcio_path: str | None = None) -> s
     if completed.returncode != 0:
         raise RuntimeError(f"WARC-Validierung fehlgeschlagen: {output}")
     return output
+
+
+def _validate_warc_in_process(warc_path: str | Path) -> str:
+    """Validate records without relying on a separately installed CLI script."""
+    try:
+        from warcio.archiveiterator import ArchiveIterator
+    except ImportError as exc:
+        raise RuntimeError("WARC-Validierung benötigt das Python-Paket `warcio`.") from exc
+
+    record_count = 0
+    with Path(warc_path).resolve().open("rb") as stream:
+        for record in ArchiveIterator(stream, check_digests=True):
+            record_count += 1
+            record.content_stream().read()
+    if record_count == 0:
+        raise RuntimeError("WARC-Validierung fehlgeschlagen: Das Archiv enthält keine Records.")
+    return f"warcio (Python): {record_count} Record(s) erfolgreich gelesen."

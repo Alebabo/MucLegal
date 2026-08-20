@@ -5,9 +5,10 @@ import ipaddress
 import re
 import socket
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from email.message import Message
+from pathlib import Path
 from urllib import error, parse, request, robotparser
 
 
@@ -39,6 +40,7 @@ class FetchResult:
     body: bytes
     decoded_html: str
     fetch_mode: str = "http"
+    browser_metadata: dict[str, object] | None = None
 
 
 class FetchFailure(RuntimeError):
@@ -95,10 +97,101 @@ class HttpFetcher:
         assert last_failure is not None
         raise last_failure
 
+    def fetch_in_browser(self, url: str) -> FetchResult:
+        """Use a real browser only when explicitly enabled by the caller."""
+        self._validate_url(url)
+        if self.policy.respect_robots:
+            self._require_robots_permission(url)
+        from muclegal.fetch.playwright import fetch_rendered_public_page
+
+        validated_origins: set[tuple[str, str]] = set()
+        robots_origins: set[tuple[str, str]] = set()
+
+        def guard_request(target_url: str, resource_type: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            origin = (parsed.scheme, parsed.netloc)
+            if origin not in validated_origins:
+                self._validate_url(target_url)
+                validated_origins.add(origin)
+            if (
+                self.policy.respect_robots
+                and resource_type == "document"
+                and origin not in robots_origins
+            ):
+                self._require_robots_permission(target_url)
+                robots_origins.add(origin)
+
+        result = fetch_rendered_public_page(
+            url,
+            user_agent=self.policy.user_agent,
+            timeout_seconds=max(20.0, self.policy.timeout_seconds),
+            request_guard=guard_request,
+        )
+        metadata = dict(result.browser_metadata or {})
+        metadata["robots_txt"] = (
+            "geprueft_abruf_erlaubt"
+            if self.policy.respect_robots
+            else "laut_policy_nicht_geprueft"
+        )
+        return replace(result, browser_metadata=metadata)
+
+    def capture_screenshot(self, url: str, destination: str | Path):
+        """Capture one public page with the same URL and robots policy as regular fetching."""
+        self._validate_url(url)
+        if self.policy.respect_robots:
+            self._require_robots_permission(url)
+        from muclegal.fetch.playwright import capture_page_screenshot
+
+        initial = parse.urlsplit(url)
+        initial_origin = (initial.scheme, initial.netloc)
+        validated_origins: set[tuple[str, str]] = {initial_origin}
+        robots_origins: set[tuple[str, str]] = {initial_origin}
+
+        def validate_subresource(target_url: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise FetchFailure("invalid_url", "Nicht öffentliche Unterressource blockiert.")
+            if parsed.username or parsed.password:
+                raise FetchFailure("credentials_in_url", "Unterressource mit Zugangsdaten blockiert.")
+            hostname = parsed.hostname.lower().rstrip(".")
+            if hostname == "localhost" or hostname.endswith(".localhost"):
+                raise FetchFailure("non_public_target", "Lokale Unterressource blockiert.")
+            try:
+                literal_ip = ipaddress.ip_address(hostname)
+            except ValueError:
+                return
+            if not literal_ip.is_global:
+                raise FetchFailure("non_public_target", "Private Unterressource blockiert.")
+
+        def guard_request(target_url: str, resource_type: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            origin = (parsed.scheme, parsed.netloc)
+            if resource_type == "document":
+                if origin not in validated_origins:
+                    self._validate_url(target_url)
+                    validated_origins.add(origin)
+                if self.policy.respect_robots and origin not in robots_origins:
+                    self._require_robots_permission(target_url)
+                    robots_origins.add(origin)
+            else:
+                validate_subresource(target_url)
+
+        return capture_page_screenshot(
+            url,
+            destination,
+            timeout_seconds=max(20.0, self.policy.timeout_seconds),
+            user_agent=self.policy.user_agent,
+            request_guard=guard_request,
+        )
+
     def _validate_url(self, url: str) -> None:
         parsed = parse.urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise FetchFailure("invalid_url", "Nur öffentliche HTTP(S)-URLs sind zulässig.")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise FetchFailure("invalid_url", "Die URL enthält keinen gültigen Port.") from exc
         if parsed.username or parsed.password:
             raise FetchFailure(
                 "credentials_in_url",
@@ -109,7 +202,10 @@ class HttpFetcher:
             try:
                 addresses = {
                     item[4][0]
-                    for item in socket.getaddrinfo(parsed.hostname, parsed.port or 443)
+                    for item in socket.getaddrinfo(
+                        parsed.hostname,
+                        port or (443 if parsed.scheme == "https" else 80),
+                    )
                 }
             except socket.gaierror as exc:
                 raise FetchFailure("dns_error", f"Hostname konnte nicht aufgelöst werden: {exc}") from exc
@@ -234,9 +330,11 @@ def _detect_block_page(html: str) -> str | None:
     if any(marker in sample for marker in captcha_markers) or re.search(
         r"\b(?:verify you are human|captcha)\b", sample
     ):
-        return "CAPTCHA oder Bot-Challenge erkannt; manuelle Prüfung erforderlich."
+        return "Art des Seitenschutzes: CAPTCHA oder Bot-Challenge. Manuelle Prüfung erforderlich."
     if re.search(r"<input\b[^>]*\btype\s*=\s*['\"]?password\b", sample):
-        return "Login-Seite erkannt; manuelle Prüfung erforderlich."
+        return "Art des Seitenschutzes: Login-Sperre mit Passwortfeld. Manuelle Prüfung erforderlich."
     if "just a moment" in sample and "cloudflare" in sample:
-        return "technische Blockseite erkannt; manuelle Prüfung erforderlich."
+        return "Art des Seitenschutzes: Cloudflare-Blockseite. Manuelle Prüfung erforderlich."
+    if "/chl/js/" in sample and "challenge" in sample:
+        return "Art des Seitenschutzes: JavaScript-Challenge. Direkte Rechtstext-Unterseiten werden geprüft."
     return None

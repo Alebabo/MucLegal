@@ -241,14 +241,23 @@ def validate_case_input(value: dict) -> dict:
         raise MonitoringCaseError("Verstoßtyp muss 'klausel' oder 'element' sein.")
 
     domain_host = _host(cleaned["domain"])
-    source_host = _host(cleaned["source_url"])
+    source_url, source_host = _source_url(cleaned["source_url"])
     allowed = cleaned.get("allowed_subdomains", [])
     if not isinstance(allowed, list) or not all(isinstance(item, str) for item in allowed):
         raise MonitoringCaseError("allowed_subdomains muss eine Liste von Hostnamen sein.")
     allowed_hosts = tuple(sorted({_host(item) for item in allowed if item.strip()}))
+    unrelated_hosts = [
+        host for host in allowed_hosts
+        if host != domain_host and not host.endswith(f".{domain_host}")
+    ]
+    if unrelated_hosts:
+        raise MonitoringCaseError(
+            "allowed_subdomains darf nur echte Subdomains der überwachten Domain enthalten."
+        )
     if source_host != domain_host and source_host not in allowed_hosts:
         raise MonitoringCaseError("Fundstellen-URL muss zur Domain oder freigegebenen Subdomain gehören.")
     cleaned["domain"] = domain_host
+    cleaned["source_url"] = source_url
     cleaned["allowed_subdomains"] = list(allowed_hosts)
 
     if cleaned["violation_type"] == "klausel":
@@ -271,9 +280,40 @@ def validate_case_input(value: dict) -> dict:
 def _host(value: str) -> str:
     candidate = value.strip()
     parsed = urlsplit(candidate if "://" in candidate else f"https://{candidate}")
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username:
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise MonitoringCaseError("Domain enthält keinen gültigen Port.") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
         raise MonitoringCaseError("Domain und Fundstelle müssen gültige öffentliche HTTP(S)-Ziele sein.")
     return parsed.hostname.lower().rstrip(".")
+
+
+def _source_url(value: str) -> tuple[str, str]:
+    candidate = value.strip()
+    parsed = urlsplit(candidate)
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise MonitoringCaseError("Fundstelle enthält keinen gültigen Port.") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise MonitoringCaseError(
+            "Fundstelle muss eine vollständige öffentliche HTTP(S)-URL ohne Zugangsdaten sein."
+        )
+    return candidate, parsed.hostname.lower().rstrip(".")
 
 
 def _row_to_case(row: sqlite3.Row) -> MonitoringCase:

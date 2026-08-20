@@ -46,7 +46,16 @@ class UiSecurityTests(unittest.TestCase):
                 page = client.get("/")
                 hostile_host = client.get("/", headers={"Host": "attacker.example"})
         self.assertEqual("nosniff", page.headers["x-content-type-options"])
-        self.assertIn("frame-ancestors 'none'", page.headers["content-security-policy"])
+        content_security_policy = page.headers["content-security-policy"]
+        self.assertIn("frame-ancestors 'none'", content_security_policy)
+        self.assertIn(
+            "img-src 'self' data: https://*.public.blob.vercel-storage.com",
+            content_security_policy,
+        )
+        self.assertIn(
+            "frame-src 'self' https://*.public.blob.vercel-storage.com",
+            content_security_policy,
+        )
         self.assertEqual(400, hostile_host.status_code)
 
     def test_raw_html_download_is_inert_plain_text(self) -> None:

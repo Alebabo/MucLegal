@@ -35,3 +35,5 @@ Thumbs.db
 
 # Third-party repositories cloned for research
 reference/*/
+.vercel
+.env*

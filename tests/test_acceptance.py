@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from muclegal.fetch import FetchFailure, FetchPolicy, HttpFetcher
+from muclegal.fetch.http import _detect_block_page
 from muclegal.normalize import NormalizationConfig, NormalizationError, VolatileRule, normalize_html
 from muclegal.pipeline import check_url
 from muclegal.storage import SnapshotRepository
@@ -160,6 +161,12 @@ class PipelineAcceptanceTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
+    def test_invalid_port_is_rejected_before_network_access(self) -> None:
+        with self.assertRaises(FetchFailure) as caught:
+            self.fetcher.fetch("https://example.test:not-a-port/page")
+
+        self.assertEqual("invalid_url", caught.exception.code)
+
     def test_fetch_compare_and_diff_golden_path(self) -> None:
         with FixtureServer() as server:
             url = server.base_url + "/page"
@@ -210,6 +217,7 @@ class PipelineAcceptanceTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertEqual([("failure", "protected_or_login_page", 1)], attempts)
+        self.assertEqual(0, snapshot_count)
         self.assertEqual(0, snapshot_count)
 
     def test_http_error_is_recorded_without_snapshot(self) -> None:
@@ -273,7 +281,13 @@ class PipelineAcceptanceTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertEqual([("failure", "protected_or_login_page", 1)], attempts)
-        self.assertEqual(0, snapshot_count)
+
+    def test_javascript_challenge_is_classified_as_protected(self) -> None:
+        page = (
+            "<html><script src='https://static.kwcdn.com/upload-static/assets/chl/js/x.js'>"
+            "</script><script>window.challenge('token')</script></html>"
+        )
+        self.assertIn("Seitenschutz", _detect_block_page(page))
 
     def test_robots_disallow_stops_before_page_fetch(self) -> None:
         with FixtureServer() as server:

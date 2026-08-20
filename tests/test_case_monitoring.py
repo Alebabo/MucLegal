@@ -80,6 +80,27 @@ def element_payload() -> dict:
 
 
 class MonitoringCaseTests(unittest.TestCase):
+    def test_case_intake_rejects_schemeless_url_and_unrelated_allowed_host(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = MonitoringCaseRepository(
+                Path(directory) / "cases.sqlite3", Path(directory) / "intake"
+            )
+            schemeless = {**clause_payload(), "source_url": "example.test/agb"}
+            unrelated = {**clause_payload(), "allowed_subdomains": ["attacker.test"]}
+            invalid_port = {
+                **clause_payload(), "source_url": "https://example.test:not-a-port/agb"
+            }
+            domain_with_path = {**clause_payload(), "domain": "example.test/unexpected"}
+
+            with self.assertRaisesRegex(MonitoringCaseError, "vollständige"):
+                repository.create(schemeless)
+            with self.assertRaisesRegex(MonitoringCaseError, "echte Subdomains"):
+                repository.create(unrelated)
+            with self.assertRaisesRegex(MonitoringCaseError, "gültigen Port"):
+                repository.create(invalid_port)
+            with self.assertRaises(MonitoringCaseError):
+                repository.create(domain_with_path)
+
     def test_screenshot_is_evidence_and_cannot_replace_required_fields(self) -> None:
         screenshot = {
             "filename": "beleg.png",
@@ -146,6 +167,10 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual("verbraucherzentrale", first["monitoring_result"]["reported_initial_violation"]["erstverstoss_festgestellt_durch"])
         self.assertEqual("unveraendert_fortbestehend", second["status"])
         self.assertIsNone(second["monitoring_result"]["freigabe_durch_mensch"])
+        self.assertEqual("skipped", second["steps"]["anthropic"])
+        self.assertEqual("success", second["steps"]["warc"])
+        self.assertEqual("success", second["steps"]["manifest"])
+        self.assertEqual("skipped", second["steps"]["timestamp"])
 
     def test_missing_element_is_only_reported_with_complete_coverage(self) -> None:
         pages = {
@@ -186,6 +211,27 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual("nicht_gefunden_im_pruefumfang", complete.element_findings[0]["state"])
         self.assertEqual("pruefung_unvollstaendig", incomplete.status)
         self.assertFalse(incomplete.coverage["complete_within_scope"])
+
+    def test_missing_dom_inspector_makes_element_coverage_incomplete(self) -> None:
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/vertrag": b"<html><body><main>Vertrag</main></body></html>",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.review(
+                repository.create(element_payload()).case_id, "freigegeben"
+            )
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=FakeFetcher(pages),
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+
+        self.assertEqual("pruefung_unvollstaendig", result.status)
+        self.assertFalse(result.coverage["complete_within_scope"])
+        self.assertTrue(result.coverage["dom_inspection_incomplete"])
 
 
 def _poll(client: TestClient, run_id: str) -> dict:
