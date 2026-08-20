@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -528,6 +529,9 @@ class LiveMonitorWorkflow:
         primary_screenshot: ScreenshotCapture | None,
     ) -> tuple[dict[str, ScreenshotCapture], dict[str, dict[str, str]]]:
         legal_pages = json.loads(legal_pages_path.read_text(encoding="utf-8"))
+        capture_selections: dict[str, dict[str, str]] = legal_pages.setdefault(
+            "screenshot_captures", {}
+        )
         captures: dict[str, ScreenshotCapture] = {}
         statuses: dict[str, dict[str, str]] = {}
         categories = (
@@ -543,8 +547,30 @@ class LiveMonitorWorkflow:
                 }
                 continue
             selected_link = _select_legal_link(links, category)
-            target_url = str(selected_link["url"])
-            progress("legal_pages", f"{title} wird für einen eigenen Screenshot geöffnet.")
+            discovered_url = str(selected_link["url"])
+            target_url = discovered_url
+            selection = "direkter_rechtstext"
+            try:
+                legal_page = self.fetcher.fetch(discovered_url)
+                target_url, selection = _select_legal_content_url(
+                    legal_page.decoded_html,
+                    legal_page.final_url,
+                    category,
+                )
+            except Exception as exc:
+                selection = f"auflösung_fehlgeschlagen:{type(exc).__name__}"
+            capture_selections[category] = {
+                "discovered_url": discovered_url,
+                "captured_url": target_url,
+                "selection": selection,
+            }
+            if target_url != discovered_url:
+                progress(
+                    "legal_pages",
+                    f"{title}-Übersicht erkannt; die konkrete Klauselseite wird geöffnet.",
+                )
+            else:
+                progress("legal_pages", f"{title} wird für einen eigenen Screenshot geöffnet.")
             try:
                 if primary_screenshot is not None and _same_document_url(target_url, primary_url):
                     capture = primary_screenshot
@@ -557,7 +583,11 @@ class LiveMonitorWorkflow:
                 if getattr(capture, "capture_state", "page_content") == "page_content":
                     statuses[label] = {
                         "status": "available",
-                        "reason": f"Öffentliche {title} unter {target_url} aufgenommen.",
+                        "reason": (
+                            f"Öffentlicher {title}-Klauseltext unter {target_url} aufgenommen."
+                            if category == "agb"
+                            else f"Öffentliche {title} unter {target_url} aufgenommen."
+                        ),
                     }
                 else:
                     statuses[label] = {
@@ -570,6 +600,7 @@ class LiveMonitorWorkflow:
                     "status": "failed",
                     "reason": f"{title}-Screenshot nicht erzeugt: {type(exc).__name__}: {exc}",
                 }
+        _write_json(legal_pages_path, legal_pages)
         return captures, statuses
 
     def _capture_baseline_evidence(
@@ -1291,6 +1322,98 @@ def _select_legal_link(links: list[dict[str, Any]], category: str) -> dict[str, 
         return value, -len(url)
 
     return max(links, key=score)
+
+
+def _select_legal_content_url(html: str, source_url: str, category: str) -> tuple[str, str]:
+    """Resolve a legal hub to a same-site page containing the actual legal text."""
+    try:
+        document = lxml_html.fromstring(html)
+    except (ValueError, TypeError):
+        return source_url, "nicht_lesbare_rechtstextseite"
+    if _contains_legal_body(document, category):
+        return source_url, "direkter_rechtstext"
+
+    source = urlsplit(source_url)
+    source_host = (source.hostname or "").casefold()
+    candidates: list[tuple[int, str]] = []
+    seen: set[str] = set()
+    for anchor in document.xpath("//main//a[@href] | //article//a[@href]"):
+        href = str(anchor.get("href") or "").strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        absolute_url = urljoin(source_url, href)
+        parsed = urlsplit(absolute_url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or (parsed.hostname or "").casefold() != source_host
+            or _same_document_url(absolute_url, source_url)
+            or absolute_url in seen
+        ):
+            continue
+        seen.add(absolute_url)
+        label = " ".join(anchor.text_content().split()).casefold()
+        haystack = f"{label} {parsed.path.casefold()}"
+        score = 0
+        if category == "agb":
+            if not any(term in haystack for term in (
+                "agb", "geschäftsbeding", "geschaeftsbeding", "lieferbeding",
+                "zahlungsbeding", "terms-condition", "terms_condition",
+            )):
+                continue
+            if "online-shop" in haystack or "online shop" in haystack:
+                score += 90
+            if "allgemeine liefer" in haystack:
+                score += 70
+            if "geschäftsbeding" in haystack or "geschaeftsbeding" in haystack:
+                score += 45
+            if "lieferbeding" in haystack or "zahlungsbeding" in haystack:
+                score += 35
+            if parsed.path.casefold().endswith(".pdf"):
+                score -= 20
+        else:
+            if not any(term in haystack for term in (
+                "datenschutz", "privacy", "datenschutzhinweis", "datenverarbeitung",
+            )):
+                continue
+            if "datenschutzerklärung" in label or "datenschutzerklaerung" in label:
+                score += 80
+            if "privacy policy" in label:
+                score += 70
+            if parsed.path.casefold().endswith(".pdf"):
+                score -= 20
+        score += 20 if label else 0
+        candidates.append((score, absolute_url))
+    if not candidates:
+        return source_url, "übersicht_ohne_auflösbare_klauselseite"
+    candidates.sort(key=lambda item: (item[0], -len(item[1])), reverse=True)
+    return candidates[0][1], "klauselseite_aus_rechtstextübersicht"
+
+
+def _contains_legal_body(document: Any, category: str) -> bool:
+    roots = document.xpath("//main | //article")
+    root = max(roots, key=lambda node: len(" ".join(node.text_content().split())), default=document)
+    lines = [" ".join(value.split()) for value in root.text_content().splitlines()]
+    lines = [value for value in lines if value]
+    text = "\n".join(lines)
+    folded = text.casefold()
+    if category == "agb":
+        numbered_clauses = sum(
+            bool(re.match(r"^\d+(?:\.\d+)*\.?\s+[a-zäöüß]", line.casefold()))
+            for line in lines
+        )
+        legal_terms = sum(
+            term in folded
+            for term in ("geltung", "vertrag", "zahlung", "liefer", "haftung", "widerruf")
+        )
+        return numbered_clauses >= 2 and legal_terms >= 2 and len(text) >= 1_000
+    privacy_terms = sum(
+        term in folded
+        for term in (
+            "personenbezogene daten", "datenverarbeitung", "verantwortliche",
+            "rechtsgrundlage", "speicherdauer", "betroffenenrechte",
+        )
+    )
+    return privacy_terms >= 2 and len(text) >= 1_500
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:

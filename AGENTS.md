@@ -194,6 +194,11 @@ Bei Zeitmangel: nach unten streichen, nie nach oben.
   Beendet die Runtime auch diesen Browser, browserlos ein beschriftetes PNG aus dem
   gespeicherten DOM-Text erzeugen und als `http_snapshot_visualized` kennzeichnen.
   Diesen Fallback nie als pixelgetreuen Live-Browserabruf darstellen.
+- Rechtstext-Übersichten sind kein Klauselbeweis. Wenn ein gefundener AGB-Link nur
+  weitere AGB-Dokumente auflistet, innerhalb derselben Website die konkrete
+  inhaltsreichste Klauselseite wählen. `legal_pages.json` muss `discovered_url`,
+  `captured_url` und die Auswahlmethode getrennt dokumentieren. In browserlosen
+  Klauselbildern Header, Navigation und Footer entfernen.
 - freeTSA und Wayback sind externe Zusatzdienste. Ausfälle werden dokumentiert; WARC,
   Roh-HTML, Screenshot und lokales Manifest bleiben die Primärbeweise.
 - Der separate GNU-Wget-WARC-Test ist unter WSL/Wget 1.25.0 sporadisch: Metadaten-

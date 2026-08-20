@@ -186,6 +186,22 @@ Für `https://www.temu.com/de` endete der Produktionslauf im Überprüfungsmodus
 Seitenschutz-Bericht, Manifest, PDF und Beweispaket über Blob bereit. Ein dahinter
 liegender Inhalt wurde ausdrücklich nicht als erfasst ausgegeben.
 
+### AGB-Übersicht statt Klauseln
+
+Bei IKEA führte der zuerst gefundene AGB-Link auf eine Rechtstext-Übersicht. Das Bild
+zeigte deshalb nur Verweise auf verschiedene AGB-Dokumente. Die Erfassung prüft nun,
+ob eine Seite bereits mehrere nummerierte Klauseln und typische Rechtstextmerkmale
+enthält. Andernfalls wird ausschließlich innerhalb derselben Website eine konkrete
+HTML-Klauselseite ausgewählt; HTML wird gegenüber PDF bevorzugt. Gefundene Übersicht,
+tatsächlich abgebildete Klausel-URL und Auswahlmethode stehen getrennt unter
+`screenshot_captures` in `legal_pages.json`.
+
+Für IKEA wurde die Übersicht dadurch auf die Seite „AGB Online-Shop“ aufgelöst. Die
+visuelle Kontrolle zeigte Klauseln 1 bis 12 im 8.000-Pixel-Bild, darunter Geltung,
+Vertragsschluss, Zahlungsmöglichkeiten, Lieferung und Widerrufsrecht. Header,
+Navigation und Footer waren entfernt; deutsche Umlaute wurden über die gebündelte
+Vera-Schrift korrekt dargestellt.
+
 ## 5. Flüchtige Dateien in Serverless Functions
 
 ### Symptom

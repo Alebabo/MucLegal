@@ -473,10 +473,17 @@ def _capture_html_evidence_image(
         ) from exc
 
     def font(size: int, *, bold: bool = False):  # noqa: ANN202
-        candidates = (
+        candidates: list[str] = [
             "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
             "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
-        )
+        ]
+        try:
+            import reportlab
+
+            reportlab_fonts = Path(reportlab.__file__).resolve().parent / "fonts"
+            candidates.insert(0, str(reportlab_fonts / ("VeraBd.ttf" if bold else "Vera.ttf")))
+        except ImportError:
+            pass
         for candidate in candidates:
             try:
                 return ImageFont.truetype(candidate, size=size)
@@ -508,14 +515,20 @@ def _capture_html_evidence_image(
     try:
         document = lxml_html.fromstring(html)
         for unwanted in document.xpath(
-            "//script|//style|//noscript|//template|//svg|//iframe|//object|//video|//audio"
+            "//script|//style|//noscript|//template|//svg|//iframe|//object|//video|//audio|//header|//footer|//nav"
         ):
             unwanted.drop_tree()
         titles = document.xpath("//title/text()")
         if titles and " ".join(titles[0].split()):
             title = " ".join(titles[0].split())[:300]
+        roots = document.xpath("//main | //article")
+        content_root = max(
+            roots,
+            key=lambda node: len(" ".join(node.text_content().split())),
+            default=document,
+        )
         seen: set[str] = set()
-        for node in document.xpath("//h1|//h2|//h3|//p|//li|//dt|//dd|//blockquote|//address"):
+        for node in content_root.xpath(".//h1|.//h2|.//h3|.//p|.//li|.//dt|.//dd|.//blockquote|.//address"):
             value = " ".join(node.text_content().split())
             key = value.casefold()
             if len(value) < 2 or key in seen:
@@ -525,7 +538,7 @@ def _capture_html_evidence_image(
             if len(blocks) >= 320:
                 break
         if not blocks:
-            body = " ".join(document.text_content().split())
+            body = " ".join(content_root.text_content().split())
             blocks = [("p", body[index:index + 1_500]) for index in range(0, len(body), 1_500)]
     except (ValueError, TypeError):
         plain = " ".join(re.sub(r"<[^>]+>", " ", html).split())
@@ -551,9 +564,19 @@ def _capture_html_evidence_image(
         (margin, y, width - margin, y + warning_height), radius=16,
         fill="#e8f1ed", outline="#7ca296", width=2,
     )
+    legal_artifact = any(
+        marker in destination.stem.casefold() for marker in ("agb", "privacy")
+    )
+    artifact_kind = (
+        "AGB-KLAUSELANSICHT"
+        if "agb" in destination.stem.casefold()
+        else "DATENSCHUTZTEXT-ANSICHT"
+        if "privacy" in destination.stem.casefold()
+        else "HTML-BEWEISBILD"
+    )
     draw.text(
         (margin + 28, y + 22),
-        "HTML-BEWEISBILD · KEIN LIVE-BROWSER-SCREENSHOT",
+        f"{artifact_kind} · KEIN LIVE-BROWSER-SCREENSHOT",
         font=font_brand,
         fill="#173f38",
     )
@@ -593,7 +616,11 @@ def _capture_html_evidence_image(
         draw.rectangle((0, maximum_height - 100, width, maximum_height), fill="#e8f1ed")
         draw.text(
             (margin, maximum_height - 68),
-            "Ansicht bei 8.000 Pixeln gekürzt · vollständiges Roh-HTML im Beweispaket",
+            (
+                "Ansicht bei 8.000 Pixeln gekürzt · weitere Klauseln unter der angegebenen URL"
+                if legal_artifact
+                else "Ansicht bei 8.000 Pixeln gekürzt · vollständiges Roh-HTML im Beweispaket"
+            ),
             font=font_small,
             fill="#173f38",
         )
@@ -621,7 +648,12 @@ def _capture_html_evidence_image(
             "dargestellt; es ist keine pixelgetreue Live-Browser-Aufnahme."
         )
     if truncated:
-        reason += " Die Ansicht wurde bei 8.000 Pixeln gekürzt; das Roh-HTML ist vollständig enthalten."
+        reason += (
+            " Die Ansicht wurde bei 8.000 Pixeln gekürzt; weitere Klauseln können "
+            "unter der angegebenen URL folgen."
+            if legal_artifact
+            else " Die Ansicht wurde bei 8.000 Pixeln gekürzt; das Roh-HTML ist vollständig enthalten."
+        )
     technical_reason = fallback_reason or browser_error
     if technical_reason:
         reason += f" Technischer Auslöser: {technical_reason[:500]}"

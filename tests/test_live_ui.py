@@ -28,6 +28,7 @@ from muclegal.live import (
     LiveWorkflowResult,
     _capture_transparency,
     _legal_subpage_candidates,
+    _select_legal_content_url,
     _select_legal_link,
     changed_excerpts,
 )
@@ -148,6 +149,37 @@ def poll(client: TestClient, run_id: str) -> dict:
 
 
 class LiveWorkflowTests(unittest.TestCase):
+    def test_agb_hub_resolves_to_concrete_clause_page(self) -> None:
+        hub = """<html><main><h1>Allgemeine Liefer- und Zahlungsbedingungen</h1>
+          <a href='/terms/agb-online-shop'>Allgemeine Liefer- und Zahlungsbedingungen Online-Shop</a>
+          <a href='/terms/agb-gift-card.pdf'>AGB Geschenkkarte PDF</a>
+        </main><footer><a href='/agb'>AGB</a></footer></html>"""
+
+        resolved, selection = _select_legal_content_url(
+            hub,
+            "https://shop.test/agb",
+            "agb",
+        )
+
+        self.assertEqual("https://shop.test/terms/agb-online-shop", resolved)
+        self.assertEqual("klauselseite_aus_rechtstextübersicht", selection)
+
+    def test_concrete_agb_clause_page_is_not_followed_again(self) -> None:
+        clause = "Für diesen Vertrag gelten die nachstehenden Bedingungen. " * 25
+        page = f"""<html><main><h1>AGB Online-Shop</h1>
+          <p>1. Geltung {clause}</p><p>2. Vertragsschluss {clause}</p>
+          <p>3. Zahlung und Lieferung {clause}</p>
+        </main><footer><a href='/agb'>AGB</a></footer></html>"""
+
+        resolved, selection = _select_legal_content_url(
+            page,
+            "https://shop.test/agb-online-shop",
+            "agb",
+        )
+
+        self.assertEqual("https://shop.test/agb-online-shop", resolved)
+        self.assertEqual("direkter_rechtstext", selection)
+
     def test_browserless_html_evidence_image_is_labeled_and_readable(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             destination = Path(output) / "evidence.png"

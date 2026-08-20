@@ -72,7 +72,7 @@ ARTIFACT_DEFINITIONS = {
     "clause_model_output": ("Analyse", "Vierklassen-Output", "text"),
     "requested_page_screenshot": ("Beweis", "Eingegebene Hauptseite", "image"),
     "screenshot": ("Beweis", "Erfasste Seite", "image"),
-    "agb_screenshot": ("Beweis", "AGB-Screenshot", "image"),
+    "agb_screenshot": ("Beweis", "AGB-Klauseln", "image"),
     "privacy_screenshot": ("Beweis", "Datenschutz-Screenshot", "image"),
     "warc": ("Beweis", "WARC", "binary"),
     "cdx": ("Beweis", "CDX", "binary"),
