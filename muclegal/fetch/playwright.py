@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from html import escape as html_escape
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urljoin, urlsplit
@@ -305,6 +306,332 @@ def capture_page_screenshot(
             )
         ),
         interactions=interactions,
+    )
+
+
+def capture_html_screenshot(
+    html: str,
+    base_url: str,
+    destination: str | Path,
+    *,
+    timeout_seconds: float = 20.0,
+    user_agent: str = DEFAULT_USER_AGENT,
+    request_guard: Callable[[str, str], None] | None = None,
+    fallback_reason: str | None = None,
+) -> ScreenshotCapture:
+    """Render already fetched HTML without JavaScript when live navigation crashes."""
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise PlaywrightUnavailable(
+            "Screenshots benötigen `pip install -e .[demo]` und `playwright install chromium`."
+        ) from exc
+
+    destination = Path(destination).resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.stem}.tmp{destination.suffix}")
+    base_element = f'<base href="{html_escape(base_url, quote=True)}">'
+    if not re.search(r"<base\b", html, re.IGNORECASE):
+        if re.search(r"<head\b[^>]*>", html, re.IGNORECASE):
+            html = re.sub(
+                r"(<head\b[^>]*>)",
+                rf"\1{base_element}",
+                html,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+        else:
+            html = f"<head>{base_element}</head>{html}"
+    protection = _detect_block_page(html)
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--disable-dev-shm-usage"],
+            )
+            try:
+                context = browser.new_context(
+                    viewport={"width": 1440, "height": 900},
+                    user_agent=user_agent,
+                    locale="de-DE",
+                    java_script_enabled=False,
+                )
+                def route_request(route) -> None:  # noqa: ANN001
+                    browser_request = route.request
+                    if browser_request.url.startswith(("data:", "blob:", "about:")):
+                        route.continue_()
+                        return
+                    # The bytes are already stored. Loading a site's resource graph here
+                    # would turn the fallback into an undocumented second web capture and
+                    # can crash constrained serverless Chromium processes.
+                    route.abort()
+
+                context.route("**/*", route_request)
+                page = context.new_page()
+                page.set_content(
+                    html,
+                    wait_until="domcontentloaded",
+                    timeout=int(timeout_seconds * 1000),
+                )
+                _wait_for_visual_capture(page, timeout_seconds=timeout_seconds)
+                page_width = int(page.evaluate("document.documentElement.scrollWidth || 1440"))
+                page_height = int(page.evaluate("document.documentElement.scrollHeight || 900"))
+                maximum_height = 8_000
+                capture_truncated = page_height > maximum_height
+                if capture_truncated:
+                    page.screenshot(
+                        path=str(temporary),
+                        full_page=False,
+                        clip={
+                            "x": 0,
+                            "y": 0,
+                            "width": min(max(page_width, 1), 1440),
+                            "height": maximum_height,
+                        },
+                        type="png",
+                    )
+                else:
+                    page.screenshot(path=str(temporary), full_page=True, type="png")
+            finally:
+                browser.close()
+        temporary.replace(destination)
+    except PlaywrightError as exc:
+        temporary.unlink(missing_ok=True)
+        if _browser_was_closed(exc):
+            return _capture_html_evidence_image(
+                html,
+                base_url,
+                destination,
+                protection=protection,
+                fallback_reason=fallback_reason,
+                browser_error=str(exc),
+            )
+        raise ScreenshotCaptureError(
+            f"Fallback-Screenshot aus gespeichertem HTML fehlgeschlagen: {exc}"
+        ) from exc
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        raise ScreenshotCaptureError(f"Screenshot konnte nicht gespeichert werden: {exc}") from exc
+
+    payload = destination.read_bytes()
+    if protection:
+        state = "protected_http_snapshot_rendered"
+        reason = f"Gespeicherte Schutzseite ohne JavaScript gerendert: {protection}"
+    else:
+        state = "http_snapshot_rendered"
+        reason = (
+            "Live-Browsernavigation wurde von Chromium beendet; der zuvor direkt "
+            "abgerufene öffentliche HTML-Stand wurde ohne JavaScript gerendert."
+        )
+    if capture_truncated:
+        reason += " Die Aufnahme wurde bei 8.000 Pixeln transparent gekürzt."
+    if fallback_reason:
+        reason += f" Technischer Auslöser: {fallback_reason[:500]}"
+    return ScreenshotCapture(
+        path=str(destination),
+        sha256=hashlib.sha256(payload).hexdigest(),
+        size_bytes=len(payload),
+        capture_state=state,
+        state_reason=reason,
+        interactions=(),
+    )
+
+
+def _browser_was_closed(error: Exception) -> bool:
+    message = str(error).casefold()
+    return any(
+        marker in message
+        for marker in (
+            "target page, context or browser has been closed",
+            "browser has been closed",
+            "browser closed",
+        )
+    )
+
+
+def _capture_html_evidence_image(
+    html: str,
+    base_url: str,
+    destination: Path,
+    *,
+    protection: str | None,
+    fallback_reason: str | None,
+    browser_error: str,
+) -> ScreenshotCapture:
+    """Create a labeled PNG from stored DOM text when Chromium itself terminates.
+
+    This is deliberately not described as a browser screenshot. It preserves a
+    human-readable view of the already captured HTML without making further requests.
+    """
+    try:
+        from lxml import html as lxml_html
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as exc:
+        raise ScreenshotCaptureError(
+            "Browserloses HTML-Beweisbild benötigt lxml und Pillow."
+        ) from exc
+
+    def font(size: int, *, bold: bool = False):  # noqa: ANN202
+        candidates = (
+            "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
+            "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
+        )
+        for candidate in candidates:
+            try:
+                return ImageFont.truetype(candidate, size=size)
+            except OSError:
+                continue
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            return ImageFont.load_default()
+
+    def wrap(draw, value: str, selected_font, maximum_width: int) -> list[str]:  # noqa: ANN001
+        words = value.split()
+        if not words:
+            return []
+        lines: list[str] = []
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            if draw.textlength(candidate, font=selected_font) <= maximum_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    title = "Gespeicherter öffentlicher HTML-Stand"
+    blocks: list[tuple[str, str]] = []
+    try:
+        document = lxml_html.fromstring(html)
+        for unwanted in document.xpath(
+            "//script|//style|//noscript|//template|//svg|//iframe|//object|//video|//audio"
+        ):
+            unwanted.drop_tree()
+        titles = document.xpath("//title/text()")
+        if titles and " ".join(titles[0].split()):
+            title = " ".join(titles[0].split())[:300]
+        seen: set[str] = set()
+        for node in document.xpath("//h1|//h2|//h3|//p|//li|//dt|//dd|//blockquote|//address"):
+            value = " ".join(node.text_content().split())
+            key = value.casefold()
+            if len(value) < 2 or key in seen:
+                continue
+            seen.add(key)
+            blocks.append((str(node.tag).casefold(), value[:2_000]))
+            if len(blocks) >= 320:
+                break
+        if not blocks:
+            body = " ".join(document.text_content().split())
+            blocks = [("p", body[index:index + 1_500]) for index in range(0, len(body), 1_500)]
+    except (ValueError, TypeError):
+        plain = " ".join(re.sub(r"<[^>]+>", " ", html).split())
+        blocks = [("p", plain[index:index + 1_500]) for index in range(0, len(plain), 1_500)]
+
+    width, maximum_height = 1440, 8_000
+    canvas = Image.new("RGB", (width, maximum_height), "#f7f7f4")
+    draw = ImageDraw.Draw(canvas)
+    margin = 72
+    content_width = width - (2 * margin)
+    font_small = font(22)
+    font_body = font(27)
+    font_h3 = font(32, bold=True)
+    font_h2 = font(38, bold=True)
+    font_h1 = font(48, bold=True)
+    font_brand = font(25, bold=True)
+
+    draw.rectangle((0, 0, width, 86), fill="#173f38")
+    draw.text((margin, 28), "MUCLEGAL  ·  BeweisLab", font=font_brand, fill="#ffffff")
+    y = 118
+    warning_height = 118
+    draw.rounded_rectangle(
+        (margin, y, width - margin, y + warning_height), radius=16,
+        fill="#e8f1ed", outline="#7ca296", width=2,
+    )
+    draw.text(
+        (margin + 28, y + 22),
+        "HTML-BEWEISBILD · KEIN LIVE-BROWSER-SCREENSHOT",
+        font=font_brand,
+        fill="#173f38",
+    )
+    draw.text(
+        (margin + 28, y + 65),
+        "Browserlos aus dem bereits gespeicherten HTML erzeugt; keine weiteren Webabrufe.",
+        font=font_small,
+        fill="#355e55",
+    )
+    y += warning_height + 34
+    for line in wrap(draw, base_url, font_small, content_width):
+        draw.text((margin, y), line, font=font_small, fill="#5b625e")
+        y += 31
+    y += 25
+    for line in wrap(draw, title, font_h1, content_width):
+        draw.text((margin, y), line, font=font_h1, fill="#161b19")
+        y += 61
+    y += 28
+
+    truncated = False
+    for tag, value in blocks:
+        selected_font = font_h1 if tag == "h1" else font_h2 if tag == "h2" else font_h3 if tag == "h3" else font_body
+        color = "#173f38" if tag.startswith("h") else "#252a28"
+        indent = 26 if tag == "li" else 0
+        prefix = "• " if tag == "li" else ""
+        lines = wrap(draw, prefix + value, selected_font, content_width - indent)
+        required = (len(lines) * (selected_font.size + 12)) + (32 if tag.startswith("h") else 20)
+        if y + required > maximum_height - 120:
+            truncated = True
+            break
+        for line in lines:
+            draw.text((margin + indent, y), line, font=selected_font, fill=color)
+            y += selected_font.size + 12
+        y += 32 if tag.startswith("h") else 20
+
+    if truncated:
+        draw.rectangle((0, maximum_height - 100, width, maximum_height), fill="#e8f1ed")
+        draw.text(
+            (margin, maximum_height - 68),
+            "Ansicht bei 8.000 Pixeln gekürzt · vollständiges Roh-HTML im Beweispaket",
+            font=font_small,
+            fill="#173f38",
+        )
+        final_height = maximum_height
+    else:
+        final_height = min(max(y + 70, 900), maximum_height)
+
+    temporary = destination.with_name(f".{destination.stem}.tmp{destination.suffix}")
+    try:
+        canvas.crop((0, 0, width, final_height)).save(temporary, format="PNG", optimize=True)
+        temporary.replace(destination)
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        raise ScreenshotCaptureError(f"HTML-Beweisbild konnte nicht gespeichert werden: {exc}") from exc
+
+    payload = destination.read_bytes()
+    if protection:
+        state = "protected_http_snapshot_visualized"
+        reason = f"Gespeicherte Schutzseite als browserloses HTML-Beweisbild dargestellt: {protection}."
+    else:
+        state = "http_snapshot_visualized"
+        reason = (
+            "Chromium wurde von der Hosting-Laufzeit beendet. Deshalb wurde der bereits "
+            "direkt abgerufene öffentliche HTML-Stand browserlos als lesbares Beweisbild "
+            "dargestellt; es ist keine pixelgetreue Live-Browser-Aufnahme."
+        )
+    if truncated:
+        reason += " Die Ansicht wurde bei 8.000 Pixeln gekürzt; das Roh-HTML ist vollständig enthalten."
+    technical_reason = fallback_reason or browser_error
+    if technical_reason:
+        reason += f" Technischer Auslöser: {technical_reason[:500]}"
+    return ScreenshotCapture(
+        path=str(destination),
+        sha256=hashlib.sha256(payload).hexdigest(),
+        size_bytes=len(payload),
+        capture_state=state,
+        state_reason=reason,
+        interactions=(),
     )
 
 

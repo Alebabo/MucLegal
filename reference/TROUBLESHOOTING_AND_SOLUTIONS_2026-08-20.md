@@ -14,7 +14,7 @@ sichtbaren Fallbacks und offenen Grenzen.
 
 | Symptom | Ursache | Umgesetzte Lösung | Status |
 |---|---|---|---|
-| Temu liefert Fehler statt Inhalt | JavaScript-/Bot-Challenge | Schutz erkennen, Art nennen, blockierte und erfasste URL trennen, öffentliche Rechtstexte prüfen | Fallback gelöst; Hauptseite bleibt geschützt |
+| Temu liefert Fehler statt Inhalt | JavaScript-/Bot-Challenge | Schutz erkennen, Art nennen, öffentliche Rechtstexte prüfen; bei vollständiger Blockade Schutzbefund-Paket erzeugen | Beweisbarer Schutzbefund; Hauptinhalt bleibt geschützt |
 | Screenshots sind weiß | Aufnahme vor stabiler Darstellung; Lazy Loading; ungeeigneter Vercel-Browserzustand | `DOMContentLoaded`, begrenztes `networkidle`, Layoutprüfung, Scrollimpulse, Bildwartezeit | Gelöst für getestete Standardseiten |
 | Screenshot zeigt „kein WLAN“ | Website meldet eigenen Konnektivitätsfehler, obwohl Navigation technisch gelang | Marker erkennen und Screenshot als Fehlerzustand statt Seitennachweis markieren | Gelöst als korrekte Kennzeichnung |
 | Screenshots funktionieren lokal, nicht auf Vercel | Chromium und native NSS/NSPR-Libraries fehlten im Function-Bundle | Headless Shell im Build installieren, Libraries kopieren, Browserpfad konfigurieren | Gelöst; Large Function nötig |
@@ -25,7 +25,7 @@ sichtbaren Fallbacks und offenen Grenzen.
 | Sehr lange Screenshots belasten Function | Full-Page-PNG kann Speicher-/Zeitgrenzen überschreiten | Aufnahme bei 8.000 Pixeln begrenzen und als `page_content_truncated` markieren | Gelöst als transparenter Teilbeleg |
 | Wget-WARC-Test scheitert sporadisch | WSL/GNU Wget 1.25.0 erzeugt gelegentlich ungültige Metadaten-/Resource-Digests | Produktiv-WARC aus exakten Snapshotbytes; Wget-Pfad streng validieren und Fehler nicht kaschieren | Produktivpfad stabil; Wget-Flake offen |
 | RFC-3161 bleibt `pending` | freeTSA/Netz/Zertifikatsdienst extern nicht verfügbar | Anfrage und Status erhalten, Warnung ausgeben, lokale Primärbeweise nicht verwerfen | Robuster Fallback; Dienstabhängigkeit offen |
-| IKEA schließt Chromium auf Vercel | Seitenspezifischer Navigation-/Runtime-Abbruch; Ursache nicht abschließend bewiesen | Fehler sichtbar halten; lokale und andere Produktionsziele separat verifizieren | Offen |
+| IKEA schließt Chromium auf Vercel | Seitenspezifischer Navigation-/Runtime-Abbruch; Ursache nicht abschließend bewiesen | Direkt geprüften HTML-Stand ohne JavaScript als gekennzeichneten Screenshot rendern | Screenshot-Fallback gelöst; Live-Abbruch offen |
 
 ## 1. Seitenschutz bei Temu und ähnlichen Seiten
 
@@ -50,6 +50,9 @@ worden, obwohl tatsächlich nur eine AGB-Unterseite zugänglich war.
   Datenschutz-Unterseiten prüfen.
 - Schutz-/Fehlerzustand unter der eingegebenen URL separat vom tatsächlich erfassten
   Rechtstext speichern.
+- Bleiben Hauptseite und alle direkten Rechtstextpfade blockiert, trotzdem ein Paket
+  mit Schutz-Screenshot, Schutzart, geprüften URLs, Einzelfehlern, Manifest,
+  Zeitstempelversuch und PDF erzeugen. `captured_url` bleibt dabei `null`.
 
 ### Grenze
 
@@ -115,13 +118,17 @@ Lokale Screenshots funktionierten, Vercel-Läufe scheiterten beim Browserstart o
 ### Ursache
 
 Das normale Python-Paket enthält weder automatisch einen passenden Chromium-Build noch
-alle nativen NSS/NSPR-Laufzeitbibliotheken der Vercel-Funktion.
+alle nativen Browser-Laufzeitbibliotheken der Vercel-Funktion. Ein echter
+Produktionslauf ohne die `ldd`-Kopie belegte dies mit
+`libatk-1.0.so.0: cannot open shared object file`.
 
 ### Lösung
 
 - `playwright install chromium --only-shell` während des Vercel-Builds.
 - NSS/NSPR-RPMs herunterladen, entpacken und benötigte Shared Libraries ins Bundle
   kopieren.
+- Zusätzlich alle vom Headless-Shell-Binary über `ldd` aufgelösten Bibliotheken
+  bündeln; die Build- und Function-Laufzeiten haben nicht denselben Bestand.
 - `PLAYWRIGHT_BROWSERS_PATH` explizit setzen.
 - Chromium mit `--disable-dev-shm-usage` starten.
 - `.vercelignore` und `excludeFiles` verwenden, damit lokale Stores und Tests das
@@ -129,9 +136,55 @@ alle nativen NSS/NSPR-Laufzeitbibliotheken der Vercel-Funktion.
 
 ### Verbleibende Grenze
 
-Die Funktion ist ungefähr 260 MB groß; Vercel aktiviert deshalb Large Functions
-(Beta). IKEA verursachte weiterhin einen seitenspezifischen Chromium-Abbruch. Ohne
-reproduzierbaren Root Cause bleibt dieser Punkt offen.
+Die Funktion überschreitet das Standardlimit und benötigt deshalb Large Functions
+(Beta) mit `VERCEL_SUPPORT_LARGE_FUNCTIONS=1`. IKEA verursachte weiterhin einen
+seitenspezifischen Chromium-Abbruch. Ohne
+reproduzierbaren Root Cause bleibt der Live-Navigationspunkt offen. Für genau den
+Fehler `Target page, context or browser has been closed` wird der bereits per HTTP
+geprüfte HTML-Stand mit gesetzter Basis-URL und deaktiviertem JavaScript in Chromium
+gerendert. Das Ergebnis trägt `capture_state: http_snapshot_rendered` und einen
+ausführlichen Grund; es wird nicht als Live-Browsernavigation ausgegeben.
+
+Der Produktionslauf zeigte anschließend, dass Vercel Chromium bei IKEA auch während
+`page.set_content` beendet. Der letzte Fallback darf deshalb nicht erneut von demselben
+Browserprozess abhängen: Aus dem bereits gespeicherten DOM-Text wird ohne weitere
+Netzwerkabrufe ein beschriftetes PNG erzeugt. Es trägt
+`capture_state: http_snapshot_visualized`, nennt URL und Herkunft und sagt im Bild
+selbst deutlich „KEIN LIVE-BROWSER-SCREENSHOT“. Das ist eine lesbare Beweisansicht des
+HTML, keine pixelgetreue Wiedergabe des visuellen Seitenzustands.
+
+Ein Preview-Build nach der Reparatur überschritt zunächst mit 672,94 MB das damalige
+Limit, weil Large Functions für Preview nicht aktiviert war. Das Verkleinern auf
+320,46 MB durch Entfernen der `ldd`-Bibliotheken ließ den Build passieren, brach aber
+den Browserstart in Produktion (`libatk-1.0.so.0` fehlte). Die korrekte Lösung ist
+daher nicht, notwendige Laufzeitbibliotheken zu entfernen, sondern Large Functions
+auch für Preview zu aktivieren und die `ldd`-Kopie beizubehalten. RPM-, `usr/share`-
+und `usr/bin`-Reste werden weiterhin entfernt. Das zusätzlich installierte
+FFmpeg-Paket (rund 2,3 MB) wird für reine Screenshots nicht benötigt und ebenfalls
+entfernt.
+
+### Visuelle Verifikation des IKEA-Fallbacks
+
+Am 20.08.2026 wurden Hauptseite, AGB und Datenschutzerklärung über diesen statischen
+Fallback lokal gerendert. Alle drei Bilder enthielten sichtbaren IKEA-Inhalt, Logo und
+Seitentexte. Die 8.000-Pixel-Grenze wurde bei der Hauptseite transparent ausgewiesen.
+
+Die Produktionsverifikation auf Deployment `dpl_41zL97aM3nBSieTCh1TASW7iwLex`
+erzeugte für `https://www.ikea.com/de/de/` drei abrufbare Blob-Artefakte:
+
+- Hauptseite: 885.118 Byte
+- AGB: 436.097 Byte
+- Datenschutzerklärung: 1.199.270 Byte
+
+Alle drei tragen Status `warning` und erklären, dass es sich wegen des Chromium-
+Abbruchs um ein browserloses HTML-Beweisbild und nicht um eine pixelgetreue
+Live-Aufnahme handelt. Das Beweispaket war ebenfalls abrufbar.
+
+Für `https://www.temu.com/de` endete der Produktionslauf im Überprüfungsmodus mit
+`completed_with_warnings`. Er nannte die Schutzart `JavaScript-Challenge`, dokumentierte
+13 geprüfte öffentliche Rechtstextpfade und stellte Schutzseiten-PNG (17.238 Byte),
+Seitenschutz-Bericht, Manifest, PDF und Beweispaket über Blob bereit. Ein dahinter
+liegender Inhalt wurde ausdrücklich nicht als erfasst ausgegeben.
 
 ## 5. Flüchtige Dateien in Serverless Functions
 

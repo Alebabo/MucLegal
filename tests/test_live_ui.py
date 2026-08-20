@@ -10,12 +10,19 @@ import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from muclegal.evidence import verify_manifest
-from muclegal.fetch import FetchFailure, FetchPolicy, HttpFetcher
-from muclegal.fetch.playwright import _cookie_rejection_action
+from muclegal.fetch import (
+    FetchFailure,
+    FetchPolicy,
+    FetchResult,
+    HttpFetcher,
+    ScreenshotCaptureError,
+)
+from muclegal.fetch.playwright import _capture_html_evidence_image, _cookie_rejection_action
 from muclegal.live import (
     LiveMonitorWorkflow,
     LiveWorkflowResult,
@@ -141,6 +148,105 @@ def poll(client: TestClient, run_id: str) -> dict:
 
 
 class LiveWorkflowTests(unittest.TestCase):
+    def test_browserless_html_evidence_image_is_labeled_and_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            destination = Path(output) / "evidence.png"
+            capture = _capture_html_evidence_image(
+                "<html><head><title>IKEA Test</title></head><body>"
+                "<h1>Allgemeine Geschäftsbedingungen</h1>"
+                "<p>Gespeicherter öffentlicher Inhalt.</p></body></html>",
+                "https://www.ikea.com/de/de/customer-service/terms-conditions/",
+                destination,
+                protection=None,
+                fallback_reason="Page.set_content: browser has been closed",
+                browser_error="Target page, context or browser has been closed",
+            )
+
+            from PIL import Image
+
+            with Image.open(destination) as image:
+                dimensions = image.size
+
+        self.assertEqual("http_snapshot_visualized", capture.capture_state)
+        self.assertIn("keine pixelgetreue Live-Browser-Aufnahme", capture.state_reason)
+        self.assertGreater(capture.size_bytes, 5_000)
+        self.assertEqual(1440, dimensions[0])
+        self.assertGreaterEqual(dimensions[1], 900)
+
+    def test_browser_termination_uses_labeled_http_snapshot_fallback(self) -> None:
+        fetcher = HttpFetcher(
+            FetchPolicy(respect_robots=False, require_public_network=False, max_attempts=1)
+        )
+        fetched = FetchResult(
+            requested_url="https://example.org",
+            final_url="https://example.org/final",
+            fetched_at="2026-08-20T12:00:00+00:00",
+            status_code=200,
+            headers=(),
+            redirect_chain=(),
+            body=b"<html><main>Gespeichert</main></html>",
+            decoded_html="<html><main>Gespeichert</main></html>",
+        )
+        fallback_capture = SimpleNamespace(capture_state="http_snapshot_rendered")
+        with tempfile.TemporaryDirectory() as output, patch(
+            "muclegal.fetch.playwright.capture_page_screenshot",
+            side_effect=ScreenshotCaptureError(
+                "Page.goto: Target page, context or browser has been closed"
+            ),
+        ), patch(
+            "muclegal.fetch.playwright.capture_html_screenshot",
+            return_value=fallback_capture,
+        ) as fallback, patch.object(fetcher, "fetch", return_value=fetched):
+            captured = fetcher.capture_screenshot(
+                "https://example.org", Path(output) / "fallback.png"
+            )
+
+        self.assertIs(captured, fallback_capture)
+        self.assertEqual("<html><main>Gespeichert</main></html>", fallback.call_args.args[0])
+        self.assertEqual("https://example.org/final", fallback.call_args.args[1])
+
+    def test_all_protected_targets_still_create_reviewable_evidence_package(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            screenshot = root / "challenge.png"
+            screenshot.write_bytes(b"\x89PNG\r\n\x1a\nchallenge")
+            capture = SimpleNamespace(
+                path=str(screenshot),
+                sha256="7" * 64,
+                size_bytes=screenshot.stat().st_size,
+                capture_state="protected_http_snapshot_rendered",
+                state_reason="Gespeicherte Schutzseite ohne JavaScript gerendert.",
+                interactions=(),
+            )
+            workflow = LiveMonitorWorkflow(
+                root,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            result = workflow._capture_protection_evidence(
+                protected_url="https://shop.test/",
+                protection_type="Art des Seitenschutzes: JavaScript-Challenge.",
+                browser_mode=True,
+                protected_screenshot=capture,
+                candidates=["https://shop.test/agb", "https://shop.test/privacy"],
+                failures=["agb: blockiert", "privacy: blockiert"],
+                progress=lambda _step, _message: None,
+            )
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            manifest_valid = verify_manifest(case["artifacts"]["manifest"]).valid
+            detail = CaseArchive(root).detail(
+                Path(case["artifacts"]["manifest"]).parent.name
+            )
+
+        artifacts = {item["label"]: item for item in detail["artifacts"]}
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertTrue(manifest_valid)
+        self.assertTrue(artifacts["protection_report"]["available"])
+        self.assertEqual("warning", artifacts["requested_page_screenshot"]["status"])
+        self.assertIsNone(case["captured_url"])
+
     def test_browser_transparency_records_non_stealth_runtime_values(self) -> None:
         outcome = SimpleNamespace(
             fetch_mode="browser_review",

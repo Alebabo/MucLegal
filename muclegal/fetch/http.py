@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import ipaddress
+import logging
 import re
 import socket
 import time
@@ -17,6 +18,7 @@ DEFAULT_USER_AGENT = (
     "(+https://github.com/Alebabo/MucLegal; public-page compliance monitor)"
 )
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -140,7 +142,11 @@ class HttpFetcher:
         self._validate_url(url)
         if self.policy.respect_robots:
             self._require_robots_permission(url)
-        from muclegal.fetch.playwright import capture_page_screenshot
+        from muclegal.fetch.playwright import (
+            ScreenshotCaptureError,
+            capture_html_screenshot,
+            capture_page_screenshot,
+        )
 
         initial = parse.urlsplit(url)
         initial_origin = (initial.scheme, initial.netloc)
@@ -176,13 +182,47 @@ class HttpFetcher:
             else:
                 validate_subresource(target_url)
 
-        return capture_page_screenshot(
-            url,
-            destination,
-            timeout_seconds=max(20.0, self.policy.timeout_seconds),
-            user_agent=self.policy.user_agent,
-            request_guard=guard_request,
-        )
+        try:
+            return capture_page_screenshot(
+                url,
+                destination,
+                timeout_seconds=max(20.0, self.policy.timeout_seconds),
+                user_agent=self.policy.user_agent,
+                request_guard=guard_request,
+            )
+        except ScreenshotCaptureError as exc:
+            browser_terminated = any(
+                marker in str(exc).casefold()
+                for marker in (
+                    "target page, context or browser has been closed",
+                    "browser has been closed",
+                    "browser closed",
+                )
+            )
+            if not browser_terminated:
+                raise
+            LOGGER.warning(
+                "Live-Browsernavigation beendet; HTML-Screenshot-Fallback wird verwendet",
+                extra={"target_url": url, "error": str(exc)},
+            )
+            try:
+                fetched = self.fetch(url)
+                html = fetched.decoded_html
+                base_url = fetched.final_url
+            except FetchFailure as fetch_exc:
+                if not fetch_exc.body:
+                    raise exc from fetch_exc
+                html = fetch_exc.body.decode("utf-8", errors="replace")
+                base_url = url
+            return capture_html_screenshot(
+                html,
+                base_url,
+                destination,
+                timeout_seconds=max(20.0, self.policy.timeout_seconds),
+                user_agent=self.policy.user_agent,
+                request_guard=guard_request,
+                fallback_reason=str(exc),
+            )
 
     def _validate_url(self, url: str) -> None:
         parsed = parse.urlsplit(url)

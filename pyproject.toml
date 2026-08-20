@@ -26,7 +26,7 @@ demo = [
 ]
 
 [tool.vercel.scripts]
-build = "PLAYWRIGHT_BROWSERS_PATH=./playwright-browsers playwright install chromium --only-shell && mkdir -p playwright-libs playwright-rpms && dnf install -y 'dnf-command(download)' rpm cpio && dnf download --resolve --destdir playwright-rpms nspr nss && for browser_package in playwright-rpms/*.rpm; do rpm2cpio \"$browser_package\" | (cd playwright-libs && cpio -idmu); done && find playwright-browsers -type f -name chrome-headless-shell -exec ldd {} \\; | awk '$3 ~ /^\\// {print $3}' | sort -u | xargs -r -I{} cp -L {} playwright-libs/"
+build = "rm -rf ./playwright-browsers ./playwright-libs ./playwright-rpms && PLAYWRIGHT_BROWSERS_PATH=./playwright-browsers playwright install chromium --only-shell && rm -rf ./playwright-browsers/ffmpeg-* && mkdir -p playwright-libs playwright-rpms && dnf install -y 'dnf-command(download)' rpm cpio && dnf download --resolve --destdir playwright-rpms nspr nss && for browser_package in playwright-rpms/*.rpm; do rpm2cpio \"$browser_package\" | (cd playwright-libs && cpio -idmu); done && find playwright-browsers -type f -name chrome-headless-shell -exec ldd {} \\; | awk '$3 ~ /^\\// {print $3}' | sort -u | xargs -r -I{} cp -L {} playwright-libs/ && rm -rf playwright-libs/usr/share playwright-libs/usr/bin playwright-rpms"
 
 [project.scripts]
 muclegal = "muclegal.cli:main"

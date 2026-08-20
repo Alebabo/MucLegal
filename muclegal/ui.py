@@ -63,6 +63,7 @@ ARTIFACT_DEFINITIONS = {
     "legal_pages": ("Abruf", "AGB & Datenschutz", "text"),
     "capture_transparency": ("Abruf", "Erfassungstransparenz", "text"),
     "screenshot_interactions": ("Abruf", "Screenshot-Interaktionen", "text"),
+    "protection_report": ("Abruf", "Seitenschutz-Bericht", "text"),
     "previous_normalized_text": ("Abruf", "Vorheriger Text", "text"),
     "diff": ("Abruf", "Diff", "text"),
     "model_input": ("Analyse", "Modellinput", "text"),
@@ -346,6 +347,8 @@ class CaseArchive:
         artifacts: list[dict] = []
         stored = record.get("artifacts", {})
         not_applicable = set(record.get("not_applicable_artifacts", []))
+        if not record.get("protection_type"):
+            not_applicable.add("protection_report")
         custom_statuses = record.get("artifact_statuses", {})
         for label, (group, title, kind) in ARTIFACT_DEFINITIONS.items():
             artifact = {"label": label, "title": title, "group": group, "kind": kind,

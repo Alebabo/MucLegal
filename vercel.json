@@ -5,7 +5,7 @@
   "functions": {
     "app.py": {
       "maxDuration": 120,
-      "excludeFiles": "{tests/**,reference/**,output/**,tmp/**,.muclegal*/**,build/**,*.pdf,*.odp}"
+      "excludeFiles": "{tests/**,reference/**,output/**,tmp/**,.muclegal*/**,build/**,playwright-rpms/**,*.pdf,*.odp}"
     }
   }
 }

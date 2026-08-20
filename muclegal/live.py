@@ -660,6 +660,13 @@ class LiveMonitorWorkflow:
         warnings: list[str] = []
         if screenshot_error:
             warnings.append(f"Screenshot konnte nicht erzeugt werden: {screenshot_error}")
+        if screenshot is not None and getattr(
+            screenshot, "capture_state", "page_content"
+        ) != "page_content":
+            warnings.append(
+                getattr(screenshot, "state_reason", None)
+                or "Der Hauptseiten-Screenshot zeigt einen technisch abweichenden Zustand."
+            )
         for label, status in (legal_screenshot_statuses or {}).items():
             if status.get("status") in {"failed", "warning"}:
                 warnings.append(status.get("reason") or f"{label} konnte nicht aufgenommen werden.")
@@ -750,7 +757,11 @@ class LiveMonitorWorkflow:
                     (
                         "protected_error_state"
                         if getattr(requested_page_screenshot, "capture_state", "page_content")
-                        == "site_connectivity_error"
+                        in {
+                            "site_connectivity_error",
+                            "protected_http_snapshot_rendered",
+                            "protected_http_snapshot_visualized",
+                        }
                         else "captured"
                     )
                     if requested_page_screenshot else "not_applicable"
@@ -807,7 +818,7 @@ class LiveMonitorWorkflow:
                         or "Der Hauptseiten-Screenshot wurde aus technischen Gründen gekürzt.",
                     }
                 } if screenshot is not None
-                    and getattr(screenshot, "capture_state", "page_content") == "page_content_truncated"
+                    and getattr(screenshot, "capture_state", "page_content") != "page_content"
                     else {}),
             },
             "not_applicable_artifacts": [
@@ -909,15 +920,215 @@ class LiveMonitorWorkflow:
                 )
             except Exception as exc:
                 failures.append(f"{candidate}: {type(exc).__name__}: {exc}")
+        return self._capture_protection_evidence(
+            protected_url=protected_url,
+            protection_type=protection_type,
+            browser_mode=browser_mode,
+            protected_screenshot=protected_screenshot,
+            candidates=candidates,
+            failures=failures,
+            progress=progress,
+        )
+
+    def _capture_protection_evidence(
+        self,
+        *,
+        protected_url: str,
+        protection_type: str,
+        browser_mode: bool,
+        protected_screenshot: ScreenshotCapture | None,
+        candidates: list[str],
+        failures: list[str],
+        progress: ProgressCallback,
+    ) -> LiveWorkflowResult:
+        """Create a reviewable package even when every public target remains protected."""
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        bundle = self.store / "bundles" / f"{stamp}-{uuid.uuid4().hex[:8]}"
+        artifacts_dir = bundle / "artifacts"
+        artifacts_dir.mkdir(parents=True, exist_ok=False)
+
+        protection_path = artifacts_dir / "protection_report.json"
+        _write_json(
+            protection_path,
+            {
+                "requested_url": protected_url,
+                "protection_type": protection_type,
+                "verification_mode": browser_mode,
+                "result": "manual_capture_required",
+                "checked_subpages": candidates,
+                "failed_subpages": failures,
+            },
+        )
+        bundled_artifacts: dict[str, Path] = {"protection_report": protection_path}
+        if protected_screenshot is not None:
+            screenshot_path = artifacts_dir / "requested_page_screenshot.png"
+            shutil.copy2(protected_screenshot.path, screenshot_path)
+            bundled_artifacts["requested_page_screenshot"] = screenshot_path
+
+        transparency_path = artifacts_dir / "capture_transparency.yaml"
+        _write_simple_yaml(
+            transparency_path,
+            {
+                "erfassungsmodus": (
+                    "browsergestuetzter_schutzbefund" if browser_mode
+                    else "direkter_http_schutzbefund"
+                ),
+                "user_agent": self.fetcher.policy.user_agent,
+                "navigator.webdriver": None,
+                "automation_flags": [],
+                "proxy": "keiner",
+                "context": "frisch_pro_screenshot",
+                "storage_state": "keiner",
+                "profilverzeichnis": "keines",
+                "robots_txt": "geprueft_abruf_erlaubt",
+                "angefragte_url": protected_url,
+                "seitenschutz": protection_type,
+                "tatsaechlich_erfasste_url": None,
+                "gepruefte_rechtstext_unterseiten": len(candidates),
+                "herkunft": "eigene_infrastruktur_ohne_proxy",
+            },
+        )
+        bundled_artifacts["capture_transparency"] = transparency_path
+
+        interactions_path = artifacts_dir / "screenshot_interactions.json"
+        _write_json(
+            interactions_path,
+            {
+                "policy": "nur_eindeutige_datensparsame_cookie_auswahl",
+                "screenshots": {
+                    "requested_page_screenshot": list(
+                        getattr(protected_screenshot, "interactions", ()) or ()
+                    ) if protected_screenshot else []
+                },
+            },
+        )
+        bundled_artifacts["screenshot_interactions"] = interactions_path
+
+        wayback = self.wayback_client.save(protected_url, bundle)
+        bundled_artifacts["wayback_status"] = bundle / "wayback-status.json"
+        progress("manifest", "Der Schutzbefund wird in einem Hash-Manifest gesichert.")
+        manifest = create_manifest(bundled_artifacts, bundle)
+        verification = verify_manifest(manifest.manifest_path)
+        if not verification.valid:
+            raise RuntimeError(f"Manifestprüfung fehlgeschlagen: {verification.errors}")
+        progress("timestamp", "Der Schutzbefund erhält einen RFC-3161-Zeitstempelversuch.")
+        timestamp = self.tsa_client.timestamp_digest(
+            manifest.manifest_sha256, bundle / "timestamp"
+        )
+
+        assessment = {
+            "ergebnis": "nicht_bewertet",
+            "confidence": 0.0,
+            "begruendung": "Seitenschutz verhinderte eine inhaltliche Erfassung.",
+            "tatsachenbasis": [
+                protection_type,
+                f"{len(candidates)} direkte Rechtstext-Unterseiten geprüft.",
+            ],
+            "staerkstes_gegenargument": (
+                "Der Schutzbefund belegt nicht den dahinterliegenden Seiteninhalt."
+            ),
+            "unsicherheit": "Manuelle Beweissicherung erforderlich.",
+            "freigabe_durch_mensch": None,
+        }
+        evidence = {
+            "warc_status": "nicht_erzeugt_wegen_seitenschutz",
+            "manifest_sha256": manifest.manifest_sha256,
+            "chain_head_sha256": manifest.chain_head_sha256,
+            "timestamp_status": timestamp.status,
+            "wayback_status": wayback.status,
+            "wayback_url": wayback.url,
+            "capture_relation": "protected_page_only",
+            "snapshot_payload_sha256": None,
+            "warc_payload_sha256": None,
+            "screenshot_status": "protected_error_state" if protected_screenshot else "failed",
+            "screenshot_sha256": protected_screenshot.sha256 if protected_screenshot else None,
+            "screenshot_path": protected_screenshot.path if protected_screenshot else None,
+            "requested_page_screenshot_status": (
+                "protected_error_state" if protected_screenshot else "failed"
+            ),
+            "requested_page_screenshot_sha256": (
+                protected_screenshot.sha256 if protected_screenshot else None
+            ),
+            "requested_page_screenshot_reason": (
+                getattr(protected_screenshot, "state_reason", None)
+                if protected_screenshot else protection_type
+            ),
+        }
+        report_data = {
+            "fall_id": self.tenor["fall_id"],
+            "url": protected_url,
+            "erkannt_am": datetime.now(timezone.utc).isoformat(),
+            "vorher": "Kein Vorherzustand.",
+            "nachher": "Inhalt wegen Seitenschutz nicht erfasst.",
+            "assessment": assessment,
+            "evidence": evidence,
+        }
+        report_path = Path(self.report_builder(report_data, bundle / "pruefbericht.pdf"))
+        warnings = [
+            f"SEITENSCHUTZ ERKANNT: {protection_type}",
+            f"{len(failures)} Rechtstext-Unterseiten konnten nicht erfasst werden.",
+        ]
+        if timestamp.status != "verified":
+            warnings.append("RFC-3161-Zeitstempel ist noch offen.")
+        case_record = {
+            **report_data,
+            "tenor": self.tenor,
+            "capture_mode": "protected_review",
+            "requested_url": protected_url,
+            "blocked_url": protected_url,
+            "protection_type": protection_type,
+            "captured_url": None,
+            "analysis_mode": "capture_only",
+            "schema_valid": True,
+            "clause_schema_valid": False,
+            "clause_findings": [],
+            "snapshot_sha256": None,
+            "previous_snapshot_sha256": None,
+            "freigabe_durch_mensch": None,
+            "warnings": warnings,
+            "artifact_statuses": {
+                "requested_page_screenshot": {
+                    "status": "warning" if protected_screenshot else "failed",
+                    "reason": (
+                        getattr(protected_screenshot, "state_reason", None)
+                        if protected_screenshot else "Schutzseite konnte nicht fotografiert werden."
+                    ) or protection_type,
+                },
+                "warc": {
+                    "status": "not_applicable",
+                    "reason": "Kein dahinterliegender Seiteninhalt wurde abgerufen.",
+                },
+            },
+            "not_applicable_artifacts": [
+                "raw_html", "response_headers", "normalized_text", "legal_pages",
+                "previous_normalized_text", "diff", "model_input", "model_output",
+                "clause_model_input", "clause_model_output", "screenshot",
+                "agb_screenshot", "privacy_screenshot", "warc", "cdx", "warc_status",
+            ],
+            "artifacts": {
+                **{label: str(path) for label, path in bundled_artifacts.items()},
+                "manifest": manifest.manifest_path,
+                "manifest_digest": manifest.digest_path,
+                "timestamp_query": timestamp.query_path,
+                "timestamp_response": timestamp.response_path,
+                "report": str(report_path),
+            },
+        }
+        case_path = bundle / "case.json"
+        _write_json(case_path, case_record)
+        self.latest_case_path.write_text(
+            case_path.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+        )
         states = {step: "skipped" for step in PIPELINE_STEPS}
-        states["fetch"] = "warning"
-        states["compare"] = "skipped"
+        states.update({"fetch": "warning", "screenshot": "warning", "manifest": "success"})
+        states["timestamp"] = "success" if timestamp.status == "verified" else "warning"
         return LiveWorkflowResult(
-            "protected",
-            f"SEITENSCHUTZ ERKANNT: {protection_type} Hauptseite und direkt geprüfte Rechtstext-Unterseiten "
-            "konnten nicht automatisiert erfasst werden. Manuelle Beweissicherung erforderlich. "
-            f"Geprüfte Unterseiten: {len(failures)}.",
-            step_states=states,
+            "completed_with_warnings",
+            f"SEITENSCHUTZ ERKANNT: {protection_type} Ein Schutzbefund mit Screenshot "
+            f"und {len(failures)} geprüften Rechtstext-Unterseiten wurde gesichert. "
+            "Der dahinterliegende Seiteninhalt wurde nicht erfasst; manuelle Beweissicherung erforderlich.",
+            str(self.latest_case_path),
+            states,
         )
 
 

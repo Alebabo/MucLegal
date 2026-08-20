@@ -186,9 +186,14 @@ Bei Zeitmangel: nach unten streichen, nie nach oben.
 - MediaMarkt: Hauptseite sowie AGB-/Datenschutz-Screenshots waren erfolgreich; sehr
   hohe Seiten werden bei 8.000 Pixeln transparent als gekürzt markiert.
 - Temu: Hauptseite kann eine JavaScript-Challenge liefern. Schutzart, blockierte URL
-  und tatsächlich erfasste öffentliche Unterseite müssen getrennt bleiben.
-- IKEA: lokal grundsätzlich renderbar; auf Vercel trat ein seitenspezifisches Schließen
-  von Chromium bei der Navigation auf. Nicht als allgemein behoben ausgeben.
+  und tatsächlich erfasste öffentliche Unterseite müssen getrennt bleiben. Bleiben
+  auch alle Rechtstextpfade blockiert, muss trotzdem ein Schutzbefund-Paket mit
+  Challenge-Screenshot, Pfadliste und manueller Grenze entstehen.
+- IKEA: Live-Chromium kann auf Vercel bei `page.goto` und selbst bei `page.set_content`
+  schließen. Zuerst den zuvor direkt geprüften HTML-Stand ohne JavaScript rendern.
+  Beendet die Runtime auch diesen Browser, browserlos ein beschriftetes PNG aus dem
+  gespeicherten DOM-Text erzeugen und als `http_snapshot_visualized` kennzeichnen.
+  Diesen Fallback nie als pixelgetreuen Live-Browserabruf darstellen.
 - freeTSA und Wayback sind externe Zusatzdienste. Ausfälle werden dokumentiert; WARC,
   Roh-HTML, Screenshot und lokales Manifest bleiben die Primärbeweise.
 - Der separate GNU-Wget-WARC-Test ist unter WSL/Wget 1.25.0 sporadisch: Metadaten-
@@ -202,7 +207,17 @@ Bei Zeitmangel: nach unten streichen, nie nach oben.
   NSS/NSPR-Bibliotheken werden in das Function-Bundle kopiert.
 - `.vercelignore` klein halten. Tests, Referenzen, lokale `.muclegal*`-Stores und
   Entwicklungsartefakte dürfen nicht ins Deployment gelangen.
-- Das Function-Bundle ist groß und nutzt derzeit Vercels Large-Functions-Beta. Keine
+- Der Remote-Build muss `playwright-browsers`, `playwright-libs` und
+  `playwright-rpms` vor jeder Chromium-Installation leeren. Die RPM-Downloads werden
+  für das Entpacken benötigt, dürfen aber nicht im Function-Bundle landen.
+- Die vom Headless-Shell-Binary über `ldd` aufgelösten Shared Libraries müssen neben
+  NSS/NSPR im Function-Bundle bleiben. Die Large-Functions-Laufzeit stellte bei einem
+  Produktionslauf selbst `libatk-1.0.so.0` nicht bereit; Chromium startete ohne die
+  Kopie nicht. Nicht auf die Bibliotheken der Build-Maschine als Runtime-Bestand bauen.
+- Das von Playwright zusätzlich geladene FFmpeg-Paket nach der Installation entfernen.
+  Das BeweisLab erstellt nur Screenshots und benötigt keine Videoaufzeichnung.
+- Das Function-Bundle ist groß und nutzt Vercels Large-Functions-Beta. Dafür muss
+  `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` in Preview und Produktion gesetzt sein. Keine
   zusätzlichen Browser oder umfangreichen Binärabhängigkeiten hinzufügen.
 - Das Serverless-Dateisystem ist flüchtig. Benutzerrelevante Fallartefakte werden über
   Vercel Blob bereitgestellt; nicht auf Persistenz zwischen Function-Instanzen vertrauen.
