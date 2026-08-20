@@ -1,5 +1,4 @@
 import os
-import tempfile
 from pathlib import Path
 
 from muclegal.live import LiveMonitorWorkflow
@@ -13,25 +12,8 @@ from muclegal.ui import create_app
 
 
 ROOT = Path(__file__).resolve().parent
-if os.environ.get("VERCEL"):
-    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / "playwright-browsers")
-    bundled_libraries = ":".join(
-        (
-            str(ROOT / "playwright-libs"),
-            str(ROOT / "playwright-libs" / "usr" / "lib64"),
-        )
-    )
-    inherited_libraries = os.environ.get("LD_LIBRARY_PATH", "")
-    os.environ["LD_LIBRARY_PATH"] = ":".join(
-        value for value in (bundled_libraries, inherited_libraries) if value
-    )
 STORE = Path(
-    os.environ.get(
-        "MUCLEGAL_STORE",
-        str(Path(tempfile.gettempdir()) / "muclegal-ui")
-        if os.environ.get("VERCEL")
-        else str(ROOT / ".muclegal-ui"),
-    )
+    os.environ.get("MUCLEGAL_STORE", str(ROOT / ".muclegal-ui"))
 ).resolve()
 ANTHROPIC_READY = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
 FETCHER = HttpFetcher(
@@ -69,7 +51,6 @@ app = create_app(
         "127.0.0.1",
         "localhost",
         "testserver",
-        "*.vercel.app",
     ],
 )
 

@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
-from dataclasses import dataclass
+import shutil
+import statistics
+import tempfile
+import time
+import uuid
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from html import escape as html_escape
 from pathlib import Path
@@ -11,6 +17,7 @@ from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
 from muclegal.fetch.http import DEFAULT_USER_AGENT, FetchFailure, FetchResult, _detect_block_page
+from muclegal.fetch.consent import handle_consent
 
 
 class PlaywrightUnavailable(RuntimeError):
@@ -29,6 +36,12 @@ class ScreenshotCapture:
     capture_state: str = "page_content"
     state_reason: str | None = None
     interactions: tuple[dict[str, str], ...] = ()
+    preview_path: str | None = None
+    index_path: str | None = None
+    tile_paths: tuple[str, ...] = ()
+    artifact_directory: str | None = None
+    capture_completeness: str = "vollstaendig_erfasst"
+    metrics_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +55,744 @@ class DomInspectionCapture:
     safe_path_status: str
     manual_review_reasons: tuple[str, ...]
     safe_path: dict | None = None
+
+
+@dataclass(frozen=True)
+class BrowserTargetCapture:
+    fetch_result: FetchResult
+    screenshot: ScreenshotCapture | None
+    artifact_directory: str
+    capture_completeness: str
+    failure_phase: str | None = None
+
+
+class CaptureRunController:
+    """One Chromium process per run and one fresh, non-persistent context per target."""
+
+    launch_args = ("--disable-dev-shm-usage",)
+
+    def __init__(
+        self,
+        output_root: str | Path,
+        *,
+        user_agent: str = DEFAULT_USER_AGENT,
+        timeout_seconds: float = 20.0,
+        request_guard: Callable[[str, str], None] | None = None,
+        after_initial_hook: Callable[[object, Path], None] | None = None,
+    ) -> None:
+        self.output_root = Path(output_root).resolve()
+        self.user_agent = user_agent
+        self.timeout_seconds = timeout_seconds
+        self.request_guard = request_guard
+        self.after_initial_hook = after_initial_hook
+        self.run_id = uuid.uuid4().hex
+        self.run_root = self.output_root / self.run_id
+        self.run_root.mkdir(parents=True, exist_ok=False)
+        self._playwright_manager = None
+        self._playwright = None
+        self._browser = None
+        self._cache: dict[str, BrowserTargetCapture] = {}
+        self.browser_starts = 0
+        self.contexts = 0
+        self.pages = 0
+        self.started_at = time.perf_counter()
+
+    def __enter__(self) -> "CaptureRunController":
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise PlaywrightUnavailable(
+                "Der lokale Erfassungslauf benötigt Playwright und Chromium."
+            ) from exc
+        self._playwright_manager = sync_playwright()
+        self._playwright = self._playwright_manager.__enter__()
+        self._browser = self._playwright.chromium.launch(
+            headless=True,
+            args=list(self.launch_args),
+        )
+        self.browser_starts = 1
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:  # noqa: ANN001
+        try:
+            if self._browser is not None:
+                self._browser.close()
+        finally:
+            if self._playwright_manager is not None:
+                self._playwright_manager.__exit__(exc_type, exc, traceback)
+
+    def capture_target(self, url: str, *, role: str = "main") -> BrowserTargetCapture:
+        if url in self._cache:
+            return self._cache[url]
+        if self._browser is None:
+            raise RuntimeError("CaptureRunController muss als Kontextmanager verwendet werden.")
+        role_slug = re.sub(r"[^a-z0-9_-]+", "-", role.casefold()).strip("-") or "page"
+        target_root = self.run_root / f"{len(self._cache) + 1:02d}-{role_slug}"
+        target_root.mkdir(parents=True, exist_ok=False)
+        result = self._capture_new_context(url, role, target_root)
+        self._cache[url] = result
+        return result
+
+    def _capture_new_context(
+        self, url: str, role: str, target_root: Path
+    ) -> BrowserTargetCapture:
+        from playwright.sync_api import Error as PlaywrightError
+
+        process_samples = [_process_sample()]
+        phase_started = time.perf_counter()
+        phase_durations: dict[str, float] = {}
+        request_counts: dict[str, int] = {}
+        transferred_bytes = 0
+        transferred_unknown = 0
+        blocked_requests: list[dict[str, str]] = []
+        interactions: list[dict] = []
+        initial: dict | None = None
+        failure_phase: str | None = None
+        failure_message: str | None = None
+        screenshot: ScreenshotCapture | None = None
+        context = None
+        page = None
+        try:
+            context = self._browser.new_context(
+                viewport={"width": 1440, "height": 900},
+                user_agent=self.user_agent,
+                locale="de-DE",
+            )
+            self.contexts += 1
+
+            def route_request(route) -> None:  # noqa: ANN001
+                browser_request = route.request
+                resource_type = browser_request.resource_type
+                request_counts[resource_type] = request_counts.get(resource_type, 0) + 1
+                if browser_request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+                    blocked_requests.append({"url": browser_request.url, "reason": "method"})
+                    route.abort()
+                    return
+                try:
+                    if self.request_guard is not None:
+                        self.request_guard(browser_request.url, resource_type)
+                except Exception as exc:
+                    blocked_requests.append({"url": browser_request.url, "reason": str(exc)})
+                    route.abort()
+                    return
+                route.continue_()
+
+            def record_response(response) -> None:  # noqa: ANN001
+                nonlocal transferred_bytes, transferred_unknown
+                try:
+                    value = response.headers.get("content-length")
+                    if value and value.isdigit():
+                        transferred_bytes += int(value)
+                    else:
+                        transferred_unknown += 1
+                except PlaywrightError:
+                    transferred_unknown += 1
+
+            context.route("**/*", route_request)
+            page = context.new_page()
+            self.pages += 1
+            page.on("response", record_response)
+            failure_phase = "navigation_domcontentloaded"
+            navigation_started = time.perf_counter()
+            response = page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=int(self.timeout_seconds * 1000),
+            )
+            phase_durations["navigation_domcontentloaded"] = time.perf_counter() - navigation_started
+            if response is None:
+                raise ScreenshotCaptureError("Browsernavigation lieferte keine HTTP-Antwort.")
+            failure_phase = "initialzustand_sichern"
+            initial = _capture_initial_state(page, response, url)
+            _write_initial_artifacts(target_root, initial)
+            process_samples.append(_process_sample())
+            if self.after_initial_hook is not None:
+                self.after_initial_hook(page, target_root)
+            phase_durations["initialzustand_sichern"] = (
+                time.perf_counter() - navigation_started
+                - phase_durations["navigation_domcontentloaded"]
+            )
+            if int(initial["status_code"]) >= 400:
+                raise ScreenshotCaptureError(
+                    f"Browsernavigation endete mit HTTP {initial['status_code']}."
+                )
+
+            failure_phase = "consent"
+            consent = handle_consent(
+                page, str(target_root / "screenshot-before-consent.png")
+            )
+            interactions.append(consent)
+            _write_text(target_root / "dom-after-consent.html", page.content())
+            _write_text(
+                target_root / "visible-text-after-consent.txt", _visible_text(page)
+            )
+            phase_durations["consent"] = time.perf_counter() - navigation_started - sum(
+                phase_durations.values()
+            )
+            process_samples.append(_process_sample())
+
+            failure_phase = "expansion"
+            if role in {"agb", "privacy", "datenschutz"}:
+                interactions.extend(_expand_legal_controls(page))
+            _write_text(target_root / "dom-after-expansion.html", page.content())
+            final_text = _visible_text(page)
+            _write_text(target_root / "visible-text-final.txt", final_text)
+            evidence_text = (
+                _legal_container_text(page)
+                if role in {"agb", "privacy", "datenschutz"}
+                else final_text
+            )
+            normalized_text = "\n".join(
+                line.strip() for line in evidence_text.splitlines() if line.strip()
+            )
+            visible_blocks = [line for line in evidence_text.splitlines() if line.strip()]
+            included_blocks = [line for line in normalized_text.splitlines() if line.strip()]
+            coverage_ratio = (
+                len(included_blocks) / len(visible_blocks) if visible_blocks else 0.0
+            )
+            _write_text(target_root / "normalized-text.txt", normalized_text)
+            _write_json(
+                target_root / "clauses.json",
+                {"clauses": _simple_clauses(normalized_text), "source": "visible-text-final"},
+            )
+            _write_json(
+                target_root / "content-coverage.json",
+                {
+                    "method": "semantic_main_container_visible_text",
+                    "normalized_visible_blocks": len(visible_blocks),
+                    "included_blocks": len(included_blocks),
+                    "coverage_ratio": coverage_ratio,
+                    "omitted_blocks": [],
+                },
+            )
+            phase_durations["expansion"] = time.perf_counter() - navigation_started - sum(
+                phase_durations.values()
+            )
+            process_samples.append(_process_sample())
+
+            failure_phase = "screenshot"
+            _wait_for_visual_capture(page, timeout_seconds=self.timeout_seconds)
+            screenshot = _capture_validated_screenshots(page, target_root, interactions)
+            if role in {"agb", "privacy", "datenschutz"} and coverage_ratio < 0.98:
+                screenshot = replace(
+                    screenshot,
+                    capture_state="page_content_truncated",
+                    state_reason=(
+                        f"Rechtstextabdeckung {coverage_ratio:.1%} liegt unter 98 %."
+                    ),
+                    capture_completeness="teilweise_erfasst",
+                )
+            phase_durations["screenshot"] = time.perf_counter() - navigation_started - sum(
+                phase_durations.values()
+            )
+            process_samples.append(_process_sample())
+            failure_phase = None
+        except PlaywrightError as exc:
+            failure_message = f"{type(exc).__name__}: {exc}"
+            if not (initial and _browser_was_closed(exc)):
+                raise ScreenshotCaptureError(
+                    f"Browser-Abruf fehlgeschlagen in Phase {failure_phase}: {exc}"
+                ) from exc
+        except ScreenshotCaptureError as exc:
+            failure_message = f"{type(exc).__name__}: {exc}"
+            if initial is None:
+                raise
+        finally:
+            try:
+                if page is not None:
+                    page.close()
+            except PlaywrightError:
+                pass
+            finally:
+                try:
+                    if context is not None:
+                        context.close()
+                except PlaywrightError:
+                    pass
+
+        if initial is None:
+            raise ScreenshotCaptureError("Kein Initialzustand konnte gesichert werden.")
+        protection = _detect_block_page(initial["dom"])
+        if protection:
+            completeness = "durch_seitenschutz_begrenzt"
+        elif failure_message or screenshot is None or not initial["raw_response"]:
+            completeness = "teilweise_erfasst"
+        else:
+            completeness = screenshot.capture_completeness
+        process_samples.append(_process_sample())
+        rss_values = [
+            int(sample["rss_bytes"])
+            for sample in process_samples
+            if isinstance(sample.get("rss_bytes"), int)
+        ]
+        handles = [
+            int(sample["handles"])
+            for sample in process_samples
+            if isinstance(sample.get("handles"), int)
+        ]
+        stored_files = [path for path in target_root.rglob("*") if path.is_file()]
+        metrics = {
+            "duration_seconds": round(time.perf_counter() - phase_started, 6),
+            "phase_durations_seconds": {
+                key: round(max(0.0, value), 6) for key, value in phase_durations.items()
+            },
+            "python_rss_bytes": (
+                {
+                    "average": round(statistics.fmean(rss_values)),
+                    "maximum": max(rss_values),
+                    "samples": rss_values,
+                }
+                if rss_values
+                else {"value": "not_available", "reason": "psutil lieferte keine RSS-Probe."}
+            ),
+            "python_cpu_time_seconds": {
+                "start": {
+                    "user": process_samples[0].get("cpu_user_seconds"),
+                    "system": process_samples[0].get("cpu_system_seconds"),
+                },
+                "end": {
+                    "user": process_samples[-1].get("cpu_user_seconds"),
+                    "system": process_samples[-1].get("cpu_system_seconds"),
+                },
+            },
+            "python_peak_handles_or_fds": max(handles) if handles else {
+                "value": "not_available",
+                "reason": "psutil lieferte keine Handle-/FD-Probe.",
+            },
+            "chromium_peak_rss_bytes": {
+                "value": "not_available",
+                "reason": "Playwright stellt unter Windows keine stabile Chromium-PID bereit.",
+            },
+            "requests_by_resource_type": request_counts,
+            "transferred_bytes_from_content_length": transferred_bytes,
+            "responses_without_content_length": transferred_unknown,
+            "temporary_storage_bytes": sum(path.stat().st_size for path in stored_files),
+            "raw_response_bytes": (target_root / "raw-response.bin").stat().st_size,
+            "dom_initial_bytes": (target_root / "dom-initial.html").stat().st_size,
+            "dom_final_bytes": (
+                (target_root / "dom-after-expansion.html").stat().st_size
+                if (target_root / "dom-after-expansion.html").is_file()
+                else {"value": "not_available", "reason": "Browser endete vor dem Finalzustand."}
+            ),
+            "browser_starts": self.browser_starts,
+            "contexts": self.contexts,
+            "pages": self.pages,
+            "failure_phase": failure_phase,
+            "failure_message": failure_message,
+        }
+        metrics_path = target_root / "resource-metrics.json"
+        _write_json(metrics_path, metrics)
+        _write_json(target_root / "interactions.json", {"interactions": interactions})
+        browser_metadata = {
+            "erfassungsmodus": "browsergestuetzt",
+            "user_agent": initial["user_agent"],
+            "navigator_webdriver": initial["navigator_webdriver"],
+            "automation_flags": [],
+            "proxy": "keiner",
+            "context": "frisch_pro_ziel_url",
+            "storage_state": "keiner",
+            "profilverzeichnis": "keines",
+            "browser_engine": "Chromium",
+            "browser_version": self._browser.version,
+            "launch_args": list(self.launch_args),
+            "request_count": sum(request_counts.values()),
+            "document_request_count": request_counts.get("document", 0),
+            "blocked_request_count": len(blocked_requests),
+            "capture_artifact_directory": str(target_root),
+            "capture_completeness": completeness,
+            "failure_phase": failure_phase,
+            "failure_message": failure_message,
+        }
+        _write_json(target_root / "browser-metadata.json", browser_metadata)
+        headers = tuple(initial["headers"].items()) + (
+            ("X-MucLegal-Capture-Mode", "browser-rendered-dom"),
+        )
+        fetch_result = FetchResult(
+            requested_url=url,
+            final_url=initial["final_url"],
+            fetched_at=initial["captured_at"],
+            status_code=int(initial["status_code"]),
+            headers=headers,
+            redirect_chain=tuple(initial["redirect_chain"]),
+            body=initial["dom"].encode("utf-8"),
+            decoded_html=initial["dom"],
+            fetch_mode="browser_review",
+            browser_metadata=browser_metadata,
+        )
+        return BrowserTargetCapture(
+            fetch_result=fetch_result,
+            screenshot=screenshot,
+            artifact_directory=str(target_root),
+            capture_completeness=completeness,
+            failure_phase=failure_phase,
+        )
+
+
+def _capture_initial_state(page, response, requested_url: str) -> dict:  # noqa: ANN001
+    redirect_chain: list[str] = []
+    redirected_request = response.request
+    while redirected_request.redirected_from is not None:
+        redirect_chain.append(redirected_request.url)
+        redirected_request = redirected_request.redirected_from
+    redirect_chain.reverse()
+    try:
+        raw_response = response.body()
+        raw_response_source = "playwright_document_response_body"
+    except Exception as exc:
+        raw_response = b""
+        raw_response_source = f"not_available:{type(exc).__name__}:{exc}"
+    snapshot = page.evaluate(
+        """() => ({
+          title: document.title,
+          dom: document.documentElement?.outerHTML || '',
+          visibleText: document.body?.innerText || '',
+          userAgent: navigator.userAgent,
+          navigatorWebdriver: navigator.webdriver,
+          viewport: {width: window.innerWidth, height: window.innerHeight},
+          scrollWidth: document.documentElement?.scrollWidth || 0,
+          scrollHeight: document.documentElement?.scrollHeight || 0
+        })"""
+    )
+    return {
+        "requested_url": requested_url,
+        "final_url": page.url,
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "status_code": response.status,
+        "headers": response.all_headers(),
+        "redirect_chain": redirect_chain,
+        "title": snapshot["title"],
+        "dom": snapshot["dom"],
+        "visible_text": snapshot["visibleText"],
+        "dimensions": {
+            "viewport": snapshot["viewport"],
+            "scrollWidth": snapshot["scrollWidth"],
+            "scrollHeight": snapshot["scrollHeight"],
+        },
+        "user_agent": snapshot["userAgent"],
+        "navigator_webdriver": snapshot["navigatorWebdriver"],
+        "raw_response": raw_response,
+        "raw_response_source": raw_response_source,
+    }
+
+
+def _write_initial_artifacts(root: Path, state: dict) -> None:
+    _write_json(
+        root / "request.json",
+        {
+            "requested_url": state["requested_url"],
+            "final_url": state["final_url"],
+            "captured_at": state["captured_at"],
+            "status_code": state["status_code"],
+            "redirect_chain": state["redirect_chain"],
+            "title": state["title"],
+            "viewport": state["dimensions"]["viewport"],
+            "scrollWidth": state["dimensions"]["scrollWidth"],
+            "scrollHeight": state["dimensions"]["scrollHeight"],
+            "user_agent": state["user_agent"],
+            "navigator_webdriver": state["navigator_webdriver"],
+            "raw_response_source": state["raw_response_source"],
+        },
+    )
+    _write_json(root / "response-headers.json", state["headers"])
+    _write_bytes(root / "raw-response.bin", state["raw_response"])
+    _write_text(root / "raw.html", state["dom"])
+    _write_text(root / "dom-initial.html", state["dom"])
+    _write_text(root / "visible-text-initial.txt", state["visible_text"])
+
+
+def _visible_text(page) -> str:  # noqa: ANN001
+    return page.locator("body").inner_text(timeout=2_000)
+
+
+def _simple_clauses(text: str) -> list[dict[str, object]]:
+    blocks = [block.strip() for block in re.split(r"\n{2,}|(?<=\.)\s+(?=[A-ZÄÖÜ0-9])", text)]
+    return [
+        {"ordinal": index, "text": block}
+        for index, block in enumerate(blocks, 1)
+        if block
+    ]
+
+
+def _legal_container_text(page) -> str:  # noqa: ANN001
+    return str(
+        page.evaluate(
+            """() => {
+              const candidates = [...document.querySelectorAll('main, article, [role="main"]')]
+                .filter(element => {
+                  const style = getComputedStyle(element);
+                  return style.visibility !== 'hidden' && style.display !== 'none';
+                });
+              const selected = candidates.sort(
+                (left, right) => (right.innerText || '').length - (left.innerText || '').length
+              )[0] || document.body;
+              return selected?.innerText || '';
+            }"""
+        )
+    )
+
+
+def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
+    from playwright.sync_api import Error as PlaywrightError
+
+    records: list[dict] = []
+    container = page.locator("main, article, [role='main']").first
+    try:
+        if container.count() == 0:
+            container = page.locator("body")
+        controls = container.locator(
+            "details:not([open]) > summary, [aria-expanded='false'][aria-controls], "
+            "[role='tab'][aria-selected='false'], button"
+        )
+        count = min(controls.count(), 100)
+    except PlaywrightError:
+        return records
+    for index in range(count):
+        control = controls.nth(index)
+        try:
+            if not control.is_visible(timeout=100):
+                continue
+            handle = control.element_handle()
+            if handle is None:
+                continue
+            before = handle.evaluate(
+                """el => ({
+                  text: (el.innerText || el.getAttribute('aria-label') || '').trim(),
+                  aria_expanded: el.getAttribute('aria-expanded'),
+                  aria_controls: el.getAttribute('aria-controls'),
+                  details_open: el.closest('details')?.open ?? null,
+                  url: document.URL,
+                  text_length: (document.body?.innerText || '').length
+                })"""
+            )
+            tag_name = handle.evaluate("el => el.tagName.toLowerCase()")
+            if tag_name == "button" and not re.search(
+                r"\bmehr\s+anzeigen\b", before["text"], re.IGNORECASE
+            ):
+                continue
+            handle.click(timeout=1_500)
+            page.wait_for_timeout(250)
+            after = handle.evaluate(
+                """el => ({
+                  aria_expanded: el.getAttribute('aria-expanded'),
+                  details_open: el.closest('details')?.open ?? null,
+                  url: document.URL,
+                  text_length: (document.body?.innerText || '').length
+                })"""
+            )
+            records.append(
+                {
+                    "type": "legal_expansion",
+                    "clicked_at": datetime.now(timezone.utc).isoformat(),
+                    "selector_strategy": "rechtstextcontainer:zulässige_struktur",
+                    "target_text": before["text"][:500],
+                    "aria_controls": before["aria_controls"],
+                    "before": before,
+                    "after": after,
+                    "changed": before["aria_expanded"] != after["aria_expanded"]
+                    or before["details_open"] != after["details_open"]
+                    or before["text_length"] != after["text_length"]
+                    or before["url"] != after["url"],
+                }
+            )
+        except PlaywrightError:
+            continue
+    return records
+
+
+def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -> ScreenshotCapture:  # noqa: ANN001
+    from PIL import Image
+    from playwright.sync_api import Error as PlaywrightError
+
+    heights = []
+    for _ in range(3):
+        height = int(page.evaluate("document.documentElement.scrollHeight || 0"))
+        heights.append(height)
+        page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+        page.wait_for_timeout(250)
+    page.evaluate("window.scrollTo(0, 0)")
+    document_height = max(heights or [900])
+    width = min(max(int(page.evaluate("document.documentElement.scrollWidth || 1440")), 1), 1440)
+    full_path = root / "screenshot-full-page.png"
+    full_error: str | None = None
+    full_metrics: dict | None = None
+    try:
+        page.screenshot(path=str(full_path), full_page=True, type="png")
+        full_metrics = _image_metrics(full_path)
+        if full_metrics["invalid_nearly_white"]:
+            full_error = "Vollbild ist nach der 99,5%-/Standardabweichungsregel nahezu weiß."
+        elif full_metrics["width"] < 1 or full_metrics["height"] < document_height:
+            full_error = "Vollbild deckt die dokumentierte Seitenhöhe nicht ab."
+    except (PlaywrightError, OSError) as exc:
+        full_error = f"{type(exc).__name__}: {exc}"
+
+    tile_paths: list[Path] = []
+    tiles: list[dict] = []
+    invalid_tiles = 0
+    reached_height = document_height
+    completeness = "vollstaendig_erfasst"
+    if full_error is not None:
+        tiles_root = root / "screenshot-tiles"
+        tiles_root.mkdir(exist_ok=True)
+        tile_height = 2_000
+        overlap = 100
+        step = tile_height - overlap
+        y = 0
+        while y < document_height and len(tiles) < 100:
+            y_end = min(y + tile_height, document_height)
+            tile_path = tiles_root / f"tile-{len(tiles):04d}.png"
+            page.screenshot(
+                path=str(tile_path),
+                full_page=False,
+                clip={"x": 0, "y": y, "width": width, "height": y_end - y},
+                type="png",
+            )
+            metrics = _image_metrics(tile_path)
+            if metrics["invalid_nearly_white"]:
+                invalid_tiles += 1
+            tile_paths.append(tile_path)
+            tiles.append(
+                {
+                    "index": len(tiles),
+                    "path": str(tile_path.relative_to(root)).replace("\\", "/"),
+                    "y_start": y,
+                    "y_end": y_end,
+                    "device_scale_factor": 1,
+                    "pixel_width": metrics["width"],
+                    "pixel_height": metrics["height"],
+                    "sha256": _sha256_path(tile_path),
+                    "captured_at": datetime.now(timezone.utc).isoformat(),
+                    "image_metrics": metrics,
+                }
+            )
+            reached_height = y_end
+            if y_end >= document_height:
+                break
+            y += step
+        if reached_height < document_height:
+            completeness = "teilweise_erfasst"
+        if invalid_tiles:
+            completeness = "teilweise_erfasst"
+    index = {
+        "mode": "full_page" if full_error is None else "tiles",
+        "full_page_attempt": {
+            "path": full_path.name if full_path.exists() else None,
+            "valid": full_error is None,
+            "error": full_error,
+            "metrics": full_metrics,
+        },
+        "document_height_css_px": document_height,
+        "height_measurements_css_px": heights,
+        "tile_height_css_px": 2_000,
+        "overlap_css_px": 100,
+        "tile_limit": 100,
+        "tiles": tiles,
+        "reached_height_css_px": reached_height,
+        "continuous_coverage": _continuous_coverage(tiles, document_height),
+        "invalid_nearly_white_tiles": invalid_tiles,
+        "capture_completeness": completeness,
+    }
+    index_path = root / "screenshot-index.json"
+    _write_json(index_path, index)
+    source = full_path if full_error is None else tile_paths[0]
+    preview_path = root / "screenshot-preview.webp"
+    with Image.open(source) as image:
+        preview = image.convert("RGB")
+        preview.thumbnail((1200, 1600))
+        preview.save(preview_path, "WEBP", quality=82, method=6)
+    primary = full_path if full_error is None else preview_path
+    payload = primary.read_bytes()
+    action_records = tuple(
+        interaction["action"]
+        for interaction in interactions
+        if interaction.get("action")
+    )
+    return ScreenshotCapture(
+        path=str(primary),
+        sha256=hashlib.sha256(payload).hexdigest(),
+        size_bytes=len(payload),
+        capture_state="page_content" if completeness == "vollstaendig_erfasst" else "page_content_truncated",
+        state_reason=None if completeness == "vollstaendig_erfasst" else (
+            f"Bildserie erreichte {reached_height} von {document_height} CSS-Pixeln."
+        ),
+        interactions=action_records,
+        preview_path=str(preview_path),
+        index_path=str(index_path),
+        tile_paths=tuple(str(path) for path in tile_paths),
+        artifact_directory=str(root),
+        capture_completeness=completeness,
+    )
+
+
+def _image_metrics(path: Path) -> dict[str, object]:
+    from PIL import Image, ImageStat
+
+    with Image.open(path) as source:
+        image = source.convert("RGBA")
+        background = Image.new("RGBA", image.size, "white")
+        background.alpha_composite(image)
+        rgb = background.convert("RGB")
+        grayscale = rgb.convert("L")
+        stat = ImageStat.Stat(grayscale)
+        histogram = grayscale.histogram()
+        total = max(1, rgb.width * rgb.height)
+        near_white = sum(histogram[248:]) / total
+        deviation = float(stat.stddev[0])
+        return {
+            "width": rgb.width,
+            "height": rgb.height,
+            "compressed_size_bytes": path.stat().st_size,
+            "uncompressed_size_bytes": rgb.width * rgb.height * 3,
+            "luminance_mean": round(float(stat.mean[0]), 6),
+            "luminance_stddev": round(deviation, 6),
+            "nearly_white_pixel_ratio": round(near_white, 8),
+            "invalid_nearly_white": near_white >= 0.995 and deviation < 3.0,
+        }
+
+
+def _continuous_coverage(tiles: list[dict], expected_height: int) -> bool:
+    if not tiles:
+        return False
+    reached = 0
+    for tile in tiles:
+        if int(tile["y_start"]) > reached:
+            return False
+        reached = max(reached, int(tile["y_end"]))
+    return reached >= expected_height
+
+
+def _process_sample() -> dict[str, object]:
+    try:
+        import psutil
+
+        process = psutil.Process()
+        memory = process.memory_info()
+        cpu = process.cpu_times()
+        return {
+            "rss_bytes": memory.rss,
+            "cpu_user_seconds": cpu.user,
+            "cpu_system_seconds": cpu.system,
+            "handles": process.num_handles() if os.name == "nt" else process.num_fds(),
+        }
+    except Exception as exc:
+        return {"value": "not_available", "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def _write_bytes(path: Path, payload: bytes) -> None:
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_bytes(payload)
+    temporary.replace(path)
+
+
+def _write_text(path: Path, value: str) -> None:
+    _write_bytes(path, value.encode("utf-8"))
+
+
+def _write_json(path: Path, value: object) -> None:
+    _write_text(path, json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def _sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def fetch_rendered_public_page(

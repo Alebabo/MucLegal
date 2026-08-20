@@ -289,6 +289,24 @@ class PipelineAcceptanceTests(unittest.TestCase):
         )
         self.assertIn("Seitenschutz", _detect_block_page(page))
 
+    def test_dormant_shopify_captcha_script_is_not_a_block_page(self) -> None:
+        page = """
+        <html><body><main><h1>Öffentlicher Shop</h1></main>
+        <script id="captcha-bootstrap">
+          const fields = ['g-recaptcha-response', 'h-captcha-response'];
+          const source = 'storefront-forms-hcaptcha/example.js';
+        </script></body></html>
+        """
+        self.assertIsNone(_detect_block_page(page))
+
+    def test_privacy_policy_that_explains_captcha_is_not_a_block_page(self) -> None:
+        page = """
+        <html><main><h1>Datenschutzerklärung</h1>
+        <p>Wir verwenden den CAPTCHA-Dienst Google reCAPTCHA zum Schutz von Formularen.</p>
+        </main></html>
+        """
+        self.assertIsNone(_detect_block_page(page))
+
     def test_robots_disallow_stops_before_page_fetch(self) -> None:
         with FixtureServer() as server:
             with self.assertRaises(FetchFailure) as caught:

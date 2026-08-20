@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import difflib
+import io
 import json
 import re
 import shutil
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urljoin, urlsplit
+from contextlib import nullcontext
 
 from lxml import html as lxml_html
+from pypdf import PdfReader
 
 from muclegal.evidence import (
     OpenSslTsaClient,
@@ -138,7 +141,40 @@ class LiveMonitorWorkflow:
         blocked_source_type: str | None = None,
         requested_page_screenshot: ScreenshotCapture | None = None,
     ) -> LiveWorkflowResult:
+        session = nullcontext()
+        if (
+            capture_baseline
+            and self.screenshot_capturer is not None
+            and hasattr(self.fetcher, "capture_session")
+        ):
+            session = self.fetcher.capture_session(self.store / "capture-runs")
+        with session:
+            return self._run_impl(
+                url,
+                progress,
+                capture_baseline=capture_baseline,
+                allow_protected_fallback=allow_protected_fallback,
+                browser_mode=browser_mode,
+                blocked_source_url=blocked_source_url,
+                blocked_source_type=blocked_source_type,
+                requested_page_screenshot=requested_page_screenshot,
+            )
+
+    def _run_impl(
+        self,
+        url: str,
+        progress: ProgressCallback | None = None,
+        *,
+        capture_baseline: bool = False,
+        allow_protected_fallback: bool = True,
+        browser_mode: bool = False,
+        blocked_source_url: str | None = None,
+        blocked_source_type: str | None = None,
+        requested_page_screenshot: ScreenshotCapture | None = None,
+    ) -> LiveWorkflowResult:
         progress = progress or (lambda _step, _message: None)
+        protection_type = blocked_source_type
+        requested_url = blocked_source_url or url
         progress("fetch", "Öffentliche Webseite und robots.txt werden geprüft und abgerufen.")
         protection_notice: str | None = None
         try:
@@ -182,7 +218,7 @@ class LiveMonitorWorkflow:
                 if browser_mode:
                     progress(
                         "browser",
-                        "Überprüfungsmodus aktiv: Die öffentliche Seite wird einmalig in einem echten Browser mit JavaScript geladen.",
+                        "Seitenschutz erkannt: Der Überprüfungsmodus wird automatisch aktiviert und die öffentliche Seite einmalig in einem echten Browser mit JavaScript geladen.",
                     )
                     try:
                         rendered = self.fetcher.fetch_in_browser(url)
@@ -395,6 +431,124 @@ class LiveMonitorWorkflow:
             shutil.copy2(source, destination)
             bundled_artifacts[label] = destination
 
+        role_captures = {
+            "main": screenshot,
+            "requested": requested_page_screenshot,
+            "agb": (legal_page_screenshots or {}).get("agb_screenshot"),
+            "privacy": (legal_page_screenshots or {}).get("privacy_screenshot"),
+        }
+        capture_index_entries: list[dict[str, Any]] = []
+        capture_galleries: dict[str, dict[str, Any]] = {}
+        copied_directories: dict[str, str] = {}
+        metric_documents: list[dict[str, Any]] = []
+        for role, capture in role_captures.items():
+            if capture is None or not getattr(capture, "artifact_directory", None):
+                continue
+            source_root = Path(capture.artifact_directory).resolve()
+            source_key = str(source_root)
+            effective_role = copied_directories.get(source_key, role)
+            if source_key not in copied_directories:
+                role_root = artifacts_dir / "roles" / role
+                shutil.copytree(source_root, role_root)
+                copied_directories[source_key] = role
+                for path in sorted(role_root.rglob("*")):
+                    if not path.is_file():
+                        continue
+                    relative = path.relative_to(bundle).as_posix()
+                    label = f"capture_{role}_{path.relative_to(role_root).as_posix()}"
+                    bundled_artifacts[label] = path
+                    capture_index_entries.append(
+                        {
+                            "role": role,
+                            "path": relative,
+                            "sha256": sha256_file(path),
+                            "size_bytes": path.stat().st_size,
+                            "kind": "original" if path.name != "screenshot-preview.webp" else "derived_preview",
+                            "derived_from": (
+                                f"artifacts/roles/{role}/screenshot-index.json"
+                                if path.name == "screenshot-preview.webp" else None
+                            ),
+                        }
+                    )
+                metrics_path = role_root / "resource-metrics.json"
+                if metrics_path.is_file():
+                    metric_documents.append(json.loads(metrics_path.read_text(encoding="utf-8")))
+            role_root = artifacts_dir / "roles" / effective_role
+            screenshot_index = role_root / "screenshot-index.json"
+            if screenshot_index.is_file():
+                index_data = json.loads(screenshot_index.read_text(encoding="utf-8"))
+                capture_galleries[role] = {
+                    "source_role": effective_role,
+                    "preview": f"artifacts/roles/{effective_role}/screenshot-preview.webp",
+                    "index": f"artifacts/roles/{effective_role}/screenshot-index.json",
+                    "mode": index_data.get("mode"),
+                    "capture_completeness": index_data.get("capture_completeness"),
+                    "tiles": [
+                        f"artifacts/roles/{effective_role}/{item['path']}"
+                        for item in index_data.get("tiles", [])
+                    ],
+                }
+
+        capture_states = [
+            getattr(capture, "capture_completeness", "vollstaendig_erfasst")
+            for capture in role_captures.values()
+            if capture is not None
+        ]
+        if protection_type:
+            capture_completeness = "durch_seitenschutz_begrenzt"
+        elif screenshot is None:
+            capture_completeness = "teilweise_erfasst"
+        elif "teilweise_erfasst" in capture_states or any(
+            status.get("status") in {"failed", "warning"}
+            for status in (legal_screenshot_statuses or {}).values()
+        ):
+            capture_completeness = "teilweise_erfasst"
+        else:
+            capture_completeness = "vollstaendig_erfasst"
+        capture_index_path = artifacts_dir / "capture-index.json"
+        _write_json(
+            capture_index_path,
+            {
+                "version": 1,
+                "capture_completeness": capture_completeness,
+                "sources": capture_galleries,
+                "artifacts": capture_index_entries,
+            },
+        )
+        bundled_artifacts["capture_index"] = capture_index_path
+        metrics_path = artifacts_dir / "capture-metrics.json"
+        _write_json(
+            metrics_path,
+            {
+                "version": 1,
+                "targets": metric_documents,
+                "browser_run_root": getattr(self.fetcher, "last_capture_run_root", None),
+                "warc_size_bytes": {"value": "pending", "reason": "Manifestbildung folgt."},
+                "zip_size_bytes": {"value": "not_available", "reason": "ZIP wird beim Download erzeugt."},
+            },
+        )
+        bundled_artifacts["capture_metrics"] = metrics_path
+        run_result_path = artifacts_dir / "run-result.json"
+        _write_json(
+            run_result_path,
+            {
+                "status": capture_completeness,
+                "requested_url": requested_url or outcome.url,
+                "captured_url": outcome.url,
+                "protection_type": protection_type,
+                "failure_phase": next(
+                    (
+                        document.get("failure_phase")
+                        for document in metric_documents
+                        if document.get("failure_phase")
+                    ),
+                    None,
+                ),
+                "available_intermediate_artifacts": [item["path"] for item in capture_index_entries],
+            },
+        )
+        bundled_artifacts["run_result"] = run_result_path
+
         warnings: list[str] = []
         if screenshot_error:
             warnings.append(f"Screenshot konnte nicht erzeugt werden: {screenshot_error}")
@@ -437,6 +591,16 @@ class LiveMonitorWorkflow:
             warc_status_path = bundle / "warc-status.json"
             _write_json(warc_status_path, {"status": "failed", "message": warc_status})
             bundled_artifacts["warc_status"] = warc_status_path
+
+        metrics_document = json.loads(metrics_path.read_text(encoding="utf-8"))
+        if "warc" in bundled_artifacts and bundled_artifacts["warc"].is_file():
+            metrics_document["warc_size_bytes"] = bundled_artifacts["warc"].stat().st_size
+        else:
+            metrics_document["warc_size_bytes"] = {
+                "value": "not_available",
+                "reason": warc_status,
+            }
+        _write_json(metrics_path, metrics_document)
 
         wayback = self.wayback_client.save(outcome.url, bundle)
         bundled_artifacts["wayback_status"] = bundle / "wayback-status.json"
@@ -550,15 +714,83 @@ class LiveMonitorWorkflow:
             discovered_url = str(selected_link["url"])
             target_url = discovered_url
             selection = "direkter_rechtstext"
+            candidate_record: dict[str, Any] = {
+                "discovered_url": discovered_url,
+                "captured_url": None,
+                "redirect_chain": [],
+                "document_type": category,
+                "link_source": selected_link.get("source", "saved_html_link"),
+                "http_status": None,
+                "visible_characters": 0,
+                "heading_count": 0,
+                "clause_count": 0,
+                "selection_score": None,
+                "exclusion_reason": None,
+            }
             try:
                 legal_page = self.fetcher.fetch(discovered_url)
-                target_url, selection = _select_legal_content_url(
-                    legal_page.decoded_html,
-                    legal_page.final_url,
-                    category,
+                content_type = next(
+                    (
+                        value
+                        for name, value in legal_page.headers
+                        if name.casefold() == "content-type"
+                    ),
+                    "",
+                ).casefold()
+                is_pdf = "application/pdf" in content_type or urlsplit(
+                    legal_page.final_url
+                ).path.casefold().endswith(".pdf")
+                if is_pdf:
+                    original_pdf = output_directory / f"{category}-original.pdf"
+                    original_pdf.write_bytes(legal_page.body)
+                    reader = PdfReader(io.BytesIO(legal_page.body))
+                    page_texts = [page.extract_text() or "" for page in reader.pages]
+                    extracted_pdf = output_directory / f"{category}-pdf-text.txt"
+                    extracted_pdf.write_text("\n\n".join(page_texts), encoding="utf-8")
+                    legal_pages.setdefault("pdf_artifacts", {})[category] = {
+                        "original_path": str(original_pdf),
+                        "original_sha256": sha256_file(original_pdf),
+                        "extracted_text_path": str(extracted_pdf),
+                        "extracted_text_sha256": sha256_file(extracted_pdf),
+                        "page_count": len(page_texts),
+                        "pages_with_text": sum(bool(text.strip()) for text in page_texts),
+                        "extracted_characters": sum(len(text) for text in page_texts),
+                    }
+                    target_url = legal_page.final_url
+                    selection = "pdf_rechtstext_original_und_seitenweise_extrahiert"
+                    visible = "\n\n".join(page_texts)
+                    headings = []
+                    clauses = split_clauses(visible)
+                else:
+                    target_url, selection = _select_legal_content_url(
+                        legal_page.decoded_html,
+                        legal_page.final_url,
+                        category,
+                    )
+                    document = lxml_html.fromstring(legal_page.decoded_html)
+                    visible = "\n".join(
+                        line.strip() for line in document.text_content().splitlines() if line.strip()
+                    )
+                    headings = document.xpath("//h1 | //h2 | //h3 | //h4 | //h5 | //h6")
+                    clauses = split_clauses(visible)
+                candidate_record.update(
+                    {
+                        "captured_url": target_url,
+                        "redirect_chain": list(legal_page.redirect_chain),
+                        "http_status": legal_page.status_code,
+                        "visible_characters": len(visible),
+                        "heading_count": len(headings),
+                        "clause_count": len(clauses),
+                        "selection_score": (
+                            len(visible) + len(headings) * 250 + len(clauses) * 100
+                        ),
+                        "selection_method": selection,
+                    }
                 )
             except Exception as exc:
                 selection = f"auflösung_fehlgeschlagen:{type(exc).__name__}"
+                candidate_record["exclusion_reason"] = f"{type(exc).__name__}: {exc}"
+            legal_pages.setdefault("candidates", []).append(candidate_record)
             capture_selections[category] = {
                 "discovered_url": discovered_url,
                 "captured_url": target_url,
@@ -579,6 +811,19 @@ class LiveMonitorWorkflow:
                         target_url,
                         output_directory / f"{label}.png",
                     )
+                quality_warning = _legal_capture_warning(category, selection, capture)
+                if quality_warning:
+                    try:
+                        capture = replace(
+                            capture,
+                            capture_state="page_content_truncated",
+                            state_reason=quality_warning,
+                            capture_completeness="teilweise_erfasst",
+                        )
+                    except TypeError:
+                        capture.capture_state = "page_content_truncated"
+                        capture.state_reason = quality_warning
+                        capture.capture_completeness = "teilweise_erfasst"
                 captures[label] = capture
                 if getattr(capture, "capture_state", "page_content") == "page_content":
                     statuses[label] = {
@@ -620,6 +865,19 @@ class LiveMonitorWorkflow:
         legal_screenshot_statuses: dict[str, dict[str, str]] | None = None,
     ) -> LiveWorkflowResult:
         """Create a technical first-capture bundle without an LLM assessment."""
+        captured_role = _legal_role_for_url(outcome.url) if protection_type else "main"
+        if captured_role in {"agb", "privacy"} and screenshot is not None:
+            role_label = "agb_screenshot" if captured_role == "agb" else "privacy_screenshot"
+            legal_page_screenshots = dict(legal_page_screenshots or {})
+            legal_page_screenshots.setdefault(role_label, screenshot)
+            legal_screenshot_statuses = dict(legal_screenshot_statuses or {})
+            legal_screenshot_statuses.setdefault(
+                role_label,
+                {
+                    "status": "available",
+                    "reason": "Öffentlich erreichbarer Rechtstext als Ersatzquelle erfasst.",
+                },
+            )
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         bundle = self.store / "bundles" / f"{stamp}-{uuid.uuid4().hex[:8]}"
         artifacts_dir = bundle / "artifacts"
@@ -633,6 +891,10 @@ class LiveMonitorWorkflow:
             "normalized_text": Path(snapshot.normalized_text_path),
             "legal_pages": legal_pages_path,
         }
+        legal_pages_document = json.loads(legal_pages_path.read_text(encoding="utf-8"))
+        for role, pdf in legal_pages_document.get("pdf_artifacts", {}).items():
+            source_artifacts[f"{role}_pdf_original"] = Path(pdf["original_path"])
+            source_artifacts[f"{role}_pdf_text"] = Path(pdf["extracted_text_path"])
         if outcome.previous_normalized_text_path:
             source_artifacts["previous_normalized_text"] = Path(
                 outcome.previous_normalized_text_path
@@ -653,11 +915,39 @@ class LiveMonitorWorkflow:
             shutil.copy2(source, destination)
             bundled_artifacts[label] = destination
 
+        (
+            capture_completeness,
+            capture_galleries,
+            metrics_path,
+        ) = _bundle_browser_capture_artifacts(
+            bundle=bundle,
+            artifacts_dir=artifacts_dir,
+            bundled_artifacts=bundled_artifacts,
+            role_captures={
+                "main": screenshot if captured_role == "main" else None,
+                "requested": requested_page_screenshot,
+                "agb": (
+                    screenshot if captured_role == "agb"
+                    else (legal_page_screenshots or {}).get("agb_screenshot")
+                ),
+                "privacy": (
+                    screenshot if captured_role == "privacy"
+                    else (legal_page_screenshots or {}).get("privacy_screenshot")
+                ),
+            },
+            legal_screenshot_statuses=legal_screenshot_statuses or {},
+            protection_type=protection_type,
+            requested_url=requested_url or outcome.url,
+            captured_url=outcome.url,
+            browser_run_root=getattr(self.fetcher, "last_capture_run_root", None),
+        )
+
         capture_transparency = _capture_transparency(
             outcome=outcome,
             configured_user_agent=self.fetcher.policy.user_agent,
             requested_url=requested_url or outcome.url,
             protection_type=protection_type,
+            browser_capture=screenshot,
         )
         transparency_path = artifacts_dir / "capture_transparency.yaml"
         _write_simple_yaml(transparency_path, capture_transparency)
@@ -733,6 +1023,16 @@ class LiveMonitorWorkflow:
             warc_status_path = bundle / "warc-status.json"
             _write_json(warc_status_path, {"status": "failed", "message": warc_status})
             bundled_artifacts["warc_status"] = warc_status_path
+
+        metrics_document = json.loads(metrics_path.read_text(encoding="utf-8"))
+        if "warc" in bundled_artifacts and bundled_artifacts["warc"].is_file():
+            metrics_document["warc_size_bytes"] = bundled_artifacts["warc"].stat().st_size
+        else:
+            metrics_document["warc_size_bytes"] = {
+                "value": "not_available",
+                "reason": warc_status,
+            }
+        _write_json(metrics_path, metrics_document)
 
         wayback = self.wayback_client.save(outcome.url, bundle)
         bundled_artifacts["wayback_status"] = bundle / "wayback-status.json"
@@ -821,6 +1121,8 @@ class LiveMonitorWorkflow:
             **report_data,
             "tenor": self.tenor,
             "capture_mode": "browser_review" if browser_mode_used else "technical_evidence",
+            "capture_completeness": capture_completeness,
+            "capture_galleries": capture_galleries,
             "capture_method_note": (
                 "Öffentlicher Seitenzustand mit Chromium und ausgeführtem JavaScript erfasst; "
                 "ausschließlich eindeutig datensparsame Cookie-Auswahl vor Screenshots; "
@@ -996,6 +1298,28 @@ class LiveMonitorWorkflow:
             shutil.copy2(protected_screenshot.path, screenshot_path)
             bundled_artifacts["requested_page_screenshot"] = screenshot_path
 
+        (
+            capture_completeness,
+            capture_galleries,
+            capture_metrics_path,
+        ) = _bundle_browser_capture_artifacts(
+            bundle=bundle,
+            artifacts_dir=artifacts_dir,
+            bundled_artifacts=bundled_artifacts,
+            role_captures={"main": None, "requested": protected_screenshot},
+            legal_screenshot_statuses={},
+            protection_type=protection_type,
+            requested_url=protected_url,
+            captured_url=protected_url,
+            browser_run_root=getattr(self.fetcher, "last_capture_run_root", None),
+        )
+        protection_metrics = json.loads(capture_metrics_path.read_text(encoding="utf-8"))
+        protection_metrics["warc_size_bytes"] = {
+            "value": "not_available",
+            "reason": "Kein dahinterliegender Seiteninhalt für WARC erfasst.",
+        }
+        _write_json(capture_metrics_path, protection_metrics)
+
         transparency_path = artifacts_dir / "capture_transparency.yaml"
         _write_simple_yaml(
             transparency_path,
@@ -1105,6 +1429,8 @@ class LiveMonitorWorkflow:
             **report_data,
             "tenor": self.tenor,
             "capture_mode": "protected_review",
+            "capture_completeness": capture_completeness,
+            "capture_galleries": capture_galleries,
             "requested_url": protected_url,
             "blocked_url": protected_url,
             "protection_type": protection_type,
@@ -1184,13 +1510,21 @@ def _capture_transparency(
     configured_user_agent: str,
     requested_url: str,
     protection_type: str | None,
+    browser_capture: ScreenshotCapture | None = None,
 ) -> dict[str, Any]:
     metadata = dict(outcome.browser_metadata or {})
-    browser_based = outcome.fetch_mode == "browser_review"
+    artifact_directory = getattr(browser_capture, "artifact_directory", None)
+    if browser_capture is not None and artifact_directory:
+        metadata_path = Path(artifact_directory) / "browser-metadata.json"
+        if metadata_path.is_file():
+            metadata.update(json.loads(metadata_path.read_text(encoding="utf-8")))
+    browser_based = outcome.fetch_mode == "browser_review" or browser_capture is not None
     return {
         "erfassungsmodus": "browsergestuetzt" if browser_based else "direkter_http_abruf",
         "user_agent": metadata.get("user_agent", configured_user_agent),
         "navigator.webdriver": metadata.get("navigator_webdriver") if browser_based else None,
+        "chromium_version": metadata.get("browser_version") if browser_based else None,
+        "launch_args": metadata.get("launch_args", []),
         "automation_flags": metadata.get("automation_flags", []),
         "proxy": metadata.get("proxy", "keiner"),
         "context": metadata.get("context", "nicht_anwendbar"),
@@ -1202,6 +1536,7 @@ def _capture_transparency(
         "tatsaechlich_erfasste_url": outcome.url,
         "browser_document_requests": metadata.get("document_request_count", 0),
         "browser_requests_gesamt": metadata.get("request_count", 0),
+        "browser_abbruchphase": metadata.get("failure_phase"),
         "parallelitaet": "seriell_maximal_ein_aktiver_prueflauf",
         "herkunft": "eigene_infrastruktur_ohne_proxy",
     }
@@ -1251,6 +1586,8 @@ def _discover_legal_pages(raw_html_path: str | Path, source_url: str, output_pat
                     "label": label or absolute_url,
                     "url": absolute_url,
                     "same_domain": (parsed.hostname or "").lower() == source_host,
+                    "document_type": category,
+                    "source": "anchor_in_saved_html",
                 })
     payload = {
         "source_url": source_url,
@@ -1281,6 +1618,7 @@ def _legal_subpage_candidates(source_url: str) -> list[str]:
     paths.extend([
         "/terms-of-use.html", "/terms", "/agb", "/agb.html",
         "/privacy-policy.html", "/privacy-and-cookie-policy.html", "/datenschutz",
+        "/policies/terms-of-service", "/policies/privacy-policy",
     ])
     return list(dict.fromkeys(urljoin(origin, path) for path in paths))
 
@@ -1292,6 +1630,38 @@ def _same_document_url(left: str, right: str) -> bool:
         return parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query
 
     return normalized(left) == normalized(right)
+
+
+def _legal_role_for_url(url: str) -> str:
+    path = urlsplit(url).path.casefold()
+    if any(marker in path for marker in ("privacy", "datenschutz")):
+        return "privacy"
+    if any(marker in path for marker in ("terms", "agb", "geschaeftsbeding")):
+        return "agb"
+    return "main"
+
+
+def _legal_capture_warning(
+    category: str, selection: str, capture: ScreenshotCapture
+) -> str | None:
+    if "übersicht_ohne_auflösbare_klauselseite" in selection:
+        return "Die gefundene Rechtstextübersicht ließ sich nicht auf eine konkrete Klauselseite auflösen."
+    artifact_directory = getattr(capture, "artifact_directory", None)
+    if not artifact_directory:
+        return None
+    normalized = Path(artifact_directory) / "normalized-text.txt"
+    clauses = Path(artifact_directory) / "clauses.json"
+    if not normalized.is_file() or not clauses.is_file():
+        return "Gerenderter Rechtstext und Klauseldatei sind nicht vollständig vorhanden."
+    characters = len(normalized.read_text(encoding="utf-8"))
+    clause_count = len(json.loads(clauses.read_text(encoding="utf-8")).get("clauses", []))
+    minimum_characters = 1_500 if category == "datenschutz" else 1_000
+    if characters < minimum_characters or clause_count < 5:
+        return (
+            f"Gerenderter Rechtstext ist mit {characters} Zeichen und {clause_count} Klauseln "
+            "zu dünn für einen vollständigen Klauselbeweis."
+        )
+    return None
 
 
 def _select_legal_link(links: list[dict[str, Any]], category: str) -> dict[str, Any]:
@@ -1414,6 +1784,145 @@ def _contains_legal_body(document: Any, category: str) -> bool:
         )
     )
     return privacy_terms >= 2 and len(text) >= 1_500
+
+
+def _bundle_browser_capture_artifacts(
+    *,
+    bundle: Path,
+    artifacts_dir: Path,
+    bundled_artifacts: dict[str, Path],
+    role_captures: dict[str, ScreenshotCapture | None],
+    legal_screenshot_statuses: dict[str, dict[str, str]],
+    protection_type: str | None,
+    requested_url: str,
+    captured_url: str,
+    browser_run_root: str | None,
+) -> tuple[str, dict[str, dict[str, Any]], Path]:
+    entries: list[dict[str, Any]] = []
+    galleries: dict[str, dict[str, Any]] = {}
+    metric_documents: list[dict[str, Any]] = []
+    copied_directories: dict[str, str] = {}
+    for role, capture in role_captures.items():
+        if capture is None or not getattr(capture, "artifact_directory", None):
+            continue
+        source_root = Path(capture.artifact_directory).resolve()
+        source_key = str(source_root)
+        effective_role = copied_directories.get(source_key, role)
+        if source_key not in copied_directories:
+            role_root = artifacts_dir / "roles" / role
+            shutil.copytree(source_root, role_root)
+            copied_directories[source_key] = role
+            for path in sorted(role_root.rglob("*")):
+                if not path.is_file():
+                    continue
+                relative = path.relative_to(bundle).as_posix()
+                relative_in_role = path.relative_to(role_root).as_posix()
+                label = f"capture_{role}_{relative_in_role}"
+                bundled_artifacts[label] = path
+                entries.append(
+                    {
+                        "role": role,
+                        "path": relative,
+                        "sha256": sha256_file(path),
+                        "size_bytes": path.stat().st_size,
+                        "kind": (
+                            "derived_preview"
+                            if path.name == "screenshot-preview.webp" else "original"
+                        ),
+                        "derived_from": (
+                            f"artifacts/roles/{role}/screenshot-index.json"
+                            if path.name == "screenshot-preview.webp" else None
+                        ),
+                    }
+                )
+            resource_metrics = role_root / "resource-metrics.json"
+            if resource_metrics.is_file():
+                metric_documents.append(
+                    json.loads(resource_metrics.read_text(encoding="utf-8"))
+                )
+        role_root = artifacts_dir / "roles" / effective_role
+        screenshot_index = role_root / "screenshot-index.json"
+        if screenshot_index.is_file():
+            index_data = json.loads(screenshot_index.read_text(encoding="utf-8"))
+            galleries[role] = {
+                "source_role": effective_role,
+                "preview": f"artifacts/roles/{effective_role}/screenshot-preview.webp",
+                "index": f"artifacts/roles/{effective_role}/screenshot-index.json",
+                "mode": index_data.get("mode"),
+                "capture_completeness": index_data.get("capture_completeness"),
+                "tiles": [
+                    f"artifacts/roles/{effective_role}/{item['path']}"
+                    for item in index_data.get("tiles", [])
+                ],
+                "originals": (
+                    [f"artifacts/roles/{effective_role}/screenshot-full-page.png"]
+                    if index_data.get("full_page_attempt", {}).get("path")
+                    else []
+                ),
+            }
+    states = [
+        getattr(capture, "capture_completeness", "vollstaendig_erfasst")
+        for capture in role_captures.values()
+        if capture is not None
+    ]
+    if protection_type:
+        completeness = "durch_seitenschutz_begrenzt"
+    elif role_captures.get("main") is None:
+        completeness = "teilweise_erfasst"
+    elif "teilweise_erfasst" in states or any(
+        status.get("status") in {"failed", "warning"}
+        for status in legal_screenshot_statuses.values()
+    ):
+        completeness = "teilweise_erfasst"
+    else:
+        completeness = "vollstaendig_erfasst"
+    capture_index = artifacts_dir / "capture-index.json"
+    _write_json(
+        capture_index,
+        {
+            "version": 1,
+            "capture_completeness": completeness,
+            "sources": galleries,
+            "artifacts": entries,
+        },
+    )
+    bundled_artifacts["capture_index"] = capture_index
+    metrics_path = artifacts_dir / "capture-metrics.json"
+    _write_json(
+        metrics_path,
+        {
+            "version": 1,
+            "targets": metric_documents,
+            "browser_run_root": browser_run_root,
+            "warc_size_bytes": {"value": "pending", "reason": "WARC folgt."},
+            "zip_size_bytes": {
+                "value": "not_available",
+                "reason": "ZIP wird erst beim lokalen Download erzeugt.",
+            },
+        },
+    )
+    bundled_artifacts["capture_metrics"] = metrics_path
+    run_result = artifacts_dir / "run-result.json"
+    _write_json(
+        run_result,
+        {
+            "status": completeness,
+            "requested_url": requested_url,
+            "captured_url": captured_url,
+            "protection_type": protection_type,
+            "failure_phase": next(
+                (
+                    document.get("failure_phase")
+                    for document in metric_documents
+                    if document.get("failure_phase")
+                ),
+                None,
+            ),
+            "available_intermediate_artifacts": [item["path"] for item in entries],
+        },
+    )
+    bundled_artifacts["run_result"] = run_result
+    return completeness, galleries, metrics_path
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:

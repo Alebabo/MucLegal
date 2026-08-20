@@ -96,6 +96,30 @@ python -m venv .venv
 
 Für die Offline-Demo ist kein API-Schlüssel erforderlich. Die optionale Live-Vorprüfung benötigt `ANTHROPIC_API_KEY`.
 
+## Lokales BeweisLab
+
+Das BeweisLab läuft ausschließlich auf dem lokalen Rechner. Es benötigt für die technische
+Erfassung kein Anthropic-Modell und übermittelt Roh-HTML, Header, DOM, Bilder oder WARC nicht an
+einen fremden Extraktions- oder Speicherdienst.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/doctor-local-beweislab.ps1
+powershell -ExecutionPolicy Bypass -File scripts/start-local-beweislab.ps1
+```
+
+Danach ist es unter `http://127.0.0.1:8000/beweis-labor` erreichbar. Fälle, Capture-Zustände,
+Vorschauen und ZIP-Pakete liegen in `.muclegal-ui/`. Der Start bindet ausschließlich an
+`127.0.0.1`; für eine lokale Ressourcen- und Browserdiagnose ohne öffentliche URL dient:
+
+```powershell
+python -m muclegal diagnose-capture --output output/capture-diagnose
+```
+
+Mit der ausdrücklich zu setzenden Option `--real` wird zusätzlich die festgelegte reale Matrix
+einmal und streng sequenziell geprüft. Schutzmechanismen, Logins, Paywalls und CAPTCHAs werden
+nicht bedient. Sehr hohe Seiten werden zuerst als validiertes Vollbild versucht und bei einem
+ungültigen Ergebnis in 2.000-CSS-Pixel-Kacheln mit dokumentierter Überlappung gesichert.
+
 ## Lokaler Unterlassungs- und Umsetzungsmonitor
 
 Die Ein-Seiten-Oberfläche führt von der manuellen Fallerfassung über die Überwachung bis zur

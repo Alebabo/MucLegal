@@ -11,12 +11,13 @@ dependencies = [
   "fastapi==0.115.6",
   "jinja2==3.1.5",
   "lxml==6.1.1",
+  "Pillow==11.3.0",
   "playwright==1.59.0",
+  "psutil==7.2.2",
   "pypdf==6.16.1",
   "reportlab==4.5.1",
   "trafilatura==2.2.0",
   "uvicorn==0.34.0",
-  "vercel==0.10.0",
   "warcio==1.8.1",
 ]
 
@@ -24,9 +25,6 @@ dependencies = [
 demo = [
   "anthropic==0.122.0",
 ]
-
-[tool.vercel.scripts]
-build = "rm -rf ./playwright-browsers ./playwright-libs ./playwright-rpms && PLAYWRIGHT_BROWSERS_PATH=./playwright-browsers playwright install chromium --only-shell && rm -rf ./playwright-browsers/ffmpeg-* && mkdir -p playwright-libs playwright-rpms && dnf install -y 'dnf-command(download)' rpm cpio && dnf download --resolve --destdir playwright-rpms nspr nss && for browser_package in playwright-rpms/*.rpm; do rpm2cpio \"$browser_package\" | (cd playwright-libs && cpio -idmu); done && find playwright-browsers -type f -name chrome-headless-shell -exec ldd {} \\; | awk '$3 ~ /^\\// {print $3}' | sort -u | xargs -r -I{} cp -L {} playwright-libs/ && rm -rf playwright-libs/usr/share playwright-libs/usr/bin playwright-rpms"
 
 [project.scripts]
 muclegal = "muclegal.cli:main"

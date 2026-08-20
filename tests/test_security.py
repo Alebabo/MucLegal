@@ -49,11 +49,11 @@ class UiSecurityTests(unittest.TestCase):
         content_security_policy = page.headers["content-security-policy"]
         self.assertIn("frame-ancestors 'none'", content_security_policy)
         self.assertIn(
-            "img-src 'self' data: https://*.public.blob.vercel-storage.com",
+            "img-src 'self' data:",
             content_security_policy,
         )
         self.assertIn(
-            "frame-src 'self' https://*.public.blob.vercel-storage.com",
+            "frame-src 'self'",
             content_security_policy,
         )
         self.assertEqual(400, hostile_host.status_code)

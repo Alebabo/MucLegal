@@ -34,6 +34,13 @@ def _parser() -> argparse.ArgumentParser:
     blind = subparsers.add_parser("blind-review", help="Blinde Prüfbögen für Juristinnen erzeugen")
     blind.add_argument("--suite", type=Path, default=Path("fixtures/eval-suite.json"))
     blind.add_argument("--output", type=Path, default=Path("output/legal-review"))
+    diagnose = subparsers.add_parser(
+        "diagnose-capture", help="Lokale Browser- und Ressourcen-Diagnose ausführen"
+    )
+    diagnose.add_argument("--output", required=True, type=Path)
+    diagnose.add_argument(
+        "--real", action="store_true", help="Zusätzlich die reale Matrix streng sequenziell prüfen"
+    )
     return parser
 
 
@@ -69,6 +76,14 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps({"status": "pending_human_review", "files": paths}, ensure_ascii=False, indent=2))
         return 0
+    if args.command == "diagnose-capture":
+        from muclegal.diagnostics import run_capture_diagnostics
+
+        result = run_capture_diagnostics(args.output, include_real=args.real)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if all(
+            item["status"] != "technisch_fehlgeschlagen" for item in result["results"]
+        ) else 5
     if args.command != "check":
         return 2
     try:

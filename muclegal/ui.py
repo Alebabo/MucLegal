@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import mimetypes
-import os
 import re
 import sqlite3
 import threading
@@ -63,6 +61,9 @@ ARTIFACT_DEFINITIONS = {
     "legal_pages": ("Abruf", "AGB & Datenschutz", "text"),
     "capture_transparency": ("Abruf", "Erfassungstransparenz", "text"),
     "screenshot_interactions": ("Abruf", "Screenshot-Interaktionen", "text"),
+    "capture_index": ("Abruf", "Erfassungsindex", "text"),
+    "capture_metrics": ("Abruf", "Ressourcenmessung", "text"),
+    "run_result": ("Abruf", "Laufergebnis", "text"),
     "protection_report": ("Abruf", "Seitenschutz-Bericht", "text"),
     "previous_normalized_text": ("Abruf", "Vorheriger Text", "text"),
     "diff": ("Abruf", "Diff", "text"),
@@ -199,9 +200,9 @@ class RunCoordinator:
                 "step": "queued",
                 "state": "queued",
                 "message": (
-                    "Prüflauf im Überprüfungsmodus angelegt; ein Browser-Abruf ist bei Seitenschutz freigegeben."
+                    "Prüflauf angelegt; der Überprüfungsmodus wird bei tatsächlichem Seitenschutz automatisch aktiviert."
                     if run.verification_mode
-                    else "Prüflauf angelegt; es wurden noch keine Beweise bewertet."
+                    else "Prüflauf ohne automatische Browser-Überprüfung angelegt; es wurden noch keine Beweise bewertet."
                 ),
             })
             run.monitoring_result = {"case_id": case_id} if case_id else None
@@ -387,10 +388,61 @@ class CaseArchive:
                     or "Die Hauptseite zeigte keinen verwertbaren Seiteninhalt."
                 )
             artifacts.append(artifact)
-        return {**summary, "artifacts": artifacts}
+        galleries: dict[str, dict] = {}
+        for role, gallery in record.get("capture_galleries", {}).items():
+            if not isinstance(role, str) or not isinstance(gallery, dict):
+                continue
+            tiles = gallery.get("tiles", []) if isinstance(gallery.get("tiles"), list) else []
+            originals = (
+                gallery.get("originals", [])
+                if isinstance(gallery.get("originals"), list) else []
+            )
+            galleries[role] = {
+                "mode": gallery.get("mode"),
+                "capture_completeness": gallery.get("capture_completeness"),
+                "tile_count": len(tiles),
+                "preview_url": f"/api/v1/cases/{case_id}/capture/{role}/preview",
+                "tile_urls": [
+                    f"/api/v1/cases/{case_id}/capture/{role}/tiles/{index}"
+                    for index in range(len(tiles))
+                ],
+                "original_urls": [
+                    f"/api/v1/cases/{case_id}/capture/{role}/originals/{index}"
+                    for index in range(len(originals))
+                ],
+            }
+        return {**summary, "artifacts": artifacts, "capture_galleries": galleries}
 
     def artifact_path(self, case_id: str, label: str) -> Path:
         return self._safe_artifact_path(label, self._read(self._case_path(case_id)))
+
+    def capture_gallery_path(
+        self, case_id: str, role: str, kind: str, index: int | None = None
+    ) -> Path:
+        case_path = self._case_path(case_id)
+        record = self._read(case_path)
+        gallery = record.get("capture_galleries", {}).get(role)
+        if not isinstance(gallery, dict):
+            raise HTTPException(404, "Bildserie nicht vorhanden.")
+        if kind == "preview":
+            relative = gallery.get("preview")
+        elif kind in {"tiles", "originals"} and index is not None:
+            values = gallery.get(kind)
+            if not isinstance(values, list) or index < 0 or index >= len(values):
+                raise HTTPException(404, "Bild der Serie nicht vorhanden.")
+            relative = values[index]
+        else:
+            raise HTTPException(404, "Bild der Serie nicht vorhanden.")
+        if not isinstance(relative, str):
+            raise HTTPException(404, "Bild der Serie nicht vorhanden.")
+        path = (case_path.parent / relative).resolve()
+        try:
+            path.relative_to(case_path.parent.resolve())
+        except ValueError as exc:
+            raise HTTPException(404, "Bildpfad verlässt das Beweispaket.") from exc
+        if not path.is_file():
+            raise HTTPException(404, "Bilddatei fehlt.")
+        return path
 
     def preview(self, case_id: str, label: str) -> str:
         definition = ARTIFACT_DEFINITIONS.get(label)
@@ -410,7 +462,13 @@ class CaseArchive:
         record = self._read(case_path)
         archive_path = case_path.parent / f"beweispaket-{case_id}.zip"
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
-            package.write(case_path, "case.json")
+            for path in sorted(case_path.parent.rglob("*")):
+                if not path.is_file() or path.resolve() == archive_path.resolve():
+                    continue
+                relative = path.relative_to(case_path.parent)
+                if ".." in relative.parts:
+                    continue
+                package.write(path, relative.as_posix())
             for label in ARTIFACT_DEFINITIONS:
                 if not record.get("artifacts", {}).get(label):
                     continue
@@ -492,45 +550,9 @@ class CaseArchive:
             "screenshot_status": evidence.get("screenshot_status"),
             "screenshot_sha256": evidence.get("screenshot_sha256"),
             "timestamp_status": evidence.get("timestamp_status"),
+            "capture_completeness": record.get("capture_completeness"),
             "warnings": warnings if isinstance(warnings, list) else [],
         }
-
-
-def _publish_case_to_blob(archive: CaseArchive, detail: dict) -> dict:
-    """Publish one completed public-page evidence package for serverless follow-up requests."""
-    try:
-        from vercel.blob import BlobClient
-    except ImportError as exc:
-        raise RuntimeError("Vercel Blob SDK ist für die öffentliche Ablage nicht installiert.") from exc
-
-    client = BlobClient()
-    case_id = detail["case_id"]
-
-    def upload(path: Path, pathname: str):
-        media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        return client.put(
-            pathname,
-            path.read_bytes(),
-            access="public",
-            content_type=media_type,
-            add_random_suffix=False,
-            multipart=path.stat().st_size > 4 * 1024 * 1024,
-        )
-
-    for artifact in detail["artifacts"]:
-        if not artifact["available"]:
-            continue
-        path = archive.artifact_path(case_id, artifact["label"])
-        blob = upload(path, f"beweislab/{case_id}/artefakte/{artifact['label']}{path.suffix}")
-        artifact["url"] = blob.url
-        if artifact["kind"] == "text" and artifact["preview_available"]:
-            artifact["preview_content"] = archive.preview(case_id, artifact["label"])
-
-    package_path = archive.build_download(case_id)
-    package = upload(package_path, f"beweislab/{case_id}/{package_path.name}")
-    detail["download_url"] = package.download_url
-    return detail
-
 
 class HumanReviewRepository:
     def __init__(self, database_path: str | Path) -> None:
@@ -717,9 +739,9 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "img-src 'self' data: https://*.public.blob.vercel-storage.com; "
+            "img-src 'self' data:; "
             "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
-            "frame-src 'self' https://*.public.blob.vercel-storage.com; object-src 'none'; "
+            "frame-src 'self'; object-src 'none'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         )
         return response
@@ -903,34 +925,17 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if payload.case_id is not None:
             raise HTTPException(422, "Das Beweislabor erwartet ausschließlich eine URL.")
         try:
-            if os.environ.get("VERCEL"):
-                run = await asyncio.to_thread(
-                    coordinator.start,
-                    payload.url,
-                    direct_url=True,
-                    verification_mode=payload.verification_mode,
-                    synchronous=True,
-                )
-            else:
-                run = coordinator.start(
-                    payload.url,
-                    direct_url=True,
-                    verification_mode=payload.verification_mode,
-                )
+            run = coordinator.start(
+                payload.url,
+                direct_url=True,
+                verification_mode=payload.verification_mode,
+            )
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         response = run.to_dict()
-        if os.environ.get("VERCEL") and run.result_available:
-            matching = next(
-                (item for item in archive.list() if item.get("url") == run.url),
-                None,
-            )
-            if matching is not None:
-                detail = archive.detail(matching["case_id"])
-                response["case_detail"] = _publish_case_to_blob(archive, detail)
-        return JSONResponse(response, status_code=200 if os.environ.get("VERCEL") else 202)
+        return JSONResponse(response, status_code=202)
 
     @app.post("/api/v1/evidence-runs/stream")
     async def stream_evidence_run(payload: RunRequest):
@@ -968,16 +973,6 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                     previous = serialized
                 if current.status in TERMINAL_RUN_STATUSES:
                     response = current_payload
-                    if os.environ.get("VERCEL") and current.result_available:
-                        matching = next(
-                            (item for item in archive.list() if item.get("url") == current.url),
-                            None,
-                        )
-                        if matching is not None:
-                            detail = archive.detail(matching["case_id"])
-                            response["case_detail"] = await asyncio.to_thread(
-                                _publish_case_to_blob, archive, detail
-                            )
                     yield json.dumps(
                         {"type": "complete", "run": response}, ensure_ascii=False
                     ) + "\n"
@@ -1021,6 +1016,20 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     @app.get("/api/cases/{case_id}/preview/{label}", include_in_schema=False)
     async def preview_case_artifact(case_id: str, label: str):
         return {"label": label, "content": archive.preview(case_id, label)}
+
+    @app.get("/api/v1/cases/{case_id}/capture/{role}/preview")
+    async def capture_preview(case_id: str, role: str):
+        return FileResponse(archive.capture_gallery_path(case_id, role, "preview"))
+
+    @app.get("/api/v1/cases/{case_id}/capture/{role}/tiles/{index}")
+    async def capture_tile(case_id: str, role: str, index: int):
+        path = archive.capture_gallery_path(case_id, role, "tiles", index)
+        return FileResponse(path, filename=path.name)
+
+    @app.get("/api/v1/cases/{case_id}/capture/{role}/originals/{index}")
+    async def capture_original(case_id: str, role: str, index: int):
+        path = archive.capture_gallery_path(case_id, role, "originals", index)
+        return FileResponse(path, filename=path.name)
 
     @app.get("/artifact/{case_id}/{label}")
     async def historical_artifact(case_id: str, label: str):

@@ -1,6 +1,6 @@
 # MucLegal – Repository-Kontext
 
-Stand: 19. August 2026
+Stand: 20. August 2026
 
 Diese Datei ist die technische Übergabe für Menschen und Coding-Agents. Verbindliche
 Projektgrenzen stehen zusätzlich in `AGENTS.md`.
@@ -38,6 +38,11 @@ bleibt ein Prüfentwurf; die abschließende Entscheidung liegt bei einer Juristi
 
 ## Reale Live-Nutzung
 
+Das BeweisLab wird ausschließlich lokal betrieben. Der verbindliche Stabilitäts-, Ressourcen-
+und Löschplan für die nächste Umsetzung steht in
+`reference/LOCAL_BEWEISLAB_IMPLEMENTATION_PLAN.md`. Es gibt keine produktive Web-URL;
+Erfassung und Artefaktbereitstellung laufen ausschließlich auf dem lokalen Rechner.
+
 ```powershell
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[demo]"
@@ -51,6 +56,9 @@ Danach:
 - Oberfläche: `http://127.0.0.1:8000`
 - API-Dokumentation: `http://127.0.0.1:8000/api/v1/docs`
 - Laufdaten: `.muclegal-ui/`
+
+Beweisartefakte dürfen im lokalen Standardbetrieb nicht zu einem Fremdspeicher hochgeladen werden.
+Die vollständige lokale Löschung samt Nachweis ist Teil des genannten Umsetzungsplans.
 
 Der erste Abruf einer URL erzeugt die Baseline. Nur ein später veränderter normalisierter Inhalt
 startet die LLM-Vorprüfung und das vollständige Dokumentationspaket.
@@ -98,7 +106,9 @@ Regeln entfernt.
   Klauseln werden strukturell gepaart, einzeln klassifiziert, schema-validiert, als append-only
   Findings gespeichert und mit eigenen Modellartefakten im UI ausgewiesen. Das bisherige
   Assessment-Format bleibt als deterministisches Aggregat für PDF und Kompatibilität erhalten.
-- Keine automatische Entdeckung von AGB-, Widerrufs- oder Checkout-URLs.
+- Rechtstextsuche bleibt konservativ: Links im gespeicherten HTML sowie bekannte
+  öffentliche Standardpfade einschließlich Shopify Policies; keine allgemeinen
+  Klickpfade und keine automatische Checkout-Erkundung.
 - Keine visuelle Interpretation des Screenshots; er ist nur Dokumentationsartefakt.
 - Kein Login, keine Paywall, kein CAPTCHA, keine App- oder Newsletter-Erfassung.
 - Kein Queue-System, keine Multi-Tenancy und keine autonome Rechtsentscheidung.

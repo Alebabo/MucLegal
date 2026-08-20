@@ -6,6 +6,7 @@ import logging
 import re
 import socket
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from email.message import Message
@@ -81,6 +82,37 @@ class HttpFetcher:
 
     def __init__(self, policy: FetchPolicy | None = None) -> None:
         self.policy = policy or FetchPolicy()
+        self._capture_controller = None
+        self._capture_session_depth = 0
+        self.last_capture_run_root: str | None = None
+
+    @contextmanager
+    def capture_session(self, output_root: str | Path):
+        """Share one Chromium process across one evidence run; nested fallbacks reuse it."""
+        if self._capture_controller is not None:
+            self._capture_session_depth += 1
+            try:
+                yield self._capture_controller
+            finally:
+                self._capture_session_depth -= 1
+            return
+        from muclegal.fetch.playwright import CaptureRunController
+
+        guard = self._browser_request_guard()
+        with CaptureRunController(
+            output_root,
+            user_agent=self.policy.user_agent,
+            timeout_seconds=max(20.0, self.policy.timeout_seconds),
+            request_guard=guard,
+        ) as controller:
+            self._capture_controller = controller
+            self._capture_session_depth = 1
+            self.last_capture_run_root = str(controller.run_root)
+            try:
+                yield controller
+            finally:
+                self._capture_session_depth = 0
+                self._capture_controller = None
 
     def fetch(self, url: str) -> FetchResult:
         self._validate_url(url)
@@ -104,31 +136,17 @@ class HttpFetcher:
         self._validate_url(url)
         if self.policy.respect_robots:
             self._require_robots_permission(url)
-        from muclegal.fetch.playwright import fetch_rendered_public_page
+        if self._capture_controller is not None:
+            result = self._capture_controller.capture_target(url, role="main").fetch_result
+        else:
+            from muclegal.fetch.playwright import fetch_rendered_public_page
 
-        validated_origins: set[tuple[str, str]] = set()
-        robots_origins: set[tuple[str, str]] = set()
-
-        def guard_request(target_url: str, resource_type: str) -> None:
-            parsed = parse.urlsplit(target_url)
-            origin = (parsed.scheme, parsed.netloc)
-            if origin not in validated_origins:
-                self._validate_url(target_url)
-                validated_origins.add(origin)
-            if (
-                self.policy.respect_robots
-                and resource_type == "document"
-                and origin not in robots_origins
-            ):
-                self._require_robots_permission(target_url)
-                robots_origins.add(origin)
-
-        result = fetch_rendered_public_page(
-            url,
-            user_agent=self.policy.user_agent,
-            timeout_seconds=max(20.0, self.policy.timeout_seconds),
-            request_guard=guard_request,
-        )
+            result = fetch_rendered_public_page(
+                url,
+                user_agent=self.policy.user_agent,
+                timeout_seconds=max(20.0, self.policy.timeout_seconds),
+                request_guard=self._browser_request_guard(),
+            )
         metadata = dict(result.browser_metadata or {})
         metadata["robots_txt"] = (
             "geprueft_abruf_erlaubt"
@@ -147,6 +165,18 @@ class HttpFetcher:
             capture_html_screenshot,
             capture_page_screenshot,
         )
+
+        if self._capture_controller is not None:
+            name = Path(destination).stem.casefold()
+            role = "agb" if "agb" in name else (
+                "privacy" if "privacy" in name or "datenschutz" in name else "main"
+            )
+            target = self._capture_controller.capture_target(url, role=role)
+            if target.screenshot is None:
+                raise ScreenshotCaptureError(
+                    f"Screenshot fehlt nach Browserphase {target.failure_phase or 'unbekannt'}."
+                )
+            return target.screenshot
 
         initial = parse.urlsplit(url)
         initial_origin = (initial.scheme, initial.netloc)
@@ -223,6 +253,37 @@ class HttpFetcher:
                 request_guard=guard_request,
                 fallback_reason=str(exc),
             )
+
+    def _browser_request_guard(self):
+        validated_origins: set[tuple[str, str]] = set()
+        robots_origins: set[tuple[str, str]] = set()
+
+        def guard_request(target_url: str, resource_type: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            origin = (parsed.scheme, parsed.netloc)
+            if resource_type == "document":
+                if origin not in validated_origins:
+                    self._validate_url(target_url)
+                    validated_origins.add(origin)
+                if self.policy.respect_robots and origin not in robots_origins:
+                    self._require_robots_permission(target_url)
+                    robots_origins.add(origin)
+                return
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise FetchFailure("invalid_url", "Nicht öffentliche Unterressource blockiert.")
+            if parsed.username or parsed.password:
+                raise FetchFailure("credentials_in_url", "Unterressource mit Zugangsdaten blockiert.")
+            hostname = parsed.hostname.lower().rstrip(".")
+            if hostname == "localhost" or hostname.endswith(".localhost"):
+                raise FetchFailure("non_public_target", "Lokale Unterressource blockiert.")
+            try:
+                literal_ip = ipaddress.ip_address(hostname)
+            except ValueError:
+                return
+            if not literal_ip.is_global:
+                raise FetchFailure("non_public_target", "Private Unterressource blockiert.")
+
+        return guard_request
 
     def _validate_url(self, url: str) -> None:
         parsed = parse.urlsplit(url)
@@ -366,10 +427,32 @@ class HttpFetcher:
 
 def _detect_block_page(html: str) -> str | None:
     sample = html[:500_000].lower()
-    captcha_markers = ("g-recaptcha", "hcaptcha", "captcha-container", "cf-chl-")
-    if any(marker in sample for marker in captcha_markers) or re.search(
-        r"\b(?:verify you are human|captcha)\b", sample
-    ):
+    # Shopify and other storefronts often ship dormant CAPTCHA bootstrap code on
+    # every page. Only markup outside scripts/styles and explicit human-check
+    # wording are evidence of a challenge that actually replaced the content.
+    visible_markup = re.sub(
+        r"<(script|style|template|noscript)\b[^>]*>.*?</\1\s*>",
+        " ",
+        sample,
+        flags=re.DOTALL,
+    )
+    visible_text = re.sub(r"<[^>]+>", " ", visible_markup)
+    has_captcha_component = bool(
+        re.search(
+            r"<[^>]+\b(?:class|id|src)\s*=\s*['\"][^'\"]*"
+            r"(?:g-recaptcha|h-captcha|hcaptcha|captcha-container|cf-chl-)",
+            visible_markup,
+        )
+        or "<h-captcha" in visible_markup
+    )
+    has_human_check = bool(
+        re.search(
+            r"\b(?:verify (?:that )?you are human|confirm (?:that )?you are human|"
+            r"complete (?:the )?captcha|captcha (?:required|challenge))\b",
+            visible_text,
+        )
+    )
+    if has_captcha_component or has_human_check:
         return "Art des Seitenschutzes: CAPTCHA oder Bot-Challenge. Manuelle Prüfung erforderlich."
     if re.search(r"<input\b[^>]*\btype\s*=\s*['\"]?password\b", sample):
         return "Art des Seitenschutzes: Login-Sperre mit Passwortfeld. Manuelle Prüfung erforderlich."

@@ -21,7 +21,10 @@ vom Unterlassungstenor erfasst?
 ## Aktueller Arbeitsstand (20.08.2026)
 
 - Aktiver Entwicklungsbranch: `agent/live-url-ui`
-- Produktion: `https://muclegal-beweislab.vercel.app/beweis-labor`
+- Das BeweisLab wird ausschließlich lokal unter `http://127.0.0.1:8000/beweis-labor`
+  betrieben; es gibt keine öffentliche Bereitstellung oder externe Artefaktablage.
+- Verbindlicher lokaler Folgeplan:
+  `reference/LOCAL_BEWEISLAB_IMPLEMENTATION_PLAN.md`
 - Kanonischer BeweisLab-Pfad: URL → robots.txt/HTTP-Abruf → Normalisierung →
   Rechtstextsuche → Haupt-, AGB- und Datenschutz-Screenshot → WARC/CDX →
   SHA-256-Manifest → RFC-3161-Versuch → PDF/ZIP.
@@ -32,6 +35,7 @@ vom Unterlassungstenor erfasst?
 - Neue Beweispakete enthalten `capture_transparency.yaml` und
   `screenshot_interactions.json`; beide liegen vor der Manifestbildung vor.
 - Referenzen für neue Agents:
+  - `reference/LOCAL_BEWEISLAB_IMPLEMENTATION_PLAN.md` (zuerst umsetzen)
   - `reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md`
   - `reference/BROWSER_MODE_AUDIT.md`
   - `reference/BACKEND_ALIGNMENT_2026-08-20.md`
@@ -141,8 +145,8 @@ bleibt `null`, bis ein Mensch im UI bestätigt – das ist die RDG-Antwort.
 - Jeder LLM-Output wird gegen ein Schema validiert. Nie ungeprüft weiterreichen.
 - Monitoring-Demos verwenden eingefrorene lokale Snapshots. Das separat ausgewiesene
   BeweisLab darf nach ausdrücklichem Start durch den Nutzer eine öffentliche URL live
-  erfassen; seine Artefakte werden lokal erzeugt und auf Vercel anschließend in Blob
-  persistiert.
+  erfassen; seine Artefakte bleiben lokal und dürfen nicht automatisch zu einem
+  Fremdspeicher hochgeladen werden.
 - Prompt-Änderungen nach dem Freeze (Do 20.08. abends) sind verboten:
   die Eval-Zahl hängt daran.
 
@@ -171,26 +175,38 @@ Bei Zeitmangel: nach unten streichen, nie nach oben.
 
 1. Syntax: `python -m compileall -q muclegal app.py`
 2. Gesamttests: `python -m pytest -q`
-3. Lokal: `python -m uvicorn app:app --host 127.0.0.1 --port 8010`
+3. Lokal: `python -m uvicorn app:app --host 127.0.0.1 --port 8000`
 4. Browser-Smoke-Test: `/beweis-labor` öffnen; URL-Feld, Überprüfungsmodus,
    Prüfverlauf, Pillen, Bildvorschau, Info-Popover und Download prüfen.
 5. Für Screenshotänderungen zusätzlich einen synthetischen Consent-Dialog mit
    `Alle ablehnen` testen und sicherstellen, dass `Alle akzeptieren` nie gewählt wird.
-6. Nach Vercel-Deploy: Alias öffnen, `vercel inspect` ausführen und einen kleinen
-   Live-Lauf mit `https://example.com` prüfen. Ein ausstehender externer Zeitstempel
-   ist eine sichtbare Warnung, kein Grund, lokale Primärbeweise zu verwerfen.
+6. Ein kleiner lokaler Live-Lauf mit `https://example.com` muss vor der realen Testmatrix
+   bestehen. Ein ausstehender externer Zeitstempel ist eine sichtbare Warnung, kein Grund,
+   lokale Primärbeweise zu verwerfen.
 
 ### Bekannte Testziele und Grenzen
 
 - `example.com`: stabiler vollständiger Smoke-Test ohne Rechtstextlinks.
 - MediaMarkt: Hauptseite sowie AGB-/Datenschutz-Screenshots waren erfolgreich; sehr
-  hohe Seiten werden bei 8.000 Pixeln transparent als gekürzt markiert.
+  hohe Seiten werden als validiertes Vollbild oder lückenlose 2.000-Pixel-Kachelserie erfasst.
 - Temu: Hauptseite kann eine JavaScript-Challenge liefern. Schutzart, blockierte URL
   und tatsächlich erfasste öffentliche Unterseite müssen getrennt bleiben. Bleiben
   auch alle Rechtstextpfade blockiert, muss trotzdem ein Schutzbefund-Paket mit
   Challenge-Screenshot, Pfadliste und manueller Grenze entstehen.
-- IKEA: Live-Chromium kann auf Vercel bei `page.goto` und selbst bei `page.set_content`
-  schließen. Zuerst den zuvor direkt geprüften HTML-Stand ohne JavaScript rendern.
+  Produktionsregression vom 20.08.2026: Die weiterhin korrekten Pfade
+  `/de/terms-of-use.html` und `/de/privacy-policy.html` scheiterten im Browser-Fallback
+  an `Page.wait_for_timeout: Target page, context or browser has been closed`.
+  Vor einer vermeintlichen Pfadänderung immer `protection_report.json` lesen. Eine
+  Korrektur muss Chromium-Starts reduzieren beziehungsweise den DOM-Stand direkt nach
+  `domcontentloaded` sichern; keine Schutz- oder Identitätsparameter verändern.
+- Mirage/Shopify: Normale Seiten enthalten häufig inaktiven CAPTCHA-Bootstrap-Code.
+  Schutz nie anhand bloßer Treffer innerhalb von Scripts oder eines erklärenden
+  Datenschutztexts klassifizieren. AGB und Datenschutz liegen häufig unter
+  `/policies/terms-of-service` und `/policies/privacy-policy`. Die automatische
+  Überprüfung ist im BeweisLab standardmäßig freigegeben, beginnt aber immer mit dem
+  direkten Abruf und darf vor dem Start deaktiviert werden.
+- IKEA: Live-Chromium kann bei `page.goto` oder `page.set_content` vorzeitig schließen.
+  Zuerst den zuvor direkt geprüften HTML-Stand ohne JavaScript rendern.
   Beendet die Runtime auch diesen Browser, browserlos ein beschriftetes PNG aus dem
   gespeicherten DOM-Text erzeugen und als `http_snapshot_visualized` kennzeichnen.
   Diesen Fallback nie als pixelgetreuen Live-Browserabruf darstellen.
@@ -206,26 +222,11 @@ Bei Zeitmangel: nach unten streichen, nie nach oben.
   Golden Path verwendet `capture_snapshot_warc` aus den exakt gespeicherten Bytes und
   muss unabhängig davon bestehen. Einen Wget-Flake niemals als grünen Test ausgeben.
 
-### Vercel
+### Lokaler Betrieb
 
-- Chromium wird über `[tool.vercel.scripts]` in `pyproject.toml` installiert; benötigte
-  NSS/NSPR-Bibliotheken werden in das Function-Bundle kopiert.
-- `.vercelignore` klein halten. Tests, Referenzen, lokale `.muclegal*`-Stores und
-  Entwicklungsartefakte dürfen nicht ins Deployment gelangen.
-- Der Remote-Build muss `playwright-browsers`, `playwright-libs` und
-  `playwright-rpms` vor jeder Chromium-Installation leeren. Die RPM-Downloads werden
-  für das Entpacken benötigt, dürfen aber nicht im Function-Bundle landen.
-- Die vom Headless-Shell-Binary über `ldd` aufgelösten Shared Libraries müssen neben
-  NSS/NSPR im Function-Bundle bleiben. Die Large-Functions-Laufzeit stellte bei einem
-  Produktionslauf selbst `libatk-1.0.so.0` nicht bereit; Chromium startete ohne die
-  Kopie nicht. Nicht auf die Bibliotheken der Build-Maschine als Runtime-Bestand bauen.
-- Das von Playwright zusätzlich geladene FFmpeg-Paket nach der Installation entfernen.
-  Das BeweisLab erstellt nur Screenshots und benötigt keine Videoaufzeichnung.
-- Das Function-Bundle ist groß und nutzt Vercels Large-Functions-Beta. Dafür muss
-  `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` in Preview und Produktion gesetzt sein. Keine
-  zusätzlichen Browser oder umfangreichen Binärabhängigkeiten hinzufügen.
-- Das Serverless-Dateisystem ist flüchtig. Benutzerrelevante Fallartefakte werden über
-  Vercel Blob bereitgestellt; nicht auf Persistenz zwischen Function-Instanzen vertrauen.
+- Nicht öffentlich deployen oder mit einer externen Laufzeit verknüpfen.
+- Vorschauen, Downloads und ZIP-Pakete ausschließlich über pfadsichere lokale Endpunkte liefern.
+- Bestehende lokale Fälle und Beweispakete in `.muclegal-ui/` nicht automatisch löschen.
 
 ### Dokumentationspflicht
 

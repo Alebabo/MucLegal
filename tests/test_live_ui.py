@@ -548,12 +548,12 @@ class LiveWorkflowTests(unittest.TestCase):
 
 
 class LiveUiTests(unittest.TestCase):
-    def test_verification_mode_is_explicit_and_forwarded_only_when_enabled(self) -> None:
+    def test_automatic_verification_is_enabled_by_default_in_lab_and_can_be_disabled(self) -> None:
         class VerificationWorkflow:
             tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
 
             def run(self, url, progress, *, capture_baseline=False, browser_mode=False):
-                self.browser_mode = browser_mode
+                self.browser_modes = getattr(self, "browser_modes", []) + [browser_mode]
                 progress("browser", "Browsermodus geprüft")
                 return LiveWorkflowResult("protected", "SEITENSCHUTZ ERKANNT")
 
@@ -579,13 +579,25 @@ class LiveUiTests(unittest.TestCase):
                     if result["status"] in TERMINAL_RUN_STATUSES:
                         break
                     time.sleep(0.01)
+                disabled = client.post(
+                    "/api/v1/evidence-runs",
+                    json={"url": "https://example.org", "verification_mode": False},
+                ).json()
+                for _ in range(100):
+                    disabled_result = client.get(
+                        f"/api/v1/evidence-runs/{disabled['run_id']}"
+                    ).json()
+                    if disabled_result["status"] in TERMINAL_RUN_STATUSES:
+                        break
+                    time.sleep(0.01)
 
-        self.assertIn('id="verification-mode"', page.text)
-        self.assertIn("Überprüfungsmodus", page.text)
+        self.assertIn('id="verification-mode" type="checkbox" checked', page.text)
+        self.assertIn("Automatische Überprüfung", page.text)
         self.assertNotIn("Grau-Modus", page.text)
         self.assertIn("keine Tarntechniken", page.text)
         self.assertTrue(started["verification_mode"])
-        self.assertTrue(workflow.browser_mode)
+        self.assertFalse(disabled["verification_mode"])
+        self.assertEqual([True, False], workflow.browser_modes)
 
     def test_missing_key_disables_form_and_rejects_api(self) -> None:
         with tempfile.TemporaryDirectory() as output:
@@ -912,6 +924,8 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn("https://www.temu.com/de/terms-of-use.html", candidates)
         self.assertIn("https://www.temu.com/de/privacy-policy.html", candidates)
         self.assertIn("https://www.temu.com/de-en/privacy-policy.html", candidates)
+        self.assertIn("https://www.temu.com/policies/terms-of-service", candidates)
+        self.assertIn("https://www.temu.com/policies/privacy-policy", candidates)
         self.assertTrue(all(url.startswith("https://www.temu.com/") for url in candidates))
 
 

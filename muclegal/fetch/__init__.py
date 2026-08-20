@@ -1,5 +1,7 @@
 from muclegal.fetch.http import FetchFailure, FetchPolicy, FetchResult, HttpFetcher
 from muclegal.fetch.playwright import (
+    BrowserTargetCapture,
+    CaptureRunController,
     DomInspectionCapture,
     ScreenshotCapture,
     ScreenshotCaptureError,
@@ -10,6 +12,8 @@ from muclegal.fetch.playwright import (
 )
 
 __all__ = [
+    "BrowserTargetCapture",
+    "CaptureRunController",
     "DomInspectionCapture",
     "FetchFailure",
     "FetchPolicy",
