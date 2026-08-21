@@ -1,6 +1,6 @@
 # MucLegal – Repository-Kontext
 
-Stand: 20. August 2026
+Stand: 21. August 2026
 
 Diese Datei ist die technische Übergabe für Menschen und Coding-Agents. Verbindliche
 Projektgrenzen stehen zusätzlich in `AGENTS.md`.
@@ -35,6 +35,14 @@ bleibt ein Prüfentwurf; die abschließende Entscheidung liegt bei einer Juristi
 - SQLite-Trigger verhindern Änderung/Löschung fachlicher Befunddaten; nur `juristin_*` ist änderbar.
 - Versionierte API unter `/api/v1/`; alte `/api/...`-Pfade sind vorläufige Aliase.
 - Eval-Suite, Blindprüfbögen und Sicherheits-/Regressionstests.
+- Menschlich definierte Fallprofile mit bis zu 20 verbindlichen Prüf-URLs,
+  `nicht_umfasst`-Abgrenzungen und mehreren Button-/Linkbezeichnungen.
+- Vollständigkeitsnachweis in `coverage.json`; eine fehlende Pflicht-URL führt fail-closed zu
+  `pruefung_unvollstaendig` und nie zu einem Beseitigt-Befund.
+- Begrenzte Shopify-Policy-Erkennung für nicht im erfassten HTML verlinkte AGB- und
+  Datenschutzpfade, weiterhin unter den normalen Robots- und Schutzregeln.
+- Vierstufige technische Eignungsaussage des BeweisLabors: technisch verwendbar,
+  eingeschränkt, nur Hinweis oder nicht erfassbar.
 
 ## Reale Live-Nutzung
 
@@ -62,6 +70,12 @@ Die vollständige lokale Löschung samt Nachweis ist Teil des genannten Umsetzun
 
 Der erste Abruf einer URL erzeugt die Baseline. Nur ein später veränderter normalisierter Inhalt
 startet die LLM-Vorprüfung und das vollständige Dokumentationspaket.
+
+Im fallbezogenen Monitor definieren die menschlich freigegebenen `target_urls` den verbindlichen
+Prüfumfang. Sitemap, interne Linksuche und bekannte öffentliche Plattformpfade ergänzen diesen
+Umfang lediglich. Details, API-Beispiel, Ankerkraut-Befund, Buttonvarianten und die zulässige
+Rolle externer Context.dev-Ergebnisse stehen in
+`reference/FALLPROFIL_UND_RECHTSTEXTZIELE_2026-08-21.md`.
 
 Eine einzelne URL inklusive Screenshot lässt sich auch per CLI prüfen:
 
@@ -109,6 +123,9 @@ Regeln entfernt.
 - Rechtstextsuche bleibt konservativ: Links im gespeicherten HTML sowie bekannte
   öffentliche Standardpfade einschließlich Shopify Policies; keine allgemeinen
   Klickpfade und keine automatische Checkout-Erkundung.
+- Externe Extraktionsergebnisse wie der bereitgestellte Context.dev-Text sind höchstens
+  menschlich zu bestätigende Analysehinweise. Sie sind keine Primärbeweise und ersetzen weder
+  lokale Artefakte noch einen dokumentierten Robots-Ausschluss.
 - Keine visuelle Interpretation des Screenshots; er ist nur Dokumentationsartefakt.
 - Kein Login, keine Paywall, kein CAPTCHA, keine App- oder Newsletter-Erfassung.
 - Kein Queue-System, keine Multi-Tenancy und keine autonome Rechtsentscheidung.
@@ -122,8 +139,13 @@ Regeln entfernt.
 python -m pytest -q
 ```
 
-Aktueller Stand bei Erstellung dieser Datei: 62 Tests bestanden. Zusätzlich wurden der echte
-Abruf und ein Playwright-Full-Page-Screenshot von `https://example.com/` erfolgreich geprüft.
+Aktueller produktbezogener Stand: 123 Tests bestanden, ein bekannter externer
+GNU-Wget/`warcio`-Digesttest wurde ausdrücklich ausgespart. Dieser sporadische WSL-Wget-Fehler
+betrifft nicht den produktiven WARC-Pfad aus den exakt lokal gespeicherten Bytes. Zusätzlich
+antwortete der lokale Browser-Smoke-Test unter `/beweis-labor` mit HTTP 200. Der reale
+Ankerkraut-Lauf fand den Shopify-AGB-Pfad, durfte ihn für den Projekt-User-Agent wegen
+`robots.txt` aber nicht automatisch erfassen; der Ausschluss bleibt als technische Grenze
+dokumentiert.
 
 ## Sicherheits- und Rechtsgrenzen
 

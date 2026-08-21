@@ -136,6 +136,19 @@ zugänglicher Eigenschaften geprüft. Ein fehlender Treffer heißt ausschließli
 `nicht_gefunden_im_pruefumfang`; bei Sperren oder unvollständiger Abdeckung lautet das Ergebnis
 `pruefung_unvollstaendig`.
 
+Ein Fallprofil kann zusätzlich bis zu 20 verbindliche Prüf-URLs, bekannte Button-/Linkvarianten
+und ausdrückliche `nicht_umfasst`-Abgrenzungen enthalten. Die Fundstellen-URL gehört immer zum
+verbindlichen Prüfumfang. Nicht erreichbare Pflichtziele werden in `coverage.json` ausgewiesen und
+dürfen niemals zu einem entlastenden Ergebnis führen. Für erkannte Shopify-Seiten kann das
+BeweisLab fehlende öffentliche Standardpfade für AGB und Datenschutz als Kandidaten ergänzen;
+auch diese Abrufe bleiben vollständig an die normalen Robots- und Schutzregeln gebunden.
+
+Die vollständige Funktions-, Datenmodell-, Ankerkraut- und Context.dev-Dokumentation steht in
+[`reference/FALLPROFIL_UND_RECHTSTEXTZIELE_2026-08-21.md`](reference/FALLPROFIL_UND_RECHTSTEXTZIELE_2026-08-21.md).
+Externe Extraktionsergebnisse können allenfalls als getrennte, menschlich zu bestätigende
+Analysehinweise dienen. Sie ersetzen keine lokal erzeugten Rohbytes, Header, Screenshots,
+WARC/CDX- oder Manifestartefakte und dürfen einen dokumentierten Robots-Ausschluss nicht umgehen.
+
 Den Schlüssel ausschließlich in der lokalen Serverumgebung setzen. Er wird nicht im Browser
 eingegeben und darf nicht in das Repository geschrieben werden:
 
