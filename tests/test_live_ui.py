@@ -1462,6 +1462,71 @@ class LiveUiTests(unittest.TestCase):
         )
         self.assertTrue(detail["capture_galleries"]["privacy"]["document_urls"])
 
+    def test_evidence_lab_selects_newest_fallback_case_by_requested_url(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            records = (
+                (
+                    "older-root-case",
+                    {
+                        "url": "https://www.temu.com/",
+                        "erkannt_am": "2026-08-21T09:00:00Z",
+                    },
+                ),
+                (
+                    "newer-legal-fallback",
+                    {
+                        "url": "https://www.temu.com/de/terms-of-use.html",
+                        "requested_url": "https://www.temu.com/",
+                        "captured_url": "https://www.temu.com/de/terms-of-use.html",
+                        "erkannt_am": "2026-08-21T15:50:00Z",
+                    },
+                ),
+            )
+            for case_id, values in records:
+                bundle = root / "bundles" / case_id
+                bundle.mkdir(parents=True)
+                record = {
+                    **values,
+                    "evidence": {},
+                    "assessment": {"ergebnis": "nicht_bewertet", "confidence": 0.0},
+                    "artifacts": {},
+                }
+                (bundle / "case.json").write_text(json.dumps(record), encoding="utf-8")
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                page = client.get("/beweis-labor")
+                cases = client.get("/api/cases").json()["cases"]
+
+        self.assertEqual("newer-legal-fallback", cases[0]["case_id"])
+        self.assertEqual("https://www.temu.com/", cases[0]["requested_url"])
+        self.assertEqual(
+            "https://www.temu.com/de/terms-of-use.html",
+            cases[0]["captured_url"],
+        )
+        self.assertIn(
+            "list.find(entry=>entry.requested_url===expectedUrl)",
+            page.text,
+        )
+        self.assertLess(
+            page.text.index("entry.requested_url===expectedUrl"),
+            page.text.index("entry.url===expectedUrl"),
+        )
+        self.assertIn("input.value=data.requested_url||data.url", page.text)
+        self.assertIn(
+            'new URLSearchParams(window.location.search).get("case_id")',
+            page.text,
+        )
+        self.assertIn(
+            "api(`/api/cases/${encodeURIComponent(caseId)}`)",
+            page.text,
+        )
+
     def test_automatic_verification_is_enabled_by_default_in_lab_and_can_be_disabled(self) -> None:
         class VerificationWorkflow:
             tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))

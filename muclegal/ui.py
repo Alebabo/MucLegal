@@ -671,7 +671,10 @@ class CaseArchive:
                 label = finding["classification"]
                 class_counts[label] = class_counts.get(label, 0) + 1
         return {
-            "case_id": case_id, "url": record.get("url", ""),
+            "case_id": case_id,
+            "url": record.get("url", ""),
+            "requested_url": record.get("requested_url") or record.get("url", ""),
+            "captured_url": record.get("captured_url") or record.get("url", ""),
             "erkannt_am": record.get("erkannt_am", ""), "fall_id": record.get("fall_id", ""),
             "status": "completed_with_warnings" if warnings else "completed",
             "result_code": assessment.get("ergebnis"), "confidence": assessment.get("confidence"),

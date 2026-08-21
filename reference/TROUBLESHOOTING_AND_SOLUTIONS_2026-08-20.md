@@ -759,3 +759,187 @@ God-Mode-Status. Sind auch diese Unterseiten blockiert oder technisch leer,
 enthält das Hinweispaket die vollständig geprüfte Pfadliste und die einzelnen
 Fehler. Das ist ein Nachweis des Erfassungsversuchs, kein Beweis für den Inhalt
 oder das Fehlen einer Klausel.
+
+## Temu-Rechtstext erscheint erst nach der gespeicherten Texterfassung
+
+### Symptom
+
+Der reguläre Live-Lauf vom 21.08.2026 auf `https://www.temu.com/` erkannte auf
+der Hauptseite eine JavaScript-Challenge und prüfte anschließend wie vorgesehen
+zuerst:
+
+- `https://www.temu.com/de/terms-of-use.html`,
+- `https://www.temu.com/de/privacy-policy.html`.
+
+Für beide deutschen Rechtstexte entstanden vollständige, lesbare
+Full-Page-Screenshots mit 15.864 beziehungsweise 19.690 CSS-Pixeln Höhe.
+`visible-text-final.txt`, `normalized-text.txt` und `clauses.json` blieben jedoch
+leer. Das Paket meldete deshalb für AGB und Datenschutz jeweils `0 Zeichen` und
+`0 Klauseln`. Erst der spätere allgemeine Pfad
+`https://www.temu.com/privacy-policy.html` lieferte 30.450 normalisierte Zeichen.
+
+### Ursache und Diagnose
+
+Die Ursache ist durch die gespeicherten Phasenartefakte und die Reihenfolge in
+`BrowserCaptureRun._capture_new_context` belegt: Direkt nach
+`domcontentloaded` wurden ein rund 3 KB großer Challenge-DOM sowie der zu diesem
+Zeitpunkt leere sichtbare Text gespeichert und normalisiert. Erst danach rief
+der Workflow `_wait_for_visual_capture` auf. Während dieses Wartens erschien
+der eigentliche Rechtstext; die anschließende Screenshotaufnahme erfasste ihn
+vollständig. DOM und Text wurden nach dem visuellen Warten aber nicht erneut
+gesichert oder normalisiert. Daher widersprechen sich in diesem Fall nicht die
+Webseite und das Bild, sondern die Erfassungszeitpunkte von Text und Screenshot.
+
+Der Lauf zeigte zusätzlich eine zweite, anhand der SHA-256-Werte belegte
+Zuordnungsgrenze: Nachdem der allgemeine englische Datenschutzpfad als primäres
+Fallback-Ziel erfolgreich war, klassifizierte `_page_role_captures` diese
+Hauptaufnahme ebenfalls als Rolle `privacy`. Dadurch zeigt die Galerie im UI
+unter „Datenschutz-Screenshot“ die englische allgemeine Datenschutzseite. Der
+deutsche Datenschutz-Screenshot bleibt zwar unverändert als
+`artifacts/privacy_screenshot.png` im Paket, wird aber in der Rollengalerie vom
+Fallback-Hauptbild verdrängt.
+
+### Lösung
+
+Die produktive Korrektur ist noch offen. Nach `_wait_for_visual_capture` muss
+für Rechtstextrollen ein zweiter, ausdrücklich als stabilisierter Zustand
+gesichert werden. Enthält dieser Zustand erstmals relevanten sichtbaren Text,
+müssen DOM, sichtbarer Text, Normalisierung, Klauseln und Abdeckungsmetrik daraus
+neu erzeugt werden. Der anfängliche Challenge-DOM bleibt als separates
+Phasenartefakt erhalten; er darf nicht überschrieben oder nachträglich als
+regulärer Rechtstext bezeichnet werden. Schutzbefund, Übergang und verwendeter
+Textstand müssen in Transparenzdatei und Manifest nachvollziehbar bleiben.
+
+Zusätzlich darf eine erfolgreiche Fallback-Hauptseite keine bereits belegte
+Rechtstextrolle überschreiben. Die Fallback-Aufnahme benötigt eine eigene Rolle,
+beispielsweise `captured_fallback`; `agb` und `privacy` müssen weiterhin auf die
+gezielt ausgewählten deutschen Rechtstextziele zeigen. Auch diese Korrektur ist
+noch nicht umgesetzt.
+
+### Verifikation und verbleibende Grenze
+
+Der Live-Lauf bestätigte die richtige Kandidatenreihenfolge, getrennte AGB- und
+Datenschutzbilder, gültiges Manifest, verifizierten RFC-3161-Zeitstempel und ein
+11.314.651 Byte großes ZIP-Paket. Er bestätigt ausdrücklich noch keine
+erfolgreiche deutsche Text- oder Klauselerfassung. Vor Freigabe einer Korrektur
+ist ein Regressionstest mit verzögert erscheinendem Rechtstext erforderlich:
+Initialzustand leer oder Challenge, stabilisierter Zustand inhaltsreich,
+Screenshot und normalisierter Text aus demselben späten Zustand. Bis dahin sind
+die Temu-Bilder als visueller Hinweis vorhanden; Hashvergleich und
+Klauselmonitoring dürfen für die beiden deutschen Rechtstexte nicht als
+erfolgreich dargestellt werden. Ein weiterer Regressionstest muss sicherstellen,
+dass ein als Datenschutzseite klassifiziertes Fallback-Ziel die bereits
+gesicherte deutsche Datenschutzrolle weder in `capture_galleries` noch im UI
+überschreibt.
+
+## Temu-Fallback-Paket wird im UI durch einen älteren Root-Fall ersetzt
+
+### Symptom
+
+Ein am 21.08.2026 gestarteter Lauf für `https://www.temu.com/` erzeugte das neue
+Paket `20260821T155017397646Z-4bae2d59`. Darin ist die angeforderte URL als
+`requested_url` erhalten und die tatsächlich erfasste öffentliche AGB-Seite als
+`captured_url: https://www.temu.com/de/terms-of-use.html` ausgewiesen. Nach dem
+Abschluss zeigte die Oberfläche trotzdem den älteren Fall
+`20260821T090820744158Z-182f5021` für die Temu-Startseite. Dadurch wirkten die
+AGB- und Datenschutz-Schaltflächen fälschlich deaktiviert, obwohl im neuen Paket
+Rechtstextbilder vorhanden waren.
+
+### Ursache und Diagnose
+
+Die Ursache ist im UI-Ladeweg belegt. `loadNewest(expectedUrl)` sucht in der
+Fallliste zuerst nach `entry.url === expectedUrl`. Die Fallzusammenfassung aus
+`CaseArchive._summary` enthält jedoch kein `requested_url`. Bei einem
+erfolgreichen Rechtstext-Fallback ist `url` die tatsächlich erfasste Unterseite
+und damit nicht mehr die angeforderte Startseite. Liegt ein älterer Fall vor,
+dessen `url` noch exakt der Startseite entspricht, wird deshalb dieser ältere
+Fall ausgewählt. Die Dateizeitstempel, Fallkennungen sowie `requested_url` und
+`captured_url` des neuen Pakets schließen eine fehlende neue Erfassung als
+Ursache aus.
+
+### Lösung
+
+Die Fallzusammenfassung gibt nun `requested_url` und `captured_url` getrennt
+aus. `loadNewest` sucht zuerst nach `requested_url`, danach aus
+Abwärtskompatibilitätsgründen nach `url` und erst zuletzt nach dem neuesten Fall
+insgesamt. Da die Fallliste absteigend nach Erfassungszeit sortiert ist, wird so
+der neueste Lauf zur ursprünglich eingegebenen URL geöffnet. Das Eingabefeld
+zeigt ebenfalls weiterhin `requested_url`; `url` und `captured_url` bleiben für
+die Transparenz der tatsächlich gesicherten Seite erhalten.
+
+Für eine eindeutige lokale Vorführung kann zusätzlich ein bestimmter
+gespeicherter Fall über `/beweis-labor?case_id=<Fallkennung>` geöffnet werden.
+Die Kennung wird weiterhin durch den bestehenden pfadsicheren API-Endpunkt
+validiert; die Ansicht verändert oder kopiert keine Beweisdaten.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest legt einen älteren Fall mit der Root-URL und einen neuen
+Fallback-Fall mit derselben `requested_url`, aber abweichender `captured_url`
+an. Er bestätigt die Sortierung, beide URL-Felder in der API und die Priorität
+von `requested_url` im UI-Ladeweg. Der Browser-Smoke-Test mit dem vorhandenen
+Temu-Paket öffnete danach den Fall `20260821T155017397646Z-4bae2d59`, zeigte die
+Temu-Nutzungsbedingungen und ließ die AGB- sowie Datenschutz-Schaltflächen
+aktiv. Adidas war bei der Vorführung nicht von diesem Anzeigefehler betroffen,
+weil dessen blockierte Root-Seite zugleich die `captured_url` blieb.
+
+Ein unmittelbar danach gestarteter neuer Temu-Lauf
+`20260821T160217037848Z-2948c897` wurde dagegen von Temu auf der Hauptseite und
+allen elf geprüften Rechtstextpfaden mit derselben JavaScript-Challenge
+begrenzt. Die Oberfläche zeigte dafür nach der Korrektur richtigerweise den
+neuen Schutzbefund mit deaktivierten Rechtstext-Schaltflächen. Der frühere,
+erfolgreich bebilderte Lauf bleibt über seine Fallkennung getrennt aufrufbar.
+Damit werden ein archivierter erfolgreicher Stand und ein aktueller
+Schutzbefund nicht miteinander vermischt.
+
+## Adidas-Rechtstexte liefern im lokalen Lauf dieselbe HTTP-403-Schutzseite
+
+### Symptom
+
+Der Lauf vom 21.08.2026 für `https://www.adidas.de/` versuchte nach dem
+geschützten Hauptabruf ausdrücklich die bekannte deutsche AGB-Adresse
+`https://www.adidas.de/terms_and_conditions`. Hauptseite und AGB-Ziel antworteten
+mit HTTP 403. Das erzeugte Bild zeigt deshalb nur die Adidas-Hinweisseite zur
+automatischen Bot-Kontrolle und ist korrekt als browserlose HTML-Visualisierung,
+nicht als Live-Browser-Screenshot oder Klauselbeweis, beschriftet.
+
+Die automatische Datenschutzsuche versuchte dabei noch
+`https://www.adidas.de/privacy-policy.html`. Die öffentlich belegte deutsche
+Adresse lautet dagegen `https://www.adidas.de/privacy_policy`.
+
+### Ursache und Diagnose
+
+Für die AGB liegt kein fehlender Zielpfad vor: `legal_pages.json` weist den
+bekannten Pfad `/terms_and_conditions` und den fehlgeschlagenen Abruf mit HTTP
+403 aus. Auch der transparente Browsermodus mit Projekt-User-Agent,
+`navigator.webdriver=true`, ohne Stealth, Proxy oder gespeichertes Profil erhielt
+die Adidas-Schutzseite. Die AGB-Erfassung scheiterte daher an der externen
+Zugriffskontrolle.
+
+Beim Datenschutz besteht zusätzlich eine lokale Pfadlücke: In der zentralen
+Website-Zuordnung ist bisher nur der Adidas-AGB-Pfad hinterlegt. Deshalb fiel die
+Suche auf den allgemeinen, für Adidas falschen Kandidaten
+`/privacy-policy.html` zurück.
+
+### Lösung
+
+Die produktive Pfadkorrektur ist noch offen: Für `adidas.de` muss
+`/privacy_policy` als bekannter öffentlicher Datenschutzpfad ergänzt und vor
+allgemeinen Kandidaten geprüft werden. Dies verbessert Pfadwahl und
+Dokumentation, hebt aber die beobachtete HTTP-403-Sperre nicht auf.
+
+Die Zugriffskontrolle wird nicht umgangen. Bleibt auch der korrekte öffentliche
+Pfad im transparenten Abruf gesperrt, endet der Lauf weiterhin mit einem klar
+bezeichneten Schutzbefund. Für einen Inhaltsbeweis ist dann eine zulässige
+manuelle Erfassung oder eine ausdrückliche Bereitstellung beziehungsweise
+Freigabe durch Adidas erforderlich.
+
+### Verifikation und verbleibende Grenze
+
+Der Lauf `20260821T155127210246Z-4c51d898` belegt den HTTP-403-Status für
+Hauptseite und bekannten AGB-Pfad sowie die korrekte Kennzeichnung des
+Ersatzbildes. Nach Ergänzung des Datenschutzpfads sind Kandidatenreihenfolge,
+`legal_pages.json` und ein Schutzbefund mit exakt `/privacy_policy` per
+Regressionstest zu prüfen. Ein erfolgreicher Suchmaschinenabruf des öffentlichen
+Textes belegt die Adresse, ist aber kein Ersatz für eine eigene Beweiserfassung
+durch das BeweisLab.
