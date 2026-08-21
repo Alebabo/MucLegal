@@ -191,6 +191,7 @@ function TenorHelpPage() {
   const [mode, setMode] = useState<WritingMode | null>(null);
   const [selectedCase, setSelectedCase] = useState<DemoCase | null>(null);
   const [commandIndex, setCommandIndex] = useState(0);
+  const [caseIndex, setCaseIndex] = useState(0);
   const [pdf, setPdf] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dictating, setDictating] = useState(false);
@@ -260,6 +261,10 @@ function TenorHelpPage() {
   }, [slashQuery]);
 
   useEffect(() => {
+    setCaseIndex(0);
+  }, [normalizedCaseQuery]);
+
+  useEffect(() => {
     const input = contextInput.current;
     if (!input) return;
     input.style.height = "0px";
@@ -279,6 +284,7 @@ function TenorHelpPage() {
     setSelectedCase(null);
     setContext(nextMode === "fälle" ? "" : contextWithoutCommand);
     setCommandIndex(0);
+    setCaseIndex(0);
     setGenerated(false);
     setSuggestion(null);
     window.requestAnimationFrame(() => contextInput.current?.focus());
@@ -287,6 +293,7 @@ function TenorHelpPage() {
   const chooseCase = (item: DemoCase) => {
     setMode("fälle");
     setSelectedCase(item);
+    setCaseIndex(0);
     setContext(caseContext(item));
     setGenerated(false);
     setSuggestion(null);
@@ -349,6 +356,7 @@ function TenorHelpPage() {
     setMode(null);
     setSelectedCase(null);
     setCommandIndex(0);
+    setCaseIndex(0);
     setPdf(null);
     setGenerated(false);
     setSelected(null);
@@ -436,6 +444,7 @@ function TenorHelpPage() {
                   setGenerated(false);
                 }}
                 onKeyDown={(event) => {
+                  const highlightedCase = caseMatches[caseIndex] ?? caseMatches[0];
                   if (showModeMenu && event.key === "ArrowDown" && filteredCommands.length > 0) {
                     event.preventDefault();
                     setCommandIndex((current) => (current + 1) % filteredCommands.length);
@@ -446,6 +455,30 @@ function TenorHelpPage() {
                     setCommandIndex(
                       (current) =>
                         (current - 1 + filteredCommands.length) % filteredCommands.length,
+                    );
+                    return;
+                  }
+                  if (
+                    !showModeMenu &&
+                    mode === "fälle" &&
+                    !selectedCase &&
+                    event.key === "ArrowDown" &&
+                    caseMatches.length > 0
+                  ) {
+                    event.preventDefault();
+                    setCaseIndex((current) => (current + 1) % caseMatches.length);
+                    return;
+                  }
+                  if (
+                    !showModeMenu &&
+                    mode === "fälle" &&
+                    !selectedCase &&
+                    event.key === "ArrowUp" &&
+                    caseMatches.length > 0
+                  ) {
+                    event.preventDefault();
+                    setCaseIndex(
+                      (current) => (current - 1 + caseMatches.length) % caseMatches.length,
                     );
                     return;
                   }
@@ -470,10 +503,10 @@ function TenorHelpPage() {
                     event.key === "Enter" &&
                     mode === "fälle" &&
                     !selectedCase &&
-                    caseMatches[0]
+                    highlightedCase
                   ) {
                     event.preventDefault();
-                    chooseCase(caseMatches[0]);
+                    chooseCase(highlightedCase);
                     return;
                   }
                   if (event.key === "Tab" && suggestion) {
@@ -524,12 +557,14 @@ function TenorHelpPage() {
                 onClick={(event) => event.stopPropagation()}
               >
                 {caseMatches.length > 0 ? (
-                  caseMatches.map((item) => (
+                  caseMatches.map((item, index) => (
                     <button
                       key={item.case_id}
                       type="button"
+                      aria-current={index === caseIndex ? "true" : undefined}
+                      onMouseEnter={() => setCaseIndex(index)}
                       onClick={() => chooseCase(item)}
-                      className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left transition hover:bg-slate-50"
+                      className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left transition ${index === caseIndex ? "bg-slate-200" : "hover:bg-slate-100"}`}
                     >
                       <span className="truncate text-xs font-semibold text-slate-900">
                         {item.title}

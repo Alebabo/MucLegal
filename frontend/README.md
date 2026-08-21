@@ -44,6 +44,9 @@ Nach `/` lässt sich das kompakte Menü mit Pfeil hoch/runter bedienen; Enter
 vor der Eingabe. Befindet sich der Cursor am Textanfang, entfernt Backspace den
 Modus wieder.
 
+Auch die Treffer unter `/fälle` lassen sich mit Pfeil hoch/runter durchlaufen.
+Enter übernimmt den jeweils grau markierten Fall.
+
 Die Rückfragen hängen nicht von der Textlänge ab. Der lokale deterministische
 Vollständigkeitscheck prüft, ob der Text folgende vier Inhalte erkennen lässt:
 

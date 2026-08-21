@@ -27,11 +27,11 @@ die Schreibfläche selbst wird nicht verkleinert.
 
 `/` öffnet eine kompakte Inline-Auswahl:
 
-| Befehl | Wirkung |
-|---|---|
-| `/sachverhalt` | neuen Sachverhalt erfassen |
-| `/tenor` | vorhandenen Tenor korrigieren oder fortschreiben |
-| `/fälle` | Archiv und Hinweise durchsuchen |
+| Befehl         | Wirkung                                          |
+| -------------- | ------------------------------------------------ |
+| `/sachverhalt` | neuen Sachverhalt erfassen                       |
+| `/tenor`       | vorhandenen Tenor korrigieren oder fortschreiben |
+| `/fälle`       | Archiv und Hinweise durchsuchen                  |
 
 Pfeil hoch/runter bewegt eine deutlich grau markierte Auswahl. Enter übernimmt
 den Modus. Der Modus erscheint danach fett direkt vor der weiteren Eingabe. Er
@@ -40,8 +40,9 @@ löscht Backspace den Modus.
 
 Im Modus `/fälle` wird während des Tippens in Titel, Fall-ID, Domain und Kurztext
 gesucht. Die Ergebnisliste zeigt kompakt nur Titel und Fall-ID. Enter übernimmt
-den ersten Treffer. Grundlage ist aktuell der gemeinsame synthetische Datensatz
-von Archiv und Hinweisen in `frontend/src/data/lottoDemoCases.ts`.
+den mit Pfeil hoch/runter grau markierten Treffer. Grundlage ist aktuell der
+gemeinsame synthetische Datensatz von Archiv und Hinweisen in
+`frontend/src/data/lottoDemoCases.ts`.
 
 ### Inhaltliche Rückfragen
 
@@ -96,15 +97,15 @@ als eigene Befundspalte an.
 `scripts/eval.py` führt Leave-one-out ausschließlich über die vier Fälle mit
 geprüftem Zitat aus. Der aktuelle, ungeschönte Stand ist:
 
-| Segment | Treffer |
-|---|---:|
-| Adressatenkreis | 4/4 (100 %) |
-| Anwendungsbereich | 0/5 (0 %) |
-| Ausnahmevorbehalt | 0/2 (0 %) |
-| Konkrete Verletzungsform | 2/4 (50 %) |
-| Ordnungsmittelandrohung | 0/4 (0 %) |
-| Verbotene Handlung | 0/5 (0 %) |
-| **Gesamt** | **6/24 (25 %)** |
+| Segment                  |         Treffer |
+| ------------------------ | --------------: |
+| Adressatenkreis          |     4/4 (100 %) |
+| Anwendungsbereich        |       0/5 (0 %) |
+| Ausnahmevorbehalt        |       0/2 (0 %) |
+| Konkrete Verletzungsform |      2/4 (50 %) |
+| Ordnungsmittelandrohung  |       0/4 (0 %) |
+| Verbotene Handlung       |       0/5 (0 %) |
+| **Gesamt**               | **6/24 (25 %)** |
 
 Der Umgehungstest bestätigt weiterhin: Der domaingebundene T-001 erfasst die
 App-Verlagerung nicht, die technikneutrale Komposition mit B-AB-03 dagegen schon.
