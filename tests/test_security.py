@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -69,6 +70,42 @@ class UiSecurityTests(unittest.TestCase):
         self.assertTrue(response.headers["content-type"].startswith("text/plain"))
         self.assertIn("attachment", response.headers["content-disposition"])
         self.assertIn("<script>", response.text)
+
+    def test_regular_bundle_cannot_reference_god_mode_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            latest, case_id = write_case(root)
+            case_path = root / "bundles" / case_id / "case.json"
+            record = json.loads(case_path.read_text(encoding="utf-8"))
+            god_artifact = (
+                root
+                / "god-mode-bundles"
+                / "god-foreign"
+                / "artifacts"
+                / "raw.html"
+            )
+            god_artifact.parent.mkdir(parents=True)
+            god_artifact.write_text("GOD MODE FOREIGN CONTENT", encoding="utf-8")
+            record["artifacts"]["raw_html"] = str(god_artifact)
+            case_path.write_text(json.dumps(record), encoding="utf-8")
+            app = create_app(latest, root / "reviews.sqlite3")
+
+            with TestClient(app) as client:
+                artifact = client.get(f"/artifact/{case_id}/raw_html")
+                download = client.get(f"/api/v1/cases/{case_id}/download")
+
+            archive_path = root / "download.zip"
+            archive_path.write_bytes(download.content)
+            with zipfile.ZipFile(archive_path) as archive:
+                packaged_names = archive.namelist()
+                packaged_content = b"".join(
+                    archive.read(name) for name in packaged_names
+                )
+
+        self.assertEqual(404, artifact.status_code)
+        self.assertEqual(200, download.status_code)
+        self.assertNotIn("artefakte/raw_html.html", packaged_names)
+        self.assertNotIn(b"GOD MODE FOREIGN CONTENT", packaged_content)
 
     def test_run_api_rejects_excessive_and_unknown_input(self) -> None:
         with tempfile.TemporaryDirectory() as output:

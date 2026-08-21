@@ -157,6 +157,10 @@ class LiveMonitorWorkflow:
         requested_page_screenshot: ScreenshotCapture | None = None,
         god_mode: bool = False,
     ) -> LiveWorkflowResult:
+        if god_mode and not capture_baseline:
+            raise ValueError(
+                "God Mode ist ausschließlich für die technische BeweisLab-Erfassung zulässig."
+            )
         progress = progress or (lambda _step, _message: None)
         session = nullcontext()
         if (
@@ -641,7 +645,7 @@ class LiveMonitorWorkflow:
             step_states["timestamp"] = "warning"
         if screenshot_error:
             step_states["screenshot"] = "warning"
-        return LiveWorkflowResult(status, message, str(self.latest_case_path), step_states)
+        return LiveWorkflowResult(status, message, str(latest_path), step_states)
 
     def _capture_legal_screenshots(
         self,

@@ -390,7 +390,8 @@ class CaseArchive:
         return sorted(cases, key=lambda item: item["erkannt_am"], reverse=True)
 
     def detail(self, case_id: str) -> dict:
-        record = self._read(self._case_path(case_id))
+        case_path = self._case_path(case_id)
+        record = self._read(case_path)
         summary = self._summary(case_id, record)
         artifacts: list[dict] = []
         stored = record.get("artifacts", {})
@@ -408,7 +409,7 @@ class CaseArchive:
                         )}
             if stored.get(label):
                 try:
-                    path = self._safe_artifact_path(label, record)
+                    path = self._safe_artifact_path(label, record, case_path.parent)
                     artifact["available"] = True
                     artifact["status"] = "available"
                     artifact["status_reason"] = "Im lokalen Beweispaket vorhanden."
@@ -492,7 +493,12 @@ class CaseArchive:
         return {**summary, "artifacts": artifacts, "capture_galleries": galleries}
 
     def artifact_path(self, case_id: str, label: str) -> Path:
-        return self._safe_artifact_path(label, self._read(self._case_path(case_id)))
+        case_path = self._case_path(case_id)
+        return self._safe_artifact_path(
+            label,
+            self._read(case_path),
+            case_path.parent,
+        )
 
     def capture_gallery_path(
         self, case_id: str, role: str, kind: str, index: int | None = None
@@ -590,7 +596,7 @@ class CaseArchive:
                 if not record.get("artifacts", {}).get(label):
                     continue
                 try:
-                    path = self._safe_artifact_path(label, record)
+                    path = self._safe_artifact_path(label, record, case_path.parent)
                 except HTTPException:
                     continue
                 package.write(path, f"artefakte/{label}{path.suffix}")
@@ -618,7 +624,12 @@ class CaseArchive:
             raise ValueError("Unvollständiges case.json")
         return record
 
-    def _safe_artifact_path(self, label: str, record: dict) -> Path:
+    def _safe_artifact_path(
+        self,
+        label: str,
+        record: dict,
+        bundle_root: Path,
+    ) -> Path:
         if label not in ARTIFACT_DEFINITIONS:
             raise HTTPException(404, "Artefakt nicht freigegeben.")
         path_value = record.get("artifacts", {}).get(label)
@@ -626,9 +637,9 @@ class CaseArchive:
             raise HTTPException(404, "Artefakt nicht vorhanden.")
         path = Path(path_value).resolve()
         try:
-            path.relative_to(self.store_root)
+            path.relative_to(bundle_root.resolve())
         except ValueError as exc:
-            raise HTTPException(404, "Artefakt liegt außerhalb der lokalen Ablage.") from exc
+            raise HTTPException(404, "Artefakt liegt außerhalb des Beweispakets.") from exc
         if not path.is_file():
             raise HTTPException(404, "Artefaktdatei fehlt.")
         return path

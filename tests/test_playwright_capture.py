@@ -122,6 +122,7 @@ def test_full_page_capture_is_not_silently_limited_at_8000_pixels(
     index = json.loads(Path(captured.screenshot.index_path).read_text("utf-8"))
     assert index["document_height_css_px"] >= height
     assert index["capture_completeness"] == "vollstaendig_erfasst"
+    assert index["continuous_coverage"] is True
     assert "FOOTER-MARKER" in Path(
         captured.artifact_directory, "visible-text-final.txt"
     ).read_text("utf-8")

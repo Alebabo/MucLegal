@@ -515,6 +515,26 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertFalse(regular_latest_exists)
         self.assertTrue(god_latest_exists)
 
+    def test_god_mode_cannot_enter_the_legal_analysis_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            workflow = LiveMonitorWorkflow(
+                Path(output),
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "ausschließlich für die technische BeweisLab-Erfassung",
+            ):
+                workflow.run("https://example.com", god_mode=True)
+
+        self.assertFalse(workflow.latest_case_path.exists())
+        self.assertFalse(workflow.latest_god_mode_case_path.exists())
+
     def test_god_mode_without_openai_key_is_a_visible_non_blocking_warning(self) -> None:
         from PIL import Image
 

@@ -555,6 +555,104 @@ protokollierte Kachelgrenze und keinen unbehandelten Clip-Fehler. Eine dynamisch
 schrumpfende Seite bleibt möglicherweise unvollständig; sie wird nicht als
 lückenloser Vollbildbeweis bezeichnet.
 
+## God Mode konnte intern die juristische Analysespur erreichen
+
+### Symptom
+
+Ein direkter Python-Aufruf von `LiveMonitorWorkflow.run(god_mode=True)` ohne
+`capture_baseline=True` konnte nach einer bereits vorhandenen God-Mode-Baseline
+in die Kerngleichheits- und Modellanalyse verzweigen. Der UI-Pfad setzte zwar
+stets `capture_baseline=True`, die Workflow-Grenze selbst erzwang diese Trennung
+aber nicht. In diesem seltenen Pfad wurde außerdem der reguläre statt des
+separaten God-Mode-Latest-Pfads zurückgegeben.
+
+### Ursache und Diagnose
+
+`RunCoordinator` koppelte God Mode korrekt an die technische BeweisLab-Erfassung.
+`LiveMonitorWorkflow.run` akzeptierte die Parameter jedoch unabhängig voneinander.
+Dadurch beruhte die fachlich zwingende Trennung nur auf dem Verhalten eines
+einzigen Aufrufers; Tests deckten ausschließlich den regulären UI-Aufruf ab.
+
+### Lösung
+
+Die Workflow-Grenze lehnt `god_mode=True` jetzt ab, wenn nicht zugleich
+`capture_baseline=True` gesetzt ist. Damit kann kein interner Aufrufer
+God-Mode-Artefakte einer juristischen Kerngleichheitsprüfung zuführen. Der
+nachgelagerte Rückgabepfad verwendet zusätzlich den bereits berechneten,
+modusabhängigen Latest-Pfad.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest bestätigt, dass der unzulässige Parameterverbund vor jedem
+Abruf mit `ValueError` endet und weder ein reguläres noch ein God-Mode-Paket
+erzeugt. Die bestehenden God-Mode-Tests bestätigen weiterhin die getrennte
+Speicherung, sichtbare Kennzeichnung und übersprungene Anthropic-Stufe. Neue
+interne Einstiegspunkte müssen weiterhin `LiveMonitorWorkflow.run` verwenden
+und dürfen keine privaten Workflow-Methoden direkt aufrufen.
+
+## Artefaktpfad konnte auf ein anderes lokales Beweispaket zeigen
+
+### Symptom
+
+Ein beschädigtes oder nachträglich manipuliertes `case.json` konnte für ein
+Artefakt auf eine Datei in einem anderen Bundle unterhalb derselben lokalen
+Ablage verweisen. Der Vorschau-Endpunkt und die ZIP-Erzeugung akzeptierten den
+Pfad, solange er nur innerhalb des gesamten Store-Verzeichnisses lag. Dadurch
+hätte insbesondere ein God-Mode-Artefakt in ein reguläres Downloadpaket kopiert
+werden können.
+
+### Ursache und Diagnose
+
+Die Pfadprüfung in `CaseArchive` verwendete `store_root` als Vertrauensgrenze.
+Diese Grenze verhindert zwar einen Zugriff außerhalb von `.muclegal-ui`, trennt
+aber reguläre Bundles und `god-mode-bundles` nicht voneinander. Die übrigen
+Galeriepfade wurden bereits strenger gegen das jeweilige Paket geprüft.
+
+### Lösung
+
+Jeder freigegebene Artefaktpfad muss jetzt innerhalb des Verzeichnisses des
+konkreten `case.json` liegen. Vorschau, Detailansicht und ZIP-Erzeugung verwenden
+dieselbe Bundle-Grenze. Symlink- und `..`-Auflösungen werden weiterhin über den
+aufgelösten absoluten Pfad geprüft.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest lässt ein reguläres `case.json` auf eine God-Mode-HTML-Datei
+zeigen. Der Artefakt-Endpunkt antwortet mit 404; das reguläre ZIP enthält weder
+den Alias unter `artefakte/` noch den fremden Dateiinhalt. Die lokale Ablage muss
+weiterhin gegen direkte Betriebssystem-Manipulation geschützt werden; absichtlich
+veränderte Paketdateien werden nicht automatisch repariert.
+
+## Gültiges Vollbild meldete widersprüchlich keine lückenlose Abdeckung
+
+### Symptom
+
+Die synthetische 30.000-Pixel-Diagnose erzeugte ein validiertes Full-Page-PNG
+mit 30.021 Pixeln Höhe und Status `vollstaendig_erfasst`. Gleichzeitig enthielt
+`screenshot-index.json` den Wert `continuous_coverage: false`.
+
+### Ursache und Diagnose
+
+Das Feld `continuous_coverage` wurde ausschließlich aus der Liste der
+Fallback-Kacheln berechnet. Bei einem erfolgreichen Vollbild ist diese Liste
+absichtlich leer; die Kachelprüfung lieferte deshalb `false`, obwohl das
+validierte Vollbild die dokumentierte Seitenhöhe vollständig abdeckte.
+
+### Lösung
+
+Ein erfolgreich validiertes Vollbild setzt `continuous_coverage` jetzt direkt
+auf `true`. Nur im Kachelmodus wird die überlappungsfreie Abdeckung weiterhin
+aus `y_start`, `y_end` und Dokumenthöhe berechnet.
+
+### Verifikation und verbleibende Grenze
+
+Die Playwright-Regressionstests prüfen das Feld für 1.000, 7.999, 8.001 und
+30.000 CSS-Pixel; alle elf Capture-Tests bestehen. Eine erneute synthetische
+Diagnose erfasste 30.021 von 30.021 Pixeln und meldete konsistent
+`continuous_coverage: true`. Die Aussage bezieht sich auf die dokumentierte
+Seitenhöhe zum Aufnahmezeitpunkt; spätere dynamische Inhaltsänderungen bleiben
+durch Höhenmessungen und Aufnahmezeitpunkt begrenzt.
+
 ## Externe Zusatzdienste
 
 freeTSA und Wayback sind optionale Zusatzdienste. Ein Ausfall wird mit Status und Grund

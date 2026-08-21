@@ -967,7 +967,11 @@ def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -
         "tiles": tiles,
         "tile_errors": tile_errors,
         "reached_height_css_px": reached_height,
-        "continuous_coverage": _continuous_coverage(tiles, document_height),
+        "continuous_coverage": (
+            True
+            if full_error is None
+            else _continuous_coverage(tiles, document_height)
+        ),
         "invalid_nearly_white_tiles": invalid_tiles,
         "capture_completeness": completeness,
     }
