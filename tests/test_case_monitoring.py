@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -80,6 +81,127 @@ def element_payload() -> dict:
 
 
 class MonitoringCaseTests(unittest.TestCase):
+    def test_legacy_case_rows_get_source_url_as_default_profile_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "cases.sqlite3"
+            repository = MonitoringCaseRepository(database, Path(directory) / "intake")
+            created = repository.create(clause_payload())
+            connection = sqlite3.connect(database)
+            try:
+                connection.execute(
+                    "UPDATE monitoring_cases SET relevant_page_types_json = ? WHERE case_id = ?",
+                    ('["AGB"]', created.case_id),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            loaded = repository.get(created.case_id)
+
+        self.assertEqual((created.source_url,), loaded.target_urls)
+        self.assertEqual(("AGB",), loaded.relevant_page_types)
+
+    def test_case_profile_persists_required_urls_variants_and_exclusions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = MonitoringCaseRepository(
+                Path(directory) / "cases.sqlite3", Path(directory) / "intake"
+            )
+            record = repository.create({
+                **element_payload(),
+                "target_urls": [
+                    "https://example.test/",
+                    "https://example.test/policies/terms-of-service",
+                ],
+                "element_labels": ["Abo kündigen", "Abonnement beenden"],
+                "nicht_umfasst": ["Ein freiwilliger Supportlink ohne Kündigungsfunktion."],
+            })
+
+        self.assertEqual(
+            (
+                "https://example.test/vertrag",
+                "https://example.test/",
+                "https://example.test/policies/terms-of-service",
+            ),
+            record.target_urls,
+        )
+        self.assertIn("Verträge hier kündigen", record.element_labels)
+        self.assertIn("Abo kündigen", record.element_labels)
+        self.assertEqual(1, len(record.nicht_umfasst))
+
+    def test_unlinked_required_terms_page_is_still_monitored(self) -> None:
+        terms_url = "https://example.test/policies/terms-of-service"
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/": b"<html><body><main>Shop ohne AGB-Link</main></body></html>",
+            terms_url: (
+                f"<html><body><main><h1>AGB</h1><p>{CLAUSE}</p></main></body></html>"
+            ).encode(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.create({
+                **clause_payload(),
+                "source_url": "https://example.test/",
+                "target_urls": ["https://example.test/", terms_url],
+            })
+            case = repository.review(case.case_id, "freigegeben")
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=FakeFetcher(pages),
+                policy=ScanPolicy(max_urls=10, max_seconds=5),
+            ).run(case)
+
+        self.assertIn(terms_url, result.coverage["captured_required_target_urls"])
+        self.assertEqual([], result.coverage["missing_required_target_urls"])
+        self.assertTrue(any(item["url"] == terms_url for item in result.document_findings))
+        self.assertTrue(any(item["reported_clause_exact"] for item in result.document_findings))
+
+    def test_button_label_variants_are_forwarded_to_dom_inspection(self) -> None:
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/vertrag": b"<html><body><main>Vertrag</main></body></html>",
+        }
+        received: list[tuple[str, ...]] = []
+
+        def inspect(url: str, destination: Path, **kwargs) -> DomInspectionCapture:
+            del url
+            received.append(tuple(kwargs["labels"]))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("{}", encoding="utf-8")
+            screenshot = destination.with_suffix(".png")
+            screenshot.write_bytes(b"png")
+            match = {
+                "accessible_name": "Abo kündigen",
+                "visible": True,
+                "disabled": False,
+                "obscured": False,
+                "href": "https://example.test/kuendigen",
+            }
+            return DomInspectionCapture(
+                str(destination), str(screenshot), "0" * 64, (match,), (match,), (),
+                "gleichurspruengliches_ziel_dokumentiert", (),
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.create({
+                **element_payload(),
+                "element_labels": ["Abo kündigen", "Abonnement beenden"],
+            })
+            case = repository.review(case.case_id, "freigegeben")
+            CaseDomainMonitor(
+                root / "monitor",
+                fetcher=FakeFetcher(pages),
+                dom_inspector=inspect,
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+
+        self.assertTrue(received)
+        self.assertIn("Abo kündigen", received[0])
+        self.assertIn("Abonnement beenden", received[0])
+
     def test_case_intake_rejects_schemeless_url_and_unrelated_allowed_host(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repository = MonitoringCaseRepository(

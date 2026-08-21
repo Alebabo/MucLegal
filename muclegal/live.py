@@ -25,6 +25,7 @@ from muclegal.evidence import (
     sha256_file,
 )
 from muclegal.evidence.wayback import WaybackClient
+from muclegal.evidence.suitability import classify_technical_evidence
 from muclegal.llm.tenor import TenorDraft
 from muclegal.fetch import FetchFailure, FetchPolicy, HttpFetcher, ScreenshotCapture
 from muclegal.llm import AnthropicAnalyzer, analyze_and_store
@@ -156,6 +157,7 @@ class LiveMonitorWorkflow:
         requested_page_screenshot: ScreenshotCapture | None = None,
         god_mode: bool = False,
     ) -> LiveWorkflowResult:
+        progress = progress or (lambda _step, _message: None)
         session = nullcontext()
         if (
             capture_baseline
@@ -164,19 +166,34 @@ class LiveMonitorWorkflow:
         ):
             session = self.fetcher.capture_session(self.store / "capture-runs")
         god_session = self.fetcher.god_mode_session() if god_mode else nullcontext()
-        with god_session:
-            with session:
-                return self._run_impl(
-                    url,
-                    progress,
-                    capture_baseline=capture_baseline,
-                    allow_protected_fallback=allow_protected_fallback,
-                    browser_mode=browser_mode,
-                    blocked_source_url=blocked_source_url,
-                    blocked_source_type=blocked_source_type,
-                    requested_page_screenshot=requested_page_screenshot,
-                    god_mode=god_mode,
-                )
+        try:
+            with god_session:
+                with session:
+                    return self._run_impl(
+                        url,
+                        progress,
+                        capture_baseline=capture_baseline,
+                        allow_protected_fallback=allow_protected_fallback,
+                        browser_mode=browser_mode,
+                        blocked_source_url=blocked_source_url,
+                        blocked_source_type=blocked_source_type,
+                        requested_page_screenshot=requested_page_screenshot,
+                        god_mode=god_mode,
+                    )
+        except Exception as exc:
+            if not (capture_baseline and allow_protected_fallback):
+                raise
+            progress(
+                "manifest",
+                "Der vorhandene Seiten- oder Fehlerzustand wird als abgeschlossenes Hinweispaket gesichert.",
+            )
+            return self._capture_terminal_failure_evidence(
+                requested_url=blocked_source_url or url,
+                error=exc,
+                progress=progress,
+                browser_mode=browser_mode,
+                god_mode=god_mode,
+            )
 
     def _run_impl(
         self,
@@ -990,6 +1007,26 @@ class LiveMonitorWorkflow:
         )
         bundled_artifacts["screenshot_interactions"] = interactions_path
 
+        result_assessment = classify_technical_evidence(
+            capture_completeness=capture_completeness,
+            has_screenshot=any(
+                capture is not None
+                for capture in [
+                    screenshot,
+                    requested_page_screenshot,
+                    *(legal_page_screenshots or {}).values(),
+                ]
+            ),
+            has_normalized_text=Path(snapshot.normalized_text_path).is_file(),
+            has_raw_capture=Path(snapshot.raw_html_path).is_file(),
+            robots_status=str(capture_transparency.get("robots_txt") or ""),
+            failure_kind="schutzseite" if protection_type else None,
+            god_mode=god_mode,
+        )
+        result_assessment_path = artifacts_dir / "result-assessment.json"
+        _write_json(result_assessment_path, result_assessment.to_dict())
+        bundled_artifacts["result_assessment"] = result_assessment_path
+
         warnings: list[str] = []
         if god_mode:
             warnings.append(GOD_MODE_NOTICE)
@@ -1205,6 +1242,7 @@ class LiveMonitorWorkflow:
             "protection_type": protection_type,
             "captured_url": outcome.url,
             "capture_transparency": capture_transparency,
+            "technical_result": result_assessment.to_dict(),
             "god_mode": god_mode,
             "god_mode_notice": GOD_MODE_NOTICE if god_mode else None,
             "evidence_suitability": evidence_suitability,
@@ -1314,6 +1352,7 @@ class LiveMonitorWorkflow:
             f"Seitenschutz erkannt ({protection_type}) Direkt öffentliche AGB- und Datenschutzseiten werden einzeln geprüft.",
         )
         protected_screenshot: ScreenshotCapture | None = None
+        screenshot_failure: str | None = None
         if self.screenshot_capturer is not None:
             progress(
                 "screenshot",
@@ -1330,11 +1369,15 @@ class LiveMonitorWorkflow:
                     protected_url, protected_path
                 )
             except Exception as exc:
+                screenshot_failure = f"{type(exc).__name__}: {exc}"
                 progress(
                     "screenshot",
-                    f"Die eingegebene Hauptseite konnte nicht fotografiert werden: {type(exc).__name__}: {exc}",
+                    "Die eingegebene Hauptseite konnte nicht fotografiert werden. Technische Details werden im Paket gespeichert.",
                 )
-        failures: list[str] = []
+        failures: list[str] = (
+            [f"Screenshot der angefragten Seite: {screenshot_failure}"]
+            if screenshot_failure else []
+        )
         candidates = _legal_subpage_candidates(protected_url)
         progress(
             "legal_pages",
@@ -1359,9 +1402,9 @@ class LiveMonitorWorkflow:
                 progress("legal_pages", f"Öffentliche Rechtstext-Unterseite erfasst: {candidate}")
                 return LiveWorkflowResult(
                     result.status,
-                    "SEITENSCHUTZ ERKANNT: Die Hauptseite war geschützt. "
-                    f"{protection_type} "
-                    f"Als Ersatz wurde diese öffentlich erreichbare Rechtstext-Unterseite erfasst: {candidate}",
+                    "Nicht als Beleg verwendbar – nur Hinweis. Die Hauptseite zeigte einen "
+                    "Schutzzustand; eine öffentlich erreichbare Rechtstext-Unterseite wurde "
+                    "zusätzlich gespeichert.",
                     result.case_path,
                     result.step_states,
                 )
@@ -1528,6 +1571,26 @@ class LiveMonitorWorkflow:
         )
         bundled_artifacts["screenshot_interactions"] = interactions_path
 
+        result_assessment = classify_technical_evidence(
+            capture_completeness=capture_completeness,
+            has_screenshot=protected_screenshot is not None,
+            has_normalized_text=False,
+            has_raw_capture=bool(
+                protected_screenshot is not None
+                and getattr(protected_screenshot, "artifact_directory", None)
+            ),
+            robots_status=str(protection_transparency.get("robots_txt") or ""),
+            failure_code=(
+                "captcha" if "captcha" in protection_type.casefold() else
+                "login_required" if "login" in protection_type.casefold() else None
+            ),
+            failure_kind="schutzseite",
+            god_mode=god_mode,
+        )
+        result_assessment_path = artifacts_dir / "result-assessment.json"
+        _write_json(result_assessment_path, result_assessment.to_dict())
+        bundled_artifacts["result_assessment"] = result_assessment_path
+
         if god_mode:
             _mark_god_mode_bundle(bundle)
 
@@ -1624,6 +1687,7 @@ class LiveMonitorWorkflow:
             "protection_type": protection_type,
             "captured_url": None,
             "capture_transparency": protection_transparency,
+            "technical_result": result_assessment.to_dict(),
             "evidence_suitability": evidence_suitability,
             "evidence_suitability_notice": evidence_suitability_notice,
             "god_mode": god_mode,
@@ -1675,11 +1739,338 @@ class LiveMonitorWorkflow:
         states["timestamp"] = "success" if timestamp.status == "verified" else "warning"
         return LiveWorkflowResult(
             "completed_with_warnings",
-            (GOD_MODE_NOTICE + " " if god_mode else ROBOTS_UNCHECKED_NOTICE + " " if robots_unchecked else "")
-            + f"SEITENSCHUTZ ERKANNT: {protection_type} Ein Schutzbefund "
-            + ("mit Schutzseiten-Screenshot " if protected_screenshot else "ohne Screenshot ")
-            + f"und {len(failures)} geprüften Rechtstext-Unterseiten wurde gesichert. "
-            "Der dahinterliegende Seiteninhalt wurde nicht erfasst; manuelle Beweissicherung erforderlich.",
+            (
+                GOD_MODE_NOTICE + " " if god_mode else ""
+            )
+            + "Nicht als Beleg verwendbar – nur Hinweis. Der sichtbare Schutz- oder "
+            "Fehlerzustand wurde gespeichert; der dahinterliegende Seiteninhalt wurde nicht "
+            "erfasst. Menschliche Beweissicherung ist erforderlich.",
+            str(latest_path),
+            states,
+        )
+
+    def _capture_terminal_failure_evidence(
+        self,
+        *,
+        requested_url: str,
+        error: Exception,
+        progress: ProgressCallback,
+        browser_mode: bool,
+        god_mode: bool,
+    ) -> LiveWorkflowResult:
+        """Persist a terminal result without presenting a technical exception as UI output."""
+        failure_code = (
+            error.code if isinstance(error, FetchFailure) else
+            "normalization_error" if isinstance(error, NormalizationError) else
+            "technical_failure"
+        )
+        technical_message = f"{type(error).__name__}: {error}"
+        browser_capture = getattr(self.fetcher, "last_browser_capture", None)
+        screenshot = getattr(browser_capture, "screenshot", None)
+        browser_metadata = dict(
+            getattr(getattr(browser_capture, "fetch_result", None), "browser_metadata", None)
+            or {}
+        )
+        capture_state = getattr(screenshot, "capture_state", None)
+        failure_kind = (
+            "verbindungsfehler" if capture_state == "site_connectivity_error" else
+            "schutzseite" if failure_code in {
+                "protected_or_login_page", "captcha", "login_required", "paywall"
+            } else
+            "leerer_browserzustand" if isinstance(error, NormalizationError) else
+            "technischer_fehler"
+        )
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        bundle_id = f"{stamp}-{uuid.uuid4().hex[:8]}"
+        bundle = self.store / ("god-mode-bundles" if god_mode else "bundles") / (
+            f"god-{bundle_id}" if god_mode else bundle_id
+        )
+        artifacts_dir = bundle / "artifacts"
+        artifacts_dir.mkdir(parents=True, exist_ok=False)
+        bundled_artifacts: dict[str, Path] = {}
+
+        if screenshot is not None and Path(screenshot.path).is_file():
+            screenshot_path = artifacts_dir / "requested_page_screenshot.png"
+            shutil.copy2(screenshot.path, screenshot_path)
+            bundled_artifacts["requested_page_screenshot"] = screenshot_path
+
+        raw_body = error.body if isinstance(error, FetchFailure) else None
+        if raw_body is not None:
+            raw_response_path = artifacts_dir / "raw-response.bin"
+            raw_response_path.write_bytes(raw_body)
+            bundled_artifacts["raw_response"] = raw_response_path
+            raw_html_path = artifacts_dir / "raw.html"
+            raw_html_path.write_text(
+                raw_body.decode("utf-8", errors="replace"), encoding="utf-8", newline="\n"
+            )
+            bundled_artifacts["raw_html"] = raw_html_path
+            headers_path = artifacts_dir / "response-headers.json"
+            _write_json(headers_path, dict(error.headers))
+            bundled_artifacts["response_headers"] = headers_path
+
+        protection_path = artifacts_dir / "protection_report.json"
+        _write_json(
+            protection_path,
+            {
+                "requested_url": requested_url,
+                "result": "manual_capture_required",
+                "failure_code": failure_code,
+                "failure_kind": failure_kind,
+                "browser_mode": browser_mode,
+                "technical_error": technical_message,
+                "browser_metadata": browser_metadata,
+            },
+        )
+        bundled_artifacts["protection_report"] = protection_path
+
+        (
+            _capture_completeness,
+            capture_galleries,
+            capture_metrics_path,
+        ) = _bundle_browser_capture_artifacts(
+            bundle=bundle,
+            artifacts_dir=artifacts_dir,
+            bundled_artifacts=bundled_artifacts,
+            role_captures={"requested": screenshot},
+            legal_screenshot_statuses={},
+            protection_type=None,
+            requested_url=requested_url,
+            captured_url=str(
+                getattr(getattr(browser_capture, "fetch_result", None), "final_url", "")
+                or requested_url
+            ),
+            browser_run_root=getattr(self.fetcher, "last_capture_run_root", None),
+        )
+        capture_completeness = "technisch_fehlgeschlagen"
+        metrics = json.loads(capture_metrics_path.read_text(encoding="utf-8"))
+        metrics["warc_size_bytes"] = {
+            "value": "not_available",
+            "reason": "Kein regulärer Seiteninhalt für WARC vorhanden.",
+        }
+        _write_json(capture_metrics_path, metrics)
+        run_result_path = bundled_artifacts["run_result"]
+        run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+        run_result.update({
+            "status": capture_completeness,
+            "failure_code": failure_code,
+            "failure_kind": failure_kind,
+            "technical_error": technical_message,
+        })
+        _write_json(run_result_path, run_result)
+        capture_index_path = bundled_artifacts["capture_index"]
+        capture_index = json.loads(capture_index_path.read_text(encoding="utf-8"))
+        capture_index["capture_completeness"] = capture_completeness
+        _write_json(capture_index_path, capture_index)
+
+        robots_metadata = self.fetcher.robots_metadata()
+        transparency = {
+            "erfassungsmodus": "browser_fehlerbefund" if browser_mode else "direkter_fehlerbefund",
+            "user_agent": browser_metadata.get("user_agent", self.fetcher.policy.user_agent),
+            "navigator.webdriver": browser_metadata.get("navigator_webdriver"),
+            "automation_flags": browser_metadata.get("automation_flags", []),
+            "proxy": "keiner",
+            "context": browser_metadata.get("context", "kein_brauchbarer_browserzustand"),
+            "storage_state": "keiner",
+            "profilverzeichnis": "keines",
+            "robots_txt": robots_metadata.get("robots_txt", "ungeprueft"),
+            "robots_txt_grund": robots_metadata.get(
+                "robots_reason", "Kein verlässlicher robots.txt-Prüfnachweis vorhanden."
+            ),
+            "robots_txt_pruefungen": robots_metadata.get("robots_checks", []),
+            "angefragte_url": requested_url,
+            "tatsaechlich_erfasste_url": browser_metadata.get("final_url"),
+            "request_count": browser_metadata.get("request_count"),
+            "failure_code": failure_code,
+            "failure_kind": failure_kind,
+            "technical_error": technical_message,
+            "god_mode": god_mode,
+            "god_mode_notice": GOD_MODE_NOTICE if god_mode else None,
+        }
+        transparency_path = artifacts_dir / "capture_transparency.yaml"
+        _write_simple_yaml(transparency_path, transparency)
+        bundled_artifacts["capture_transparency"] = transparency_path
+
+        interactions_path = artifacts_dir / "screenshot_interactions.json"
+        _write_json(
+            interactions_path,
+            {
+                "policy": "nur_eindeutige_datensparsame_cookie_auswahl",
+                "screenshots": {
+                    "requested_page_screenshot": list(
+                        getattr(screenshot, "interactions", ()) or ()
+                    ) if screenshot else []
+                },
+            },
+        )
+        bundled_artifacts["screenshot_interactions"] = interactions_path
+
+        has_raw_capture = bool(raw_body) or bool(
+            browser_capture is not None
+            and Path(getattr(browser_capture, "artifact_directory", "")).is_dir()
+        )
+        result_assessment = classify_technical_evidence(
+            capture_completeness=capture_completeness,
+            has_screenshot=screenshot is not None,
+            has_normalized_text=False,
+            has_raw_capture=has_raw_capture,
+            robots_status=str(transparency.get("robots_txt") or ""),
+            failure_code=failure_code,
+            failure_kind=failure_kind,
+            god_mode=god_mode,
+        )
+        result_assessment_path = artifacts_dir / "result-assessment.json"
+        _write_json(result_assessment_path, result_assessment.to_dict())
+        bundled_artifacts["result_assessment"] = result_assessment_path
+
+        wayback_path = bundle / "wayback-status.json"
+        _write_json(
+            wayback_path,
+            {
+                "status": "skipped",
+                "message": "Kein regulärer Seiteninhalt für eine zusätzliche Archivierung vorhanden.",
+            },
+        )
+        bundled_artifacts["wayback_status"] = wayback_path
+        if god_mode:
+            _mark_god_mode_bundle(bundle)
+
+        manifest = create_manifest(
+            bundled_artifacts,
+            bundle,
+            notice=GOD_MODE_NOTICE if god_mode else None,
+        )
+        verification = verify_manifest(manifest.manifest_path)
+        if not verification.valid:
+            raise RuntimeError(f"Manifestprüfung fehlgeschlagen: {verification.errors}")
+
+        timestamp_status = "unavailable"
+        timestamp_query = None
+        timestamp_response = None
+        try:
+            timestamp = self.tsa_client.timestamp_digest(
+                manifest.manifest_sha256, bundle / "timestamp"
+            )
+            timestamp_status = timestamp.status
+            timestamp_query = timestamp.query_path
+            timestamp_response = timestamp.response_path
+        except Exception as timestamp_error:
+            timestamp_error_path = artifacts_dir / "timestamp-error.json"
+            _write_json(
+                timestamp_error_path,
+                {"status": "unavailable", "technical_error": str(timestamp_error)},
+            )
+
+        evidence_suitability = (
+            "nicht_juristisch_verwertbar" if god_mode else
+            "nicht_erfassbar" if result_assessment.code == "nicht_erfassbar" else
+            "nicht_beweisgeeignet"
+        )
+        evidence_suitability_notice = result_assessment.meaning
+        assessment = {
+            "ergebnis": "nicht_bewertet",
+            "confidence": 0.0,
+            "begruendung": "Technischer Fehler- oder Schutzbefund ohne juristische Bewertung.",
+            "tatsachenbasis": [result_assessment.what_was_found],
+            "staerkstes_gegenargument": "Der dahinterliegende Seiteninhalt wurde nicht belegt.",
+            "unsicherheit": result_assessment.next_action,
+        }
+        evidence = {
+            "warc_status": "nicht_erzeugt_wegen_fehlerzustand",
+            "manifest_sha256": manifest.manifest_sha256,
+            "chain_head_sha256": manifest.chain_head_sha256,
+            "timestamp_status": timestamp_status,
+            "wayback_status": "skipped",
+            "capture_relation": "error_state_only",
+            "screenshot_status": "protected_error_state" if screenshot else "failed",
+            "requested_page_screenshot_status": (
+                "protected_error_state" if screenshot else "failed"
+            ),
+            "requested_page_screenshot_reason": (
+                getattr(screenshot, "state_reason", None) if screenshot else
+                result_assessment.what_was_found
+            ),
+        }
+        report_data = {
+            "fall_id": self.tenor["fall_id"],
+            "url": requested_url,
+            "erkannt_am": datetime.now(timezone.utc).isoformat(),
+            "vorher": "Kein Vorherzustand.",
+            "nachher": result_assessment.what_was_found,
+            "assessment": assessment,
+            "evidence": evidence,
+            "evidence_suitability": evidence_suitability,
+            "evidence_suitability_notice": evidence_suitability_notice,
+            "god_mode": god_mode,
+        }
+        report_path: Path | None = None
+        try:
+            report_path = Path(self.report_builder(report_data, bundle / "pruefbericht.pdf"))
+        except Exception:
+            report_path = None
+
+        case_record = {
+            **report_data,
+            "tenor": self.tenor,
+            "capture_mode": "technical_failure_record",
+            "capture_completeness": capture_completeness,
+            "capture_galleries": capture_galleries,
+            "requested_url": requested_url,
+            "blocked_url": requested_url if failure_kind == "schutzseite" else None,
+            "protection_type": failure_kind if failure_kind == "schutzseite" else None,
+            "captured_url": getattr(
+                getattr(browser_capture, "fetch_result", None), "final_url", None
+            ),
+            "capture_transparency": transparency,
+            "technical_result": result_assessment.to_dict(),
+            "evidence_suitability": evidence_suitability,
+            "evidence_suitability_notice": evidence_suitability_notice,
+            "god_mode": god_mode,
+            "god_mode_notice": GOD_MODE_NOTICE if god_mode else None,
+            "schema_valid": True,
+            "clause_schema_valid": False,
+            "clause_findings": [],
+            "snapshot_sha256": None,
+            "previous_snapshot_sha256": None,
+            "freigabe_durch_mensch": None,
+            "warnings": [result_assessment.meaning],
+            "artifact_statuses": {
+                "requested_page_screenshot": {
+                    "status": "warning" if screenshot else "failed",
+                    "reason": result_assessment.what_was_found,
+                }
+            },
+            "not_applicable_artifacts": [
+                "normalized_text", "legal_pages", "previous_normalized_text", "diff",
+                "model_input", "model_output", "clause_model_input", "clause_model_output",
+                "screenshot", "agb_screenshot", "privacy_screenshot", "warc", "cdx",
+                "warc_status",
+            ],
+            "artifacts": {
+                **{label: str(path) for label, path in bundled_artifacts.items()},
+                "manifest": manifest.manifest_path,
+                "manifest_digest": manifest.digest_path,
+                **({"timestamp_query": timestamp_query} if timestamp_query else {}),
+                **({"timestamp_response": timestamp_response} if timestamp_response else {}),
+                **({"report": str(report_path)} if report_path else {}),
+            },
+        }
+        case_path = bundle / "case.json"
+        _write_json(case_path, case_record)
+        latest_path = self.latest_god_mode_case_path if god_mode else self.latest_case_path
+        latest_path.write_text(
+            case_path.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+        )
+        states = {step: "skipped" for step in PIPELINE_STEPS}
+        states["fetch"] = "warning"
+        states["normalize"] = "warning" if isinstance(error, NormalizationError) else "skipped"
+        states["screenshot"] = "warning" if screenshot else "skipped"
+        states["manifest"] = "success"
+        states["timestamp"] = "success" if timestamp_status == "verified" else "warning"
+        progress("timestamp", "Das Hinweispaket wurde abgeschlossen und bleibt lokal verfügbar.")
+        return LiveWorkflowResult(
+            "completed_with_warnings",
+            f"{result_assessment.label}. {result_assessment.what_was_found}",
             str(latest_path),
             states,
         )
@@ -1896,7 +2287,8 @@ def _god_mode_banner_font(image_font: Any, size: int) -> Any:
 
 def _discover_legal_pages(raw_html_path: str | Path, source_url: str, output_path: Path) -> Path:
     """Find linked legal pages in the captured HTML without following click paths."""
-    document = lxml_html.fromstring(Path(raw_html_path).read_bytes())
+    raw_html = Path(raw_html_path).read_bytes()
+    document = lxml_html.fromstring(raw_html)
     categories = {
         "agb": ("agb", "allgemeine geschäftsbedingungen", "terms and conditions"),
         "datenschutz": ("datenschutz", "datenschutzerklärung", "privacy policy", "privacy"),
@@ -1924,9 +2316,32 @@ def _discover_legal_pages(raw_html_path: str | Path, source_url: str, output_pat
                     "document_type": category,
                     "source": "anchor_in_saved_html",
                 })
+    # Shopify legal pages can exist at stable public endpoints without being linked in
+    # the delivered start-page HTML. Probe only the two documented same-origin platform
+    # paths, and only when ordinary link discovery found nothing for that category.
+    if b"shopify" in raw_html.lower():
+        origin = f"{urlsplit(source_url).scheme}://{urlsplit(source_url).netloc}"
+        platform_paths = {
+            "agb": "/policies/terms-of-service",
+            "datenschutz": "/policies/privacy-policy",
+        }
+        for category, path in platform_paths.items():
+            if findings[category]:
+                continue
+            candidate = urljoin(origin, path)
+            findings[category].append({
+                "label": "Bekannter öffentlicher Shopify-Rechtstextpfad",
+                "url": candidate,
+                "same_domain": True,
+                "document_type": category,
+                "source": "known_shopify_public_path",
+            })
     payload = {
         "source_url": source_url,
-        "method": "Linksuche im gespeicherten HTML; keine Klickpfade aufgerufen.",
+        "method": (
+            "Linksuche im gespeicherten HTML; bei erkannter Shopify-Seite zusätzlich "
+            "zwei bekannte öffentliche Rechtstextpfade; keine Klickpfade aufgerufen."
+        ),
         "agb": findings["agb"][:20],
         "datenschutz": findings["datenschutz"][:20],
     }

@@ -27,6 +27,10 @@ DISCOVERY_TERMS = (
     "kündig", "kuendig", "konto", "checkout", "warenkorb", "widerruf",
 )
 TRACKING_PARAMETERS = {"fbclid", "gclid", "msclkid", "ref", "source"}
+COMMON_PROFILE_PATHS = {
+    "agb": ("/agb", "/terms", "/policies/terms-of-service"),
+    "datenschutz": ("/datenschutz", "/privacy-policy.html", "/policies/privacy-policy"),
+}
 
 
 @dataclass(frozen=True)
@@ -85,11 +89,16 @@ class CaseDomainMonitor:
         pages_root.mkdir(parents=True, exist_ok=False)
         started = time.monotonic()
         allowed_hosts = {case.domain, *case.allowed_subdomains}
-        queue: deque[tuple[str, int, str]] = deque([(canonical_url(case.source_url), 0, "fundstelle")])
+        required_targets = tuple(dict.fromkeys(canonical_url(url) for url in case.target_urls))
+        queue: deque[tuple[str, int, str, bool]] = deque(
+            (url, 0, "fallprofil", True) for url in required_targets
+        )
+        for candidate in _profile_path_candidates(case):
+            queue.append((candidate, 0, "bekannter_rechtstextpfad", False))
         for sitemap_url in self._sitemap_urls(case.source_url):
             for candidate in self._read_sitemap(sitemap_url):
                 if _allowed(candidate, allowed_hosts):
-                    queue.append((canonical_url(candidate), 1, "sitemap"))
+                    queue.append((canonical_url(candidate), 1, "sitemap", True))
 
         visited: list[str] = []
         skipped: list[dict] = []
@@ -101,7 +110,7 @@ class CaseDomainMonitor:
             if len(visited) >= self.policy.max_urls or time.monotonic() - started >= self.policy.max_seconds:
                 budget_exhausted = True
                 break
-            url, depth, source = queue.popleft()
+            url, depth, source, required = queue.popleft()
             if url in seen:
                 continue
             seen.add(url)
@@ -114,9 +123,18 @@ class CaseDomainMonitor:
             try:
                 fetched = self.fetcher.fetch(url)
             except FetchFailure as exc:
-                blocked.append(
-                    {"url": url, "reason": exc.code, "message": str(exc), "manual_review": exc.manual_review}
-                )
+                failure = {
+                    "url": url,
+                    "reason": exc.code,
+                    "message": str(exc),
+                    "manual_review": exc.manual_review,
+                    "source": source,
+                    "required_by_case_profile": required,
+                }
+                if required:
+                    blocked.append(failure)
+                else:
+                    skipped.append(failure)
                 continue
             visited.append(url)
             extension = ".pdf" if _is_pdf(fetched.headers, fetched.body, url) else ".html"
@@ -130,6 +148,7 @@ class CaseDomainMonitor:
                 "final_url": fetched.final_url,
                 "depth": depth,
                 "source": source,
+                "required_by_case_profile": url in required_targets,
                 "content_type": "pdf" if extension == ".pdf" else "html",
                 "artifact_path": str(page_path),
                 "headers_path": str(headers_path),
@@ -144,7 +163,7 @@ class CaseDomainMonitor:
                 discovered.sort(key=lambda item: (_priority(item[0], item[1]), item[0]), reverse=True)
                 for link, label in discovered:
                     if link not in seen and _allowed(link, allowed_hosts):
-                        queue.append((link, depth + 1, f"link:{label[:100]}"))
+                        queue.append((link, depth + 1, f"link:{label[:100]}", True))
 
         progress("normalize", "AGB- und Seitentexte wurden ausschließlich gegen den gemeldeten Verstoß geprüft.")
         document_findings = self._document_findings(case, pages)
@@ -156,11 +175,21 @@ class CaseDomainMonitor:
             manual_reasons.extend(dom_reasons)
 
         dom_incomplete = case.violation_type == "element" and not element_findings
-        complete = not budget_exhausted and not blocked and not dom_incomplete
+        captured_required_targets = [url for url in required_targets if url in visited]
+        missing_required_targets = [url for url in required_targets if url not in visited]
+        complete = (
+            not budget_exhausted
+            and not blocked
+            and not dom_incomplete
+            and not missing_required_targets
+        )
         monitoring_status = _monitoring_status(case, document_findings, element_findings, complete, self._has_history(case.case_id))
         coverage = {
-            "strategy": "fundstelle+sitemap+priorisierte_interne_links",
+            "strategy": "menschliches_fallprofil+bekannte_rechtstextpfade+sitemap+priorisierte_interne_links",
             "allowed_hosts": sorted(allowed_hosts),
+            "required_target_urls": list(required_targets),
+            "captured_required_target_urls": captured_required_targets,
+            "missing_required_target_urls": missing_required_targets,
             "limits": asdict(self.policy),
             "visited_urls": visited,
             "skipped_urls": skipped,
@@ -185,6 +214,9 @@ class CaseDomainMonitor:
             "description": case.description,
             "tenor_element": case.tenor_element,
             "monitoring_target": case.monitoring_target,
+            "target_urls": list(case.target_urls),
+            "element_labels": list(case.element_labels),
+            "nicht_umfasst": list(case.nicht_umfasst),
             "erstverstoss_festgestellt_durch": "verbraucherzentrale",
             "system_detected": False,
             "screenshot_path": case.screenshot_path,
@@ -285,10 +317,11 @@ class CaseDomainMonitor:
 
     def _document_findings(self, case: MonitoringCase, pages: list[dict]) -> list[dict]:
         target = normalize_plain_text(case.clause_text or case.monitoring_target).strip()
+        profile_targets = {canonical_url(url) for url in case.target_urls}
         findings: list[dict] = []
         for page in pages:
             lower_identity = f"{page['url']} {page['source']}".casefold()
-            is_document = any(term in lower_identity for term in DISCOVERY_TERMS) or page["url"] == canonical_url(case.source_url)
+            is_document = any(term in lower_identity for term in DISCOVERY_TERMS) or page["url"] in profile_targets
             if not is_document:
                 continue
             text = normalize_plain_text(page["text"]).strip() if page["text"] else ""
@@ -319,10 +352,11 @@ class CaseDomainMonitor:
         if self.dom_inspector is None:
             return [], ["Playwright-DOM-Prüfung ist nicht konfiguriert."]
         destination.mkdir(parents=True, exist_ok=True)
+        profile_targets = {canonical_url(url) for url in case.target_urls}
         relevant = [
             page for page in pages
             if page["content_type"] == "html" and (
-                page["url"] == canonical_url(case.source_url)
+                page["url"] in profile_targets
                 or any(term in f"{page['url']} {page['source']}".casefold() for term in DISCOVERY_TERMS)
             )
         ][: self.policy.max_dom_pages]
@@ -334,6 +368,7 @@ class CaseDomainMonitor:
                     page["url"],
                     destination / f"{index:03d}-dom.json",
                     label=case.element_label or case.monitoring_target,
+                    labels=case.element_labels,
                     function=case.element_function or case.monitoring_target,
                 )
             except Exception as exc:
@@ -422,6 +457,24 @@ def _element_state(
             else "manuelle_pruefung_erforderlich"
         )
     return "gefunden"
+
+
+def _profile_path_candidates(case: MonitoringCase) -> list[str]:
+    """Add a small same-origin path set; explicit human targets remain authoritative."""
+    parsed = urlsplit(case.source_url)
+    origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+    page_types = " ".join(case.relevant_page_types).casefold()
+    paths: list[str] = []
+    if any(term in page_types for term in ("agb", "beding", "terms")):
+        paths.extend(COMMON_PROFILE_PATHS["agb"])
+    if any(term in page_types for term in ("datenschutz", "privacy")):
+        paths.extend(COMMON_PROFILE_PATHS["datenschutz"])
+    explicit = {canonical_url(url) for url in case.target_urls}
+    return [
+        candidate
+        for candidate in dict.fromkeys(canonical_url(urljoin(origin, path)) for path in paths)
+        if candidate not in explicit
+    ]
 
 
 def canonical_url(value: str) -> str:

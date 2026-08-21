@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from muclegal.live import PIPELINE_STEPS, LiveMonitorWorkflow
+from muclegal.evidence.suitability import classify_technical_evidence
 from muclegal.domain_monitor import CaseDomainMonitor
 from muclegal.monitoring_cases import (
     MonitoringCaseError,
@@ -79,6 +80,7 @@ ARTIFACT_DEFINITIONS = {
     "page_artifacts_index": ("Abruf", "Seitenartefakt-Index", "text"),
     "capture_metrics": ("Abruf", "Ressourcenmessung", "text"),
     "run_result": ("Abruf", "Laufergebnis", "text"),
+    "result_assessment": ("Hinweis", "Technische Ergebnisbewertung", "text"),
     "protection_report": ("Abruf", "Seitenschutz-Bericht", "text"),
     "previous_normalized_text": ("Abruf", "Vorheriger Text", "text"),
     "diff": ("Abruf", "Diff", "text"),
@@ -127,8 +129,11 @@ class MonitoringCaseCreateRequest(BaseModel):
     tenor_element: str = Field(min_length=1, max_length=8000)
     monitoring_target: str = Field(min_length=1, max_length=4000)
     relevant_page_types: list[str] = Field(min_length=1, max_length=20)
+    target_urls: list[str] = Field(default_factory=list, max_length=20)
+    nicht_umfasst: list[str] = Field(default_factory=list, max_length=20)
     clause_text: str | None = Field(default=None, max_length=12000)
     element_label: str | None = Field(default=None, max_length=1000)
+    element_labels: list[str] = Field(default_factory=list, max_length=20)
     element_function: str | None = Field(default=None, max_length=2000)
     element_error: str | None = None
     allowed_subdomains: list[str] = Field(default_factory=list, max_length=20)
@@ -219,8 +224,9 @@ class RunCoordinator:
                 "step": "queued",
                 "state": "queued",
                 "message": (
-                    "GOD MODE autorisiert: Vollmacht und Rechtsrahmen wurden per Checkbox bestätigt; "
-                    "robots.txt, Browser, Screenshots und Normalisierung sind für das Ziel freigeschaltet."
+                    "God Mode als getrennte Demonstration aktiviert: nicht juristisch verwertbar. "
+                    "Die Checkbox dokumentiert nur die bestätigte Autorisierung; sie garantiert "
+                    "weder eine rechtliche Verwertbarkeit noch die Überwindung von Schutzmaßnahmen."
                     if run.god_mode_authorized else
                     "Prüflauf angelegt; der Überprüfungsmodus wird bei tatsächlichem Seitenschutz automatisch aktiviert."
                     if run.verification_mode
@@ -631,6 +637,19 @@ class CaseArchive:
     def _summary(case_id: str, record: dict) -> dict:
         evidence = record.get("evidence", {})
         assessment = record.get("assessment", {})
+        result_assessment = record.get("technical_result")
+        if not isinstance(result_assessment, dict):
+            result_assessment = classify_technical_evidence(
+                capture_completeness=str(
+                    record.get("capture_completeness") or "teilweise_erfasst"
+                ),
+                has_screenshot=evidence.get("screenshot_status") not in {None, "failed"},
+                has_normalized_text=bool(record.get("snapshot_sha256")),
+                has_raw_capture=bool(record.get("artifacts", {}).get("raw_html")),
+                robots_status=record.get("capture_transparency", {}).get("robots_txt"),
+                failure_kind=("schutzseite" if record.get("protection_type") else None),
+                god_mode=bool(record.get("god_mode")),
+            ).to_dict()
         warnings = record.get("warnings", [])
         clause_findings = record.get("clause_findings", [])
         if not isinstance(clause_findings, list):
@@ -663,6 +682,7 @@ class CaseArchive:
             "screenshot_sha256": evidence.get("screenshot_sha256"),
             "timestamp_status": evidence.get("timestamp_status"),
             "capture_completeness": record.get("capture_completeness"),
+            "technical_result": result_assessment,
             "warnings": warnings if isinstance(warnings, list) else [],
             "evidence_suitability": record.get("evidence_suitability", "regulaer"),
             "evidence_suitability_notice": record.get("evidence_suitability_notice"),

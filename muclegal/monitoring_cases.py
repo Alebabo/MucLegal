@@ -41,8 +41,11 @@ class MonitoringCase:
     tenor_element: str
     monitoring_target: str
     relevant_page_types: tuple[str, ...]
+    target_urls: tuple[str, ...]
+    nicht_umfasst: tuple[str, ...]
     clause_text: str | None
     element_label: str | None
+    element_labels: tuple[str, ...]
     element_function: str | None
     element_error: str | None
     allowed_subdomains: tuple[str, ...]
@@ -138,7 +141,15 @@ class MonitoringCaseRepository:
                     cleaned["description"],
                     cleaned["tenor_element"],
                     cleaned["monitoring_target"],
-                    json.dumps(cleaned["relevant_page_types"], ensure_ascii=False),
+                    json.dumps(
+                        {
+                            "page_types": cleaned["relevant_page_types"],
+                            "target_urls": cleaned["target_urls"],
+                            "nicht_umfasst": cleaned["nicht_umfasst"],
+                            "element_labels": cleaned["element_labels"],
+                        },
+                        ensure_ascii=False,
+                    ),
                     cleaned.get("clause_text"),
                     cleaned.get("element_label"),
                     cleaned.get("element_function"),
@@ -260,12 +271,44 @@ def validate_case_input(value: dict) -> dict:
     cleaned["source_url"] = source_url
     cleaned["allowed_subdomains"] = list(allowed_hosts)
 
+    target_urls = cleaned.get("target_urls") or [source_url]
+    if not isinstance(target_urls, list) or not all(
+        isinstance(item, str) and item.strip() for item in target_urls
+    ):
+        raise MonitoringCaseError("Prüf-URLs müssen als Liste vollständiger URLs angegeben werden.")
+    if len(target_urls) > 20:
+        raise MonitoringCaseError("Ein Fallprofil darf höchstens 20 verbindliche Prüf-URLs enthalten.")
+    normalized_targets: list[str] = []
+    for value in [source_url, *target_urls]:
+        target_url, target_host = _source_url(value)
+        if target_host != domain_host and target_host not in allowed_hosts:
+            raise MonitoringCaseError(
+                "Prüf-URLs müssen zur Domain oder einer freigegebenen Subdomain gehören."
+            )
+        if target_url not in normalized_targets:
+            normalized_targets.append(target_url)
+    cleaned["target_urls"] = normalized_targets
+
+    nicht_umfasst = cleaned.get("nicht_umfasst") or []
+    if not isinstance(nicht_umfasst, list) or not all(
+        isinstance(item, str) and item.strip() for item in nicht_umfasst
+    ):
+        raise MonitoringCaseError("nicht_umfasst muss eine Liste verständlicher Abgrenzungen sein.")
+    if len(nicht_umfasst) > 20:
+        raise MonitoringCaseError("Ein Fallprofil darf höchstens 20 Nicht-umfasst-Abgrenzungen enthalten.")
+    cleaned["nicht_umfasst"] = list(dict.fromkeys(item.strip() for item in nicht_umfasst))
+
     if cleaned["violation_type"] == "klausel":
         clause_text = str(cleaned.get("clause_text") or "").strip()
         if not clause_text:
             raise MonitoringCaseError("Bei Klauselverstößen ist der beanstandete Wortlaut erforderlich.")
         cleaned["clause_text"] = clause_text
-        cleaned.update(element_label=None, element_function=None, element_error=None)
+        cleaned.update(
+            element_label=None,
+            element_labels=[],
+            element_function=None,
+            element_error=None,
+        )
     else:
         for field in ("element_label", "element_function", "element_error"):
             if not isinstance(cleaned.get(field), str) or not cleaned[field].strip():
@@ -273,6 +316,16 @@ def validate_case_input(value: dict) -> dict:
             cleaned[field] = cleaned[field].strip()
         if cleaned["element_error"] not in ELEMENT_ERRORS:
             raise MonitoringCaseError("Unbekannte Fehlerart für das erwartete Element.")
+        labels = cleaned.get("element_labels") or [cleaned["element_label"]]
+        if not isinstance(labels, list) or not all(
+            isinstance(item, str) and item.strip() for item in labels
+        ):
+            raise MonitoringCaseError("Button-Bezeichnungen müssen als Liste angegeben werden.")
+        if len(labels) > 20:
+            raise MonitoringCaseError("Ein Fallprofil darf höchstens 20 Button-Bezeichnungen enthalten.")
+        cleaned["element_labels"] = list(
+            dict.fromkeys([cleaned["element_label"], *(item.strip() for item in labels)])
+        )
         cleaned["clause_text"] = None
     return cleaned
 
@@ -317,6 +370,14 @@ def _source_url(value: str) -> tuple[str, str]:
 
 
 def _row_to_case(row: sqlite3.Row) -> MonitoringCase:
+    stored_profile = json.loads(row["relevant_page_types_json"])
+    if isinstance(stored_profile, list):
+        stored_profile = {
+            "page_types": stored_profile,
+            "target_urls": [row["source_url"]],
+            "nicht_umfasst": [],
+            "element_labels": [row["element_label"]] if row["element_label"] else [],
+        }
     return MonitoringCase(
         case_id=row["case_id"],
         fall_id=row["fall_id"],
@@ -326,9 +387,15 @@ def _row_to_case(row: sqlite3.Row) -> MonitoringCase:
         description=row["description"],
         tenor_element=row["tenor_element"],
         monitoring_target=row["monitoring_target"],
-        relevant_page_types=tuple(json.loads(row["relevant_page_types_json"])),
+        relevant_page_types=tuple(stored_profile.get("page_types", [])),
+        target_urls=tuple(stored_profile.get("target_urls") or [row["source_url"]]),
+        nicht_umfasst=tuple(stored_profile.get("nicht_umfasst", [])),
         clause_text=row["clause_text"],
         element_label=row["element_label"],
+        element_labels=tuple(
+            stored_profile.get("element_labels")
+            or ([row["element_label"]] if row["element_label"] else [])
+        ),
         element_function=row["element_function"],
         element_error=row["element_error"],
         allowed_subdomains=tuple(json.loads(row["allowed_subdomains_json"])),

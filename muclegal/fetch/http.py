@@ -85,6 +85,7 @@ class HttpFetcher:
         self._capture_controller = None
         self._capture_session_depth = 0
         self.last_capture_run_root: str | None = None
+        self.last_browser_capture = None
         self._robots_checks: list[dict[str, str]] = []
         self._god_mode = False
 
@@ -111,16 +112,27 @@ class HttpFetcher:
             (item for item in self._robots_checks if item["status"] == "ungeprueft"),
             None,
         )
+        disallowed = next(
+            (
+                item
+                for item in self._robots_checks
+                if item["status"] == "geprueft_abruf_untersagt"
+            ),
+            None,
+        )
         status = "god_mode_ausdruecklich_ignoriert" if self._god_mode else (
             "ungeprueft" if unchecked else (
-                "geprueft_abruf_erlaubt" if self._respect_robots()
-                else "laut_policy_nicht_geprueft"
+                "geprueft_abruf_untersagt" if disallowed else (
+                    "geprueft_abruf_erlaubt" if self._respect_robots()
+                    else "laut_policy_nicht_geprueft"
+                )
             )
         )
         return {
             "robots_txt": status,
             "robots_reason": (
                 unchecked["reason"] if unchecked else
+                disallowed["reason"] if disallowed else
                 "robots.txt wurde geprüft; der Abruf ist für den Projekt-User-Agent erlaubt."
             ),
             "robots_checks": [dict(item) for item in self._robots_checks],
@@ -163,6 +175,7 @@ class HttpFetcher:
                 self._capture_controller = None
 
     def fetch(self, url: str) -> FetchResult:
+        self.last_browser_capture = None
         self._validate_url(url)
         self._begin_robots_monitor()
         if self._respect_robots():
@@ -187,8 +200,12 @@ class HttpFetcher:
         if self._respect_robots():
             self._require_robots_permission(url)
         if self._capture_controller is not None:
-            result = self._capture_controller.capture_target(url, role="main").fetch_result
+            self.last_browser_capture = self._capture_controller.capture_target(
+                url, role="main"
+            )
+            result = self.last_browser_capture.fetch_result
         else:
+            self.last_browser_capture = None
             from muclegal.fetch.playwright import fetch_rendered_public_page
 
             result = fetch_rendered_public_page(

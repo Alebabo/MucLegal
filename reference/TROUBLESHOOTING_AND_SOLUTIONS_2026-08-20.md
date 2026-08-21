@@ -404,6 +404,157 @@ Das Intervall ist über `MUCLEGAL_OPENAI_SAMPLE_INTERVAL_DAYS` konfigurierbar. L
 Primärartefakte werden bei jedem gestarteten Lauf weiterhin erzeugt. Der Schlüssel wird nur aus
 `OPENAI_API_KEY` gelesen und gehört nicht ins Repository.
 
+## Adidas-Lauf zeigt nach Codeänderung keinen Browser-Screenshot
+
+### Symptom
+
+Bei `https://www.adidas.com/` erschien nach dem direkten HTTP-Schutz weder der neue
+Browser-Fallback im Prüfverlauf noch eine Screenshot-Vorschau, obwohl die automatische
+Überprüfung im BeweisLab aktiviert war.
+
+### Ursache und Diagnose
+
+Der lokale Uvicorn-Prozess lief ohne `--reload` und war vor den Änderungen am Robots- und
+Browser-Fallback gestartet worden. Damit lieferte die HTML-Oberfläche zwar den aktuellen
+Dateistand aus, der bereits importierte Python-Workflow im Serverprozess blieb jedoch alt.
+Gezielte Regressionstests für `robots.txt`-Status `ungeprueft` und den standardmäßig aktivierten
+Browsermodus waren grün; erst der Neustart brachte den Live-Endpunkt auf denselben Stand.
+
+### Lösung
+
+Den bestehenden Uvicorn-Prozess sauber beenden und mit
+`python -m uvicorn app:app --host 127.0.0.1 --port 8000` neu starten. Danach setzt ein Adidas-Lauf
+nach dem direkten HTTP-403 den transparenten Playwright-Abruf ein. Liefert Adidas weiterhin nur
+eine Bot-Schutzseite, wird deren sichtbarer Zustand als „Angefragte Seite“ gespeichert und klar
+als nicht beweisgeeigneter Schutzbefund ausgewiesen.
+
+### Verifikation und verbleibende Grenze
+
+Der reale Lauf wechselte in den Schritt „echter Browser mit JavaScript“, erzeugte ein 114.528
+Byte großes Schutzseitenbild und stellte es im UI unter „Screenshot · Angefragte Seite“ ohne
+Konsolenfehler dar. `robots.txt` blieb wegen HTTP 403 `ungeprueft`; der Lauf endete deshalb mit
+`nicht_beweisgeeignet`. Playwright wird verwendet, überwindet aber keinen Bot-Schutz, kein CAPTCHA,
+keinen Login und keine Paywall. Der dahinterliegende Adidas-Shopinhalt muss bei fortbestehendem
+Schutz manuell gesichert werden.
+
+## Leerer Browserzustand führte nach zweiter Normalisierung zu keinem Fallpaket
+
+### Symptom
+
+Ein transparenter Browserlauf konnte bereits Screenshot, DOM, Browsermetadaten und
+Request-Metriken gespeichert haben, während sichtbarer und normalisierter Text leer blieben.
+Bei Temu zeigte Chromium beispielsweise „No connection“. Die zweite Normalisierung warf erneut
+`NormalizationError`; der Lauf endete früher mit der technischen Meldung und ohne sichtbaren
+Ergebnisdatensatz.
+
+### Ursache und Diagnose
+
+`muclegal/live.py` fing nur den ersten Normalisierungsfehler des direkten HTTP-Abrufs ab. Der
+zweite Aufruf von `check_url(..., fetched=rendered)` lag außerhalb eines terminalen
+Fehlerpaketpfads. Dadurch blieben die bereits in der Browserrolle vorhandenen Dateien zwar
+teilweise auf der Platte, wurden aber weder inventarisiert noch manifestiert oder im UI angeboten.
+
+### Lösung
+
+Jeder direkte BeweisLab-Lauf wird jetzt über eine zentrale vierstufige technische
+Ergebnisbewertung abgeschlossen. Scheitert die Normalisierung auch nach dem Browser-Fallback,
+entsteht ein lokales Fehler-/Schutzbefund-Paket. Es übernimmt vorhandenen Screenshot, Roh-HTML,
+initiales DOM, Browsermetadaten, Interaktionsprotokoll und Request-Metriken in eine Rollenstruktur,
+ergänzt `run-result.json`, `protection_report.json`, Erfassungstransparenz, Ergebnisbewertung und
+Manifest und kennzeichnet den Lauf sichtbar als
+„Nicht als Beleg verwendbar – nur Hinweis“. Die Originalexception steht ausschließlich in den
+technischen Paketdateien. Ungültige und private URLs erhalten entsprechend den terminalen Status
+„URL nicht erfassbar“ mit Zeitpunkt, Grund und Handlungsempfehlung.
+
+### Verifikation und verbleibende Grenze
+
+Der Regressionstest erzwingt zwei aufeinanderfolgende `NormalizationError`-Ausnahmen bei einem
+gespeicherten `site_connectivity_error`-Screenshot. Er prüft terminalen Laufstatus,
+`technisch_fehlgeschlagen`, Screenshot-Galerie, Fehlercode im Paket und dass
+`NormalizationError` nicht in der Hauptmeldung erscheint. Ein weiterer Test belegt den
+Ergebnisdatensatz für eine private URL. Der Fehlerzustand weist nur das Zugriffsproblem nach; ein
+Mensch muss den dahinterliegenden Seiteninhalt weiterhin zusätzlich manuell sichern.
+
+## Nicht verlinkte Shopify-AGB fehlten trotz erreichbarer Rechtstextseite
+
+### Symptom
+
+Bei einem erfolgreichen Lauf auf einer Shopify-Startseite wurde keine AGB-Seite
+angezeigt, obwohl der öffentliche Standardpfad
+`/policies/terms-of-service` erreichbar beziehungsweise als Fallziel bekannt
+war.
+
+### Ursache und Diagnose
+
+Die normale Rechtstextsuche wertete ausschließlich Links im gespeicherten HTML
+aus. Die Liste bekannter AGB- und Datenschutzpfade wurde nur im
+Schutzseiten-Fallback verwendet. Eine erfolgreich geladene Startseite ohne
+ausgelieferten Footer-Link verhinderte deshalb den Fallback. `legal_pages.json`
+enthielt keine AGB-Kandidaten, obwohl das HTML Shopify-Merkmale enthielt.
+
+### Lösung
+
+Bei erkannter Shopify-Seite ergänzt die reguläre Rechtstextsuche jetzt genau
+die beiden öffentlichen Standardpfade `/policies/terms-of-service` und
+`/policies/privacy-policy`, wenn die jeweilige Kategorie keinen HTML-Link
+lieferte. Zusätzlich kann ein menschlich freigegebenes Fallprofil bis zu 20
+verbindliche Prüf-URLs vorgeben. Diese Ziele werden vor Sitemap- und
+Linkkandidaten geprüft; fehlende Pflichtziele erscheinen ausdrücklich in
+`missing_required_target_urls`.
+
+### Verifikation und verbleibende Grenze
+
+Ein synthetischer Shopify-Shop ohne Footer-Link liefert beide Standardpfade in
+`legal-pages.json`. Ein Fallprofil mit einer nicht verlinkten
+`/policies/terms-of-service`-URL erfasst die Seite und findet die gemeldete
+Klausel. Mehrere dokumentierte Button-Bezeichnungen werden an die transparente
+DOM-Prüfung weitergegeben. Alte SQLite-Fälle bleiben ohne Migration lesbar.
+
+Der reale Ankerkraut-Lauf vom 21.08.2026 fand den zuvor fehlenden AGB-Kandidaten
+als `known_shopify_public_path`. Der anschließende Abruf wurde jedoch korrekt
+abgelehnt, weil `robots.txt` den Pfad für den Projekt-User-Agent untersagte. Die
+Seite fehlt damit nicht mehr unbemerkt: Kandidat, URL, Auswahlmethode und
+Robots-Ablehnung stehen in `legal_pages.json` und in den Warnungen; ein
+AGB-Screenshot wird nicht vorgetäuscht.
+
+Es werden keine beliebigen Pfade erraten. Nicht verlinkte Seiten anderer
+Plattformen benötigen eine Fallprofil-URL, eine öffentliche Sitemap oder einen
+eigenen eng begrenzten und belegten Plattformpfad. Login, Paywall, CAPTCHA und
+verändernde Formularaktionen bleiben ausgeschlossen.
+
+## Dynamisch schrumpfende Rechtstextseite ließ Kachelaufnahme abbrechen
+
+### Symptom
+
+Beim realen Ankerkraut-Datenschutzlauf scheiterte die Screenshotphase mit
+`Page.screenshot: Clipped area is either empty or outside the resulting image`.
+Der zuvor gemessene sehr hohe DOM war während der Kachelserie geschrumpft.
+
+### Ursache und Diagnose
+
+Die Kachelschleife verwendete während der gesamten Aufnahme ausschließlich die
+anfänglich gemessene Dokumenthöhe. War die Seite nach Lazy-Loading oder
+Layoutänderungen kürzer, lag eine spätere `clip`-Position außerhalb des nun
+aktuellen Dokuments. Die Playwright-Ausnahme wurde innerhalb der Kachelschleife
+nicht abgefangen und verwarf deshalb auch bereits gültige Kacheln.
+
+### Lösung
+
+Vor jeder Kachel werden aktuelle Höhe und Breite neu gemessen. Liegt die nächste
+Kachel außerhalb des geschrumpften Dokuments oder lehnt Playwright einen Clip
+ab, endet die Serie kontrolliert als `teilweise_erfasst`. Bereits valide
+Kacheln, Index und Vorschau bleiben erhalten; `tile_errors` dokumentiert die
+Grenze. Nur wenn weder Vollbild noch eine einzige Kachel vorhanden ist, gilt die
+Screenshotaufnahme als fehlgeschlagen.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest simuliert eine Seite, die von 5.000 auf 1.000 CSS-Pixel
+schrumpft. Er bestätigt eine erhaltene Kachel, `teilweise_erfasst`, eine
+protokollierte Kachelgrenze und keinen unbehandelten Clip-Fehler. Eine dynamisch
+schrumpfende Seite bleibt möglicherweise unvollständig; sie wird nicht als
+lückenloser Vollbildbeweis bezeichnet.
+
 ## Externe Zusatzdienste
 
 freeTSA und Wayback sind optionale Zusatzdienste. Ein Ausfall wird mit Status und Grund

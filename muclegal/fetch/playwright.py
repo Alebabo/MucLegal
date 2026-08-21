@@ -881,6 +881,7 @@ def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -
 
     tile_paths: list[Path] = []
     tiles: list[dict] = []
+    tile_errors: list[str] = []
     invalid_tiles = 0
     reached_height = document_height
     completeness = "vollstaendig_erfasst"
@@ -892,14 +893,38 @@ def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -
         step = tile_height - overlap
         y = 0
         while y < document_height and len(tiles) < 100:
-            y_end = min(y + tile_height, document_height)
-            tile_path = tiles_root / f"tile-{len(tiles):04d}.png"
-            page.screenshot(
-                path=str(tile_path),
-                full_page=False,
-                clip={"x": 0, "y": y, "width": width, "height": y_end - y},
-                type="png",
+            current_height = max(
+                int(page.evaluate("document.documentElement.scrollHeight || 0")), 1
             )
+            current_width = min(
+                max(int(page.evaluate("document.documentElement.scrollWidth || 1440")), 1),
+                1440,
+            )
+            if y >= current_height:
+                completeness = "teilweise_erfasst"
+                tile_errors.append(
+                    "Die Seite schrumpfte während der Aufnahme; weitere Kacheln lagen "
+                    "außerhalb des aktuellen Dokuments."
+                )
+                break
+            y_end = min(y + tile_height, document_height, current_height)
+            tile_path = tiles_root / f"tile-{len(tiles):04d}.png"
+            try:
+                page.screenshot(
+                    path=str(tile_path),
+                    full_page=False,
+                    clip={
+                        "x": 0,
+                        "y": y,
+                        "width": min(width, current_width),
+                        "height": y_end - y,
+                    },
+                    type="png",
+                )
+            except (PlaywrightError, OSError) as exc:
+                completeness = "teilweise_erfasst"
+                tile_errors.append(f"Kachel ab CSS-Pixel {y} nicht aufgenommen: {exc}")
+                break
             metrics = _image_metrics(tile_path)
             if metrics["invalid_nearly_white"]:
                 invalid_tiles += 1
@@ -940,6 +965,7 @@ def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -
         "overlap_css_px": 100,
         "tile_limit": 100,
         "tiles": tiles,
+        "tile_errors": tile_errors,
         "reached_height_css_px": reached_height,
         "continuous_coverage": _continuous_coverage(tiles, document_height),
         "invalid_nearly_white_tiles": invalid_tiles,
@@ -947,6 +973,11 @@ def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -
     }
     index_path = root / "screenshot-index.json"
     _write_json(index_path, index)
+    if full_error is not None and not tile_paths:
+        raise ScreenshotCaptureError(
+            "Weder validiertes Vollbild noch eine gültige Screenshot-Kachel vorhanden: "
+            f"{full_error}; {'; '.join(tile_errors) or 'Kachelaufnahme ohne Bild'}"
+        )
     source = full_path if full_error is None else tile_paths[0]
     preview_path = root / "screenshot-preview.webp"
     with Image.open(source) as image:
@@ -1902,6 +1933,7 @@ def inspect_expected_element(
     *,
     label: str,
     function: str,
+    labels: tuple[str, ...] | list[str] | None = None,
     timeout_seconds: float = 20.0,
 ) -> DomInspectionCapture:
     """Inspect a reported element in rendered DOM without creating external state."""
@@ -1922,7 +1954,12 @@ def inspect_expected_element(
     safe_path_status = "kein_passender_navigationspfad"
     safe_path_evidence: dict | None = None
     origin = urlsplit(url)
-    label_tokens = _tokens(label)
+    reported_labels = tuple(
+        dict.fromkeys(
+            item.strip() for item in (labels or (label,)) if isinstance(item, str) and item.strip()
+        )
+    ) or (label,)
+    label_token_sets = tuple(_tokens(item) for item in reported_labels if _tokens(item))
     function_tokens = _tokens(function)
 
     try:
@@ -1996,9 +2033,10 @@ def inspect_expected_element(
                         f"{detail.get('accessible_name', '')} {detail.get('text', '')} "
                         f"{detail.get('href', '')}"
                     )
-                    label_match = bool(label_tokens) and (
-                        label_tokens <= haystack
-                        or len(label_tokens & haystack) / len(label_tokens) >= 0.6
+                    label_match = any(
+                        tokens <= haystack
+                        or len(tokens & haystack) / len(tokens) >= 0.6
+                        for tokens in label_token_sets
                     )
                     function_match = bool(function_tokens) and (
                         function_tokens <= haystack
@@ -2065,7 +2103,11 @@ def inspect_expected_element(
 
     payload = {
         "url": url,
-        "reported_target": {"label": label, "function": function},
+        "reported_target": {
+            "label": label,
+            "label_variants": list(reported_labels),
+            "function": function,
+        },
         "elements": elements,
         "matching_elements": [item for item in elements if item["matches_reported_target"]],
         "blocked_requests": blocked_requests,

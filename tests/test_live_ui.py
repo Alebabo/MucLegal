@@ -23,18 +23,24 @@ from muclegal.fetch import (
     HttpFetcher,
     ScreenshotCaptureError,
 )
-from muclegal.fetch.playwright import _capture_html_evidence_image, _cookie_rejection_action
+from muclegal.fetch.playwright import (
+    _capture_html_evidence_image,
+    _capture_validated_screenshots,
+    _cookie_rejection_action,
+)
 from muclegal.live import (
     LiveMonitorWorkflow,
     LiveWorkflowResult,
     _bundle_browser_capture_artifacts,
     _capture_transparency,
+    _discover_legal_pages,
     _legal_subpage_candidates,
     _mark_god_mode_bundle,
     _select_legal_content_url,
     _select_legal_link,
     changed_excerpts,
 )
+from muclegal.normalize import NormalizationError
 from muclegal.ui import CaseArchive, TERMINAL_RUN_STATUSES, create_app
 
 
@@ -156,6 +162,254 @@ def poll(client: TestClient, run_id: str) -> dict:
 
 
 class LiveWorkflowTests(unittest.TestCase):
+    def test_shrinking_page_keeps_valid_tiles_instead_of_raising_clip_error(self) -> None:
+        from PIL import Image
+        from playwright.sync_api import Error as PlaywrightError
+
+        class ShrinkingPage:
+            def __init__(self) -> None:
+                self.height_reads = 0
+
+            def evaluate(self, expression: str):
+                if "scrollHeight" in expression:
+                    self.height_reads += 1
+                    return 5_000 if self.height_reads <= 3 else 1_000
+                if "scrollWidth" in expression:
+                    return 1_440
+                return None
+
+            def wait_for_timeout(self, _milliseconds: int) -> None:
+                return None
+
+            def screenshot(self, *, path: str, full_page: bool, type: str, clip=None) -> None:
+                del type
+                if full_page:
+                    raise PlaywrightError("Full-page screenshot failed")
+                assert clip is not None
+                Image.new("RGB", (int(clip["width"]), int(clip["height"])), "blue").save(
+                    path, "PNG"
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = _capture_validated_screenshots(ShrinkingPage(), root, [])
+            index = json.loads((root / "screenshot-index.json").read_text(encoding="utf-8"))
+
+        self.assertEqual("teilweise_erfasst", capture.capture_completeness)
+        self.assertEqual(1, len(capture.tile_paths))
+        self.assertTrue(index["tile_errors"])
+        self.assertEqual(1_000, index["reached_height_css_px"])
+
+    def test_shopify_legal_paths_are_discovered_without_footer_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "shopify.html"
+            output_path = root / "legal-pages.json"
+            html_path.write_text(
+                "<html><head><script src='https://cdn.shopify.com/store.js'></script></head>"
+                "<body><main>Shop ohne Rechtstextlinks</main></body></html>",
+                encoding="utf-8",
+            )
+
+            _discover_legal_pages(
+                html_path,
+                "https://www.ankerkraut.de/",
+                output_path,
+            )
+            legal_pages = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            "https://www.ankerkraut.de/policies/terms-of-service",
+            legal_pages["agb"][0]["url"],
+        )
+        self.assertEqual("known_shopify_public_path", legal_pages["agb"][0]["source"])
+        self.assertEqual(
+            "https://www.ankerkraut.de/policies/privacy-policy",
+            legal_pages["datenschutz"][0]["url"],
+        )
+
+    def test_empty_main_creates_terminal_result_instead_of_normalization_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.page = b"<html><body><main></main></body></html>"
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+
+            result = workflow.run(server.url, capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            run_result = json.loads(
+                Path(case["artifacts"]["run_result"]).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("nicht_erfassbar", case["technical_result"]["code"])
+        self.assertEqual("normalization_error", run_result["failure_code"])
+
+    def test_robots_disallow_creates_terminal_refusal_record(self) -> None:
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.robots_body = b"User-agent: *\nDisallow: /\n"
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+
+            result = workflow.run(server.url, capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("nicht_erfassbar", case["technical_result"]["code"])
+        self.assertEqual(
+            "geprueft_abruf_untersagt",
+            case["capture_transparency"]["robots_txt"],
+        )
+        self.assertIn("nicht automatisiert abrufen", case["technical_result"]["next_action"])
+
+    def test_private_url_creates_terminal_result_record_without_stacktrace(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=HttpFetcher(
+                    FetchPolicy(require_public_network=True, max_attempts=1)
+                ),
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+
+            result = workflow.run(
+                "http://127.0.0.1/private", capture_baseline=True
+            )
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("nicht_erfassbar", case["technical_result"]["code"])
+        self.assertEqual("URL nicht erfassbar", case["technical_result"]["label"])
+        self.assertNotIn("FetchFailure", result.message)
+
+    def test_invalid_url_creates_terminal_result_record(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+
+            result = workflow.run("keine-url", capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("nicht_erfassbar", case["technical_result"]["code"])
+        self.assertIn("HTTP(S)-URL", case["technical_result"]["what_was_found"])
+
+    def test_second_normalization_error_preserves_browser_state_as_hint_package(self) -> None:
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            role_root = root / "browser-state"
+            role_root.mkdir()
+            raw_html = "<html><body><main></main></body></html>"
+            (role_root / "raw.html").write_text(raw_html, encoding="utf-8")
+            (role_root / "dom-initial.html").write_text(raw_html, encoding="utf-8")
+            (role_root / "normalized-text.txt").write_text("", encoding="utf-8")
+            image_path = role_root / "screenshot-full-page.png"
+            Image.new("RGB", (320, 180), "white").save(image_path, "PNG")
+            Image.new("RGB", (160, 90), "white").save(
+                role_root / "screenshot-preview.webp", "WEBP"
+            )
+            (role_root / "screenshot-index.json").write_text(
+                json.dumps({
+                    "mode": "full_page",
+                    "capture_completeness": "teilweise_erfasst",
+                    "full_page_attempt": {"path": "screenshot-full-page.png"},
+                    "tiles": [],
+                }),
+                encoding="utf-8",
+            )
+            (role_root / "resource-metrics.json").write_text(
+                json.dumps({"failure_phase": "normalization", "request_count": 3}),
+                encoding="utf-8",
+            )
+            screenshot = SimpleNamespace(
+                path=str(image_path),
+                sha256=hashlib.sha256(image_path.read_bytes()).hexdigest(),
+                size_bytes=image_path.stat().st_size,
+                capture_state="site_connectivity_error",
+                state_reason="Der Browser zeigte No connection.",
+                interactions=(),
+                artifact_directory=str(role_root),
+                capture_completeness="teilweise_erfasst",
+            )
+            rendered = FetchResult(
+                requested_url="https://www.temu.com/",
+                final_url="https://www.temu.com/",
+                fetched_at="2026-08-21T10:00:00Z",
+                status_code=200,
+                headers=(),
+                redirect_chain=(),
+                body=raw_html.encode(),
+                decoded_html=raw_html,
+                fetch_mode="browser_review",
+                browser_metadata={
+                    "user_agent": "MucLegal-Test",
+                    "navigator_webdriver": True,
+                    "request_count": 3,
+                },
+            )
+            fetcher = local_fetcher()
+
+            def browser_fetch(_url: str) -> FetchResult:
+                fetcher.last_browser_capture = SimpleNamespace(
+                    fetch_result=rendered,
+                    screenshot=screenshot,
+                    artifact_directory=str(role_root),
+                )
+                return rendered
+
+            workflow = LiveMonitorWorkflow(
+                root,
+                FIXTURES / "tenor.json",
+                fetcher=fetcher,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            with patch("muclegal.live.check_url") as checked:
+                checked.side_effect = [
+                    NormalizationError("Die konfigurierte Extraktion ergab keinen relevanten Text."),
+                    NormalizationError("Die konfigurierte Extraktion ergab keinen relevanten Text."),
+                ]
+                with patch.object(fetcher, "fetch_in_browser", side_effect=browser_fetch):
+                    result = workflow.run(
+                        "https://www.temu.com/",
+                        capture_baseline=True,
+                        browser_mode=True,
+                    )
+
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            run_result = json.loads(
+                Path(case["artifacts"]["run_result"]).read_text(encoding="utf-8")
+            )
+            protection = json.loads(
+                Path(case["artifacts"]["protection_report"]).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("hinweis", case["technical_result"]["code"])
+        self.assertEqual("technisch_fehlgeschlagen", case["capture_completeness"])
+        self.assertIn("requested", case["capture_galleries"])
+        self.assertEqual("normalization_error", run_result["failure_code"])
+        self.assertIn("NormalizationError", protection["technical_error"])
+        self.assertNotIn("NormalizationError", result.message)
+
     def test_authorized_god_mode_is_separate_marked_and_ignores_robots(self) -> None:
         from PIL import Image
 
@@ -546,7 +800,7 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertEqual("completed_with_warnings", result.status)
         self.assertEqual("nicht_beweisgeeignet", case["evidence_suitability"])
         self.assertEqual("ungeprueft", case["capture_transparency"]["robots_txt"])
-        self.assertIn("NICHT BEWEISGEEIGNET", result.message)
+        self.assertIn("Nicht als Beleg verwendbar", result.message)
         self.assertTrue(manifest_valid)
         self.assertTrue(artifacts["protection_report"]["available"])
         self.assertEqual("warning", artifacts["requested_page_screenshot"]["status"])

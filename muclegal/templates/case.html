@@ -167,13 +167,16 @@
           <input id="intake-source-url" class="input wide" type="url" required maxlength="2048" placeholder="https://example.de/agb" aria-label="Konkrete Fundstellen-URL">
           <select id="intake-type" class="select" aria-label="Verstoßtyp"><option value="klausel">Klausel</option><option value="element">Button / Element</option></select>
           <input id="intake-pages" class="input" required value="AGB, Startseite" aria-label="Relevante Seitentypen">
+          <textarea id="intake-target-urls" class="input wide" maxlength="12000" placeholder="Verbindliche Prüf-URLs · eine URL pro Zeile&#10;https://example.de/&#10;https://example.de/policies/terms-of-service" aria-label="Verbindliche Prüf-URLs"></textarea>
           <textarea id="intake-description" class="input wide" required maxlength="4000" placeholder="Von der Verbraucherzentrale festgestellter Verstoß" aria-label="Beschreibung"></textarea>
           <textarea id="intake-tenor" class="input wide" required maxlength="8000" placeholder="Freigegebener Tenor oder tragendes Tenorelement" aria-label="Tenorelement"></textarea>
           <textarea id="intake-target" class="input wide" required maxlength="4000" placeholder="Was soll künftig gefunden oder vermisst werden?" aria-label="Monitoringziel"></textarea>
+          <textarea id="intake-not-covered" class="input wide" maxlength="6000" placeholder="Nicht umfasst · eine Abgrenzung pro Zeile" aria-label="Nicht vom Fallprofil umfasst"></textarea>
           <textarea id="intake-clause" class="input wide conditional" required maxlength="12000" placeholder="Beanstandeter Wortlaut der Klausel" aria-label="Beanstandeter Klauselwortlaut"></textarea>
           <div id="intake-element-fields" class="wide tenor-grid conditional" hidden>
             <input id="intake-element-label" class="input" maxlength="1000" placeholder="Bezeichnung des Elements" aria-label="Elementbezeichnung">
             <select id="intake-element-error" class="select" aria-label="Fehlerart">{% for error in element_errors %}<option value="{{ error }}">{{ error }}</option>{% endfor %}</select>
+            <textarea id="intake-element-labels" class="input wide" maxlength="4000" placeholder="Weitere beobachtete Button-Bezeichnungen · eine pro Zeile" aria-label="Weitere Button-Bezeichnungen"></textarea>
             <textarea id="intake-element-function" class="input wide" maxlength="2000" placeholder="Erwartete Funktion des Elements" aria-label="Elementfunktion"></textarea>
           </div>
           <label class="input wide" style="display:block">Optionaler Screenshot des Erstverstoßes · nur Beweismittel<input id="intake-screenshot" type="file" accept="image/png,image/jpeg,image/webp" style="display:block;margin-top:5px"></label>
@@ -182,7 +185,7 @@
         </form>
         <div id="monitoring-case-list" class="case-list">
           {% for item in monitoring_cases %}
-          <div class="case-row" data-case-id="{{ item.case_id }}"><div><strong>{{ item.fall_id }} · {{ item.violation_type }}</strong><small>Erstverstoß: Verbraucherzentrale · {{ item.source_url }}</small></div><div><span class="status-chip{% if item.decision == 'freigegeben' %} ok{% endif %}">{{ item.decision }}</span>{% if item.decision != 'freigegeben' %}<button class="button case-review" type="button" data-decision="freigegeben">Fall freigeben</button>{% endif %}</div></div>
+          <div class="case-row" data-case-id="{{ item.case_id }}"><div><strong>{{ item.fall_id }} · {{ item.violation_type }}</strong><small>Erstverstoß: Verbraucherzentrale · {{ item.target_urls|length }} verbindliche Prüf-URL(s) · {{ item.source_url }}</small></div><div><span class="status-chip{% if item.decision == 'freigegeben' %} ok{% endif %}">{{ item.decision }}</span>{% if item.decision != 'freigegeben' %}<button class="button case-review" type="button" data-decision="freigegeben">Fall freigeben</button>{% endif %}</div></div>
           {% endfor %}
         </div>
       </details>
@@ -359,7 +362,8 @@
     event.preventDefault(); const status=document.getElementById("intake-status"); status.textContent="wird gespeichert";
     try {
       const type=intakeType.value, file=document.getElementById("intake-screenshot").files[0];
-      const payload={fall_id:document.getElementById("intake-fall-id").value,domain:document.getElementById("intake-domain").value,source_url:document.getElementById("intake-source-url").value,violation_type:type,description:document.getElementById("intake-description").value,tenor_element:document.getElementById("intake-tenor").value,monitoring_target:document.getElementById("intake-target").value,relevant_page_types:document.getElementById("intake-pages").value.split(",").map(v=>v.trim()).filter(Boolean),clause_text:type==="klausel"?document.getElementById("intake-clause").value:null,element_label:type==="element"?document.getElementById("intake-element-label").value:null,element_function:type==="element"?document.getElementById("intake-element-function").value:null,element_error:type==="element"?document.getElementById("intake-element-error").value:null,allowed_subdomains:[],screenshot:await screenshotPayload(file)};
+      const lines=id=>document.getElementById(id).value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+      const payload={fall_id:document.getElementById("intake-fall-id").value,domain:document.getElementById("intake-domain").value,source_url:document.getElementById("intake-source-url").value,violation_type:type,description:document.getElementById("intake-description").value,tenor_element:document.getElementById("intake-tenor").value,monitoring_target:document.getElementById("intake-target").value,relevant_page_types:document.getElementById("intake-pages").value.split(",").map(v=>v.trim()).filter(Boolean),target_urls:lines("intake-target-urls"),nicht_umfasst:lines("intake-not-covered"),clause_text:type==="klausel"?document.getElementById("intake-clause").value:null,element_label:type==="element"?document.getElementById("intake-element-label").value:null,element_labels:type==="element"?lines("intake-element-labels"):[],element_function:type==="element"?document.getElementById("intake-element-function").value:null,element_error:type==="element"?document.getElementById("intake-element-error").value:null,allowed_subdomains:[],screenshot:await screenshotPayload(file)};
       const created=await api("/api/v1/cases",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}); status.textContent=`${created.fall_id} · menschliche Prüfung offen`; location.reload();
     } catch(error) { status.textContent=error.message; status.className="status-chip warn"; }
   });
