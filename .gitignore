@@ -35,4 +35,6 @@ Thumbs.db
 
 # Third-party repositories cloned for research
 reference/*/
+!reference/tenore/
+!reference/tenore/*.yaml
 .env*

@@ -52,6 +52,19 @@ MucLegal arbeitet ausschließlich mit öffentlich zugänglichen Seiten. Es umgeh
 
 Der aktuelle Stand ist ein Hackathon-Prototyp und noch kein autonomes Produktivsystem. Insbesondere gibt es keine Benutzerverwaltung, kein Mehrmandanten-Dashboard, keine visuelle Screenshot-Analyse und keine automatische rechtliche Freigabe.
 
+### Tenorschreibhilfe
+
+Unter `http://127.0.0.1:8080/tenorhilfe` steht zusätzlich eine minimalistische
+Schreibfläche für Unterlassungstenore bereit. Sie komponiert zwei bearbeitbare
+Entwürfe aus dem validierten Tenorregister und zeigt die verwendeten Baustein- und
+Referenz-IDs. Mit `/sachverhalt`, `/tenor` und `/fälle` kann der Arbeitsmodus direkt
+in der Eingabe gewechselt werden. Rückfragen richten sich nach fehlenden Inhalten
+statt nach der Textlänge.
+
+Bedienung, Datenfluss, Verifikation und Grenzen sind in
+[`reference/TENORSCHREIBHILFE_IMPLEMENTATION_2026-08-22.md`](reference/TENORSCHREIBHILFE_IMPLEMENTATION_2026-08-22.md)
+dokumentiert.
+
 ---
 
 <p align="center">

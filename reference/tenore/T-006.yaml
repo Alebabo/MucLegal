@@ -1,0 +1,127 @@
+id: T-006
+quelle: urteil
+gericht_az: "LG Düsseldorf, 12 O 293/22"
+datum: null
+datum_hinweis: "Verkündungsdatum in der Team-Sammlung nicht angegeben — VOR DEM PITCH ERGÄNZEN."
+fundstelle_url: null
+fundstelle_hinweis: "Keine Fundstelle in der Team-Sammlung. Suchpfad: Verbandsklagenregister BfJ, openlegaldata.io, dejure.org."
+rechtskraeftig: unbekannt
+parteien:
+  klaeger: "Verbraucherschutzverband"
+  beklagte: "Anbieter von Fitness-/Mitgliedschaftsverträgen (im Tenor als „F.” anonymisiert)"
+zitat_geprueft: teilweise
+zitat_quelle: >
+  Übernommen aus der Team-Sammlung „Tenore_Beispiele” (Google Doc). NICHT am Volltext
+  gegengeprüft, weil keine Fundstelle vorlag. VOR DEM PITCH GEGENPRÜFEN ODER AUS DER
+  DEMO NEHMEN.
+
+sachverhalt: >
+  Die Beklagte verwendete in Dauerschuldverhältnissen gegenüber Verbrauchern eine
+  Preisanpassungsklausel, die eine Änderung der Mitgliedsgebühr nach billigem Ermessen
+  anhand nicht beeinflussbarer äußerer Umstände vorsah.
+fallgruppe: agb_klausel
+verstoss_modus: klausel_verwendet
+kanal:
+  - website
+rechtsgrundlage:
+  - norm: "§ 1 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 307 BGB"
+    funktion: anspruchsbegruendend
+    anmerkung: "Aus der Team-Sammlung nicht belegt — beim Gegenprüfen verifizieren."
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+tenor_text: >
+  es bei Vermeidung eines für jeden Fall der Zuwiderhandlung festzusetzenden
+  Ordnungsgeldes bis zu 250.000,00 €, ersatzweise Ordnungshaft bis zu sechs Monaten oder
+  Ordnungshaft bis zu sechs Monaten, zu vollstrecken an den Geschäftsführern der
+  Beklagten, in Bezug auf Dauerschuldverhältnisse (M.) die Verwendung folgender und/oder
+  dieser inhaltsgleicher Klauseln zu unterlassen, sofern nicht der Vertrag mit einer
+  Person abgeschlossen wird, die in Ausübung ihrer gewerblichen oder selbstständigen
+  beruflichen Tätigkeit handelt (Unternehmer): [wörtlicher Klauseltext zur Anpassung
+  der Mitgliedsgebühr]
+verletzungsform_anlage: "Klauselwortlaut im Tenor selbst"
+
+tenor_bausteine:
+  - text: "es bei Vermeidung eines für jeden Fall der Zuwiderhandlung festzusetzenden
+      Ordnungsgeldes bis zu 250.000,00 €, ersatzweise Ordnungshaft bis zu sechs Monaten
+      oder Ordnungshaft bis zu sechs Monaten, zu vollstrecken an den Geschäftsführern
+      der Beklagten"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-05
+  - text: "sofern nicht der Vertrag mit einer Person abgeschlossen wird, die in Ausübung
+      ihrer gewerblichen oder selbstständigen beruflichen Tätigkeit handelt (Unternehmer)"
+    funktion: adressatenkreis
+    baustein_id: B-AK-05
+    anmerkung: >
+      NEGATIVE Formulierung des Adressatenkreises: nicht „gegenüber Verbrauchern”,
+      sondern „außer gegenüber Unternehmern”. Wirkt weiter, weil auch Fälle erfasst
+      werden, in denen die Verbrauchereigenschaft streitig ist.
+  - text: "in Bezug auf Dauerschuldverhältnisse (M.)"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-06
+  - text: "die Verwendung folgender und/oder dieser inhaltsgleicher Klauseln zu unterlassen"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-42
+    anmerkung: >
+      „und/oder dieser inhaltsgleicher Klauseln” ist die Kerngleichheits-Erweiterung
+      für Klauselfälle. Vergleiche T-005, wo sie fehlt.
+      ACHTUNG: Der Doppelausspruch („oder sich auf eine solche Klausel zu berufen”)
+      fehlt hier — siehe nachtraeglich_bewertet.
+  - text: "[wörtlicher Klauseltext]"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-04
+
+kerngleich_umfasst:
+  - beschreibung: "Sprachlich umformulierte Preisanpassungsklausel mit demselben
+      Anpassungsmechanismus"
+    begruendung: "Ausdrücklich von „und/oder dieser inhaltsgleicher Klauseln” erfasst."
+    sicherheit: hoch
+  - beschreibung: "Dieselbe Klausel in einem anderen Produkt derselben Beklagten,
+      sofern Dauerschuldverhältnis"
+    begruendung: "Der Anwendungsbereich nennt Dauerschuldverhältnisse, nicht ein Produkt."
+    sicherheit: mittel
+
+nicht_umfasst:
+  - beschreibung: "Preisanpassungsklausel mit konkret bezifferten, überprüfbaren
+      Anpassungsparametern und Sonderkündigungsrecht"
+    begruendung: "Der beanstandete Ermessensspielraum entfällt."
+    sicherheit: mittel
+  - beschreibung: "Berufen auf die Klausel in bereits geschlossenen Altverträgen"
+    begruendung: >
+      Der Tenor untersagt nur die VERWENDUNG. Ohne den Doppelausspruch bleibt die
+      Berufung auf Altverträge unberührt.
+    sicherheit: hoch
+  - beschreibung: "Verwendung gegenüber Unternehmern"
+    begruendung: "Ausdrücklich ausgenommen."
+    sicherheit: hoch
+
+nachtraeglich_bewertet:
+  zu_eng: ja
+  hinweis: >
+    Der Tenor enthält die Inhaltsgleichheits-Formel, aber NICHT den doppelten
+    Verbotsausspruch. Untersagt ist nur das „Verwenden”, nicht das „Sich-darauf-Berufen”.
+    Folge: Alle bereits geschlossenen Verträge behalten die Klausel praktisch, weil die
+    Beklagte sich weiterhin darauf berufen kann. Bei Fitness- und Abo-Verträgen ist der
+    Bestand an Altverträgen typischerweise um ein Vielfaches größer als der Neuzugang —
+    der Tenor greift also gerade dort nicht, wo der Schaden entsteht.
+    Vgl. T-007 (OLG Frankfurt), wo beides tenoriert wurde.
+    STANDARDPRÜFUNG für jeden § 1 UKlaG-Fall: Sind BEIDE Bausteine B-VH-42 und
+    B-VH-43 enthalten?
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+pruefbare_merkmale:
+  - merkmal: "Preisanpassungsklausel in den aktuellen AGB"
+    pruefung: "AGB-Seite abrufen, Volltextsuche nach /billige[ms] Ermessen|anpassen|
+      Mitgliedsgebühr ändern/, Fundstellen extrahieren"
+    automatisierbar: true
+  - merkmal: "Bewertung der Inhaltsgleichheit einer geänderten Klausel"
+    pruefung: "manuell — juristische Wertung"
+    automatisierbar: false
+
+sicherheit: niedrig
+uneinigkeit: null
+geprueft_von: "Claude (Übernahme aus Team-Sammlung + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

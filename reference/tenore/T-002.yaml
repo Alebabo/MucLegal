@@ -1,0 +1,199 @@
+id: T-002
+quelle: urteil
+gericht_az: "OLG München, 6 U 4336/23 e"
+datum: "2025-03-20"
+fundstelle_url: "https://www.gesetze-bayern.de/Content/Document/Y-300-Z-GRURRS-B-2025-N-5520"
+fundstelle_zusatz: "GRUR-RR 2025, 302; NJW-RR 2025, 817; MMR 2025, 639. Vorinstanz: LG München I, 12 O 4127/23 vom 16.11.2023."
+rechtskraeftig: true
+parteien:
+  klaeger: "Verbraucherzentrale NRW e.V."
+  beklagte: "Sky Deutschland Fernsehen GmbH & Co. KG (sky.de)"
+zitat_geprueft: true
+zitat_quelle: "gesetze-bayern.de, Volltext, abgerufen 2026-08-21"
+
+# --- Was war der Fall ---
+sachverhalt: >
+  Auf der Startseite war am unteren Bildrand eine graue Schaltfläche „Weitere Links
+  einblenden“ platziert. Erst nach Klick darauf erschienen 58 Links zu Themen wie
+  „Angebote & Pakete“ oder „Live Sport“; unterhalb davon fand sich in kleinerer,
+  grauer Schrift die Schaltfläche „Kündigen“ — in derselben Zeile wie „Impressum“,
+  „Kontakt“, „Datenschutz & Cookies“, „Nutzungsbedingungen“ und „AGB“.
+fallgruppe: kuendigungsbutton
+verstoss_modus: vorhanden_unzureichend
+kanal:
+  - website
+rechtsgrundlage:
+  - norm: "§ 3 Abs. 1 Nr. 1 UKlaG i.V.m. § 2 Abs. 1 S. 1, Abs. 2 Nr. 1 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 312k Abs. 2 S. 4 BGB"
+    funktion: anspruchsbegruendend
+  - norm: "§ 5 UKlaG i.V.m. § 13 Abs. 3 UWG"
+    funktion: abmahnkostenerstattung
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+# --- Der Tenor (wörtlich, Ziffer I.1.1) ---
+tenor_text: >
+  Die Beklagte wird verurteilt, es bei Meidung eines Ordnungsgeldes von bis zu
+  250.000,00 €, ersatzweise Ordnungshaft oder Ordnungshaft bis zu sechs Monaten,
+  Ordnungshaft zu vollstrecken an den Mitgliedern der Geschäftsführung der
+  Komplementärin, im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern künftig
+  zu unterlassen, auf der Webseite https://www.s....de, über die Verbraucher
+  kostenpflichtige Dauerschuldverhältnisse über PAY-TV-Inhalte auf elektronischem Weg
+  abschließen können, die gesetzlich vorgeschriebene Kündigungsschaltfläche nicht
+  unmittelbar und/oder leicht zugänglich vorzuhalten, sondern so, dass erst nach Klick
+  auf „Weitere Links einblenden“ oder inhaltsgleiche Gestaltungen die Schaltfläche
+  „Kündigen“ sichtbar wird, wie nachfolgend abgebildet: [Bildschirmabbildung im Urteil]
+verletzungsform_anlage: "In den Tenor eingebettete Bildschirmabbildung"
+
+teilabweisung:
+  vorhanden: true
+  beschreibung: >
+    Das LG hatte zusätzlich einen Verstoß gegen § 312k Abs. 2 S. 2 BGB (gute Lesbarkeit)
+    bejaht. Das OLG hat das aufgehoben: Maßstab sei die Kündigungsschaltfläche
+    ISOLIERT betrachtet, nicht der Vergleich mit der auffälligeren
+    Vertragsabschluss-Schaltfläche (Rn. 20-23). Kostenfolge: § 92 Abs. 1 S. 2 ZPO,
+    Kosten gegeneinander aufgehoben.
+  lehre_fuer_tenorierung: >
+    Ein zusätzlich geltend gemachtes Merkmal, das nicht durchdringt, kostet die Hälfte
+    der Kosten. „Gut lesbar“ nur dann in den Antrag aufnehmen, wenn die Schaltfläche
+    für sich genommen schlecht lesbar ist — nicht im Vergleich zum Bestellbutton.
+
+# --- Warum der Tenor so aussieht ---
+tenor_bausteine:
+  - text: "es bei Meidung eines Ordnungsgeldes von bis zu 250.000,00 €, ersatzweise
+      Ordnungshaft oder Ordnungshaft bis zu sechs Monaten, Ordnungshaft zu vollstrecken
+      an den Mitgliedern der Geschäftsführung der Komplementärin"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-02
+  - text: "im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern künftig zu unterlassen"
+    funktion: adressatenkreis
+    baustein_id: B-AK-01
+  - text: "auf der Webseite https://www.s....de, über die Verbraucher kostenpflichtige
+      Dauerschuldverhältnisse über PAY-TV-Inhalte auf elektronischem Weg abschließen können"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-02
+  - text: "die gesetzlich vorgeschriebene Kündigungsschaltfläche nicht unmittelbar
+      und/oder leicht zugänglich vorzuhalten"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-11
+    anmerkung: >
+      Abstrakter Teil, orientiert am Gesetzeswortlaut des § 312k Abs. 2 S. 4 BGB.
+  - text: "sondern so, dass erst nach Klick auf „Weitere Links einblenden“ oder
+      inhaltsgleiche Gestaltungen die Schaltfläche „Kündigen“ sichtbar wird"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-11b
+    anmerkung: >
+      Konkretisierender Teil. Der Zusatz „oder inhaltsgleiche Gestaltungen“ ist die
+      Kerngleichheits-Erweiterung — der wichtigste Baustein dieses Tenors.
+  - text: "wie nachfolgend abgebildet"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-03
+
+# --- Reichweite ---
+kerngleich_umfasst:
+  - beschreibung: "Kündigungsbutton hinter einer Schaltfläche „Mehr anzeigen“ oder
+      „Alle Links“ versteckt"
+    begruendung: >
+      „oder inhaltsgleiche Gestaltungen“ erfasst funktional gleichwertige
+      Aufklapp-Mechanismen unabhängig von der Beschriftung.
+    sicherheit: hoch
+  - beschreibung: "Kündigungsbutton hinter einem Akkordeon- oder Burger-Menü,
+      das nicht auf die Kündigungsmöglichkeit hindeutet"
+    begruendung: >
+      Tragendes Element ist nach Rn. 27, dass der Nutzer die Kündigungsmöglichkeit
+      unter der allgemein gehaltenen Bezeichnung nicht erwartet.
+    sicherheit: mittel
+  - beschreibung: "Kündigungsbutton sofort sichtbar, aber am Ende von 58 gleichartigen
+      Links platziert"
+    begruendung: >
+      Zweifelhaft. Der Tenor knüpft an „erst nach Klick ... sichtbar wird“ an. Fehlt
+      der Klick, greift der konkretisierende Teil nicht mehr. Ordnungsmittelverfahren
+      mit offenem Ausgang.
+    sicherheit: niedrig
+
+nicht_umfasst:
+  - beschreibung: "Zwei nebeneinander platzierte, sofort sichtbare Schaltflächen
+      „Abo beenden“ und „Infos zur Kündigung“, die zu unterschiedlichen Zielen führen"
+    begruendung: >
+      Die Schaltfläche ist sofort sichtbar, es fehlt am Merkmal „erst nach Klick ...
+      sichtbar wird“. Der Verstoß liegt hier in der Uneindeutigkeit der Beschriftung —
+      ein anderes Tatbestandsmerkmal.
+    sicherheit: hoch
+    belegt_durch: "LG München I, 33 O 14294/25 vom 14.07.2026 — neues Verfahren nötig"
+  - beschreibung: "Kündigungsschaltfläche in kleiner, grauer Schrift, aber sofort sichtbar"
+    begruendung: >
+      Das OLG hat den Lesbarkeitsvorwurf ausdrücklich abgewiesen (Rn. 23).
+    sicherheit: hoch
+  - beschreibung: "Kündigungsbutton fehlt vollständig"
+    begruendung: >
+      Der Tenor untersagt eine bestimmte Art des Vorhaltens, nicht das Fehlen.
+      Praktisch würde man argumentieren, dass das Fehlen erst recht erfasst ist —
+      dafür fehlt hier aber der Wortlaut.
+    sicherheit: mittel
+
+# --- Lernsignal aus der Praxis: DER Referenzfall ---
+nachtraeglich_bewertet:
+  zu_eng: ja
+  hinweis: >
+    Dieser Tenor enthält bereits die Erweiterung „oder inhaltsgleiche Gestaltungen“
+    und war trotzdem zu eng. Die Beklagte gestaltete den Kündigungsweg daraufhin um:
+    Der Button war nun sofort sichtbar, aber neben ihm stand eine zweite, ähnlich
+    benannte Schaltfläche („Abo beenden“ vs. „Infos zur Kündigung“), die zu Telefon,
+    Chat und WhatsApp führte. Die Verbraucherzentrale NRW musste erneut klagen und
+    gewann erneut (LG München I, 33 O 14294/25 vom 14.07.2026).
+    LEHRE: „inhaltsgleiche Gestaltungen“ wirkt nur innerhalb desselben
+    Umgehungsmechanismus. Es schützt gegen andere Aufklapp-Beschriftungen, nicht
+    gegen einen anderen Mechanismus. Wer nur die Sichtbarkeit tenoriert, lässt die
+    Eindeutigkeit der Beschriftung offen.
+    EMPFEHLUNG für vergleichbare Fälle: Anwendungsbereich technikneutral (B-AB-03) und
+    verbotene Handlung am Erfolg statt am Mechanismus ausrichten — „ohne dass die zur
+    elektronischen Kündigung führende Schaltfläche für den durchschnittlichen
+    Verbraucher ohne erheblichen Aufwand und eindeutig als solche erkennbar ist“.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+umgehungskette:
+  - stufe: 1
+    az: "LG München I, 33 O 15098/22 (10.10.2023)"
+    gestaltung: "Login-Hürde vor der Bestätigungsseite (WOW)"
+    ausgang: "untersagt, rechtskräftig"
+  - stufe: 2
+    az: "OLG München, 6 U 4336/23 e (20.03.2025)"
+    gestaltung: "Button hinter „Weitere Links einblenden“, unter 58 Links (sky.de)"
+    ausgang: "untersagt, rechtskräftig"
+  - stufe: 3
+    az: "LG München I, 33 O 14294/25 (14.07.2026)"
+    gestaltung: "Zwei-Button-Lösung „Abo beenden“ / „Infos zur Kündigung“; Kündigungsgrund als Pflichtfeld"
+    ausgang: "untersagt"
+
+umgehungskette_hinweis: >
+    Dasselbe Unternehmen, dreimal derselbe Grundverstoß, drei Verfahren.
+    Das ist der Beleg dafür, dass die Reichweite des Tenors — nicht seine
+    Existenz — das Problem ist. Dieser Datensatz ist der stärkste Beleg im
+    gesamten Register.
+
+# --- Brücke zum Monitor ---
+pruefbare_merkmale:
+  - merkmal: "Kündigungsschaltfläche ohne vorherigen Klick sichtbar"
+    pruefung: "Nach Seitenaufruf DOM auf Element mit Text /kündig/i prüfen, das ohne
+      JS-Interaktion sichtbar ist (getComputedStyle: display != none, visibility != hidden)"
+    automatisierbar: true
+  - merkmal: "Kein Aufklapp-Element zwischen Einstieg und Kündigungsschaltfläche"
+    pruefung: "Prüfen, ob das Element Nachfahre eines Containers mit aria-expanded='false',
+      <details> ohne open, oder eines per Klick eingeblendeten Wrappers ist"
+    automatisierbar: true
+  - merkmal: "Anzahl konkurrierender Links in unmittelbarer Umgebung"
+    pruefung: "Anzahl <a>-Elemente im selben Footer-Container zählen; Schwelle
+      dokumentieren, nicht als Verstoß werten"
+    automatisierbar: true
+  - merkmal: "Nur eine Schaltfläche adressiert die Kündigung"
+    pruefung: "Alle Elemente mit Text /kündig|abo beenden|vertrag beenden/i zählen und
+      ihre Ziel-URLs vergleichen. Mehr als eine mit unterschiedlichem Ziel = Prüfhinweis"
+    automatisierbar: true
+    herkunft: "Aus der Umgehung Stufe 3 abgeleitet, nicht aus dem Tenor selbst"
+
+sicherheit: hoch
+uneinigkeit: null
+geprueft_von: "Claude (Recherche + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

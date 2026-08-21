@@ -943,3 +943,40 @@ Ersatzbildes. Nach Ergänzung des Datenschutzpfads sind Kandidatenreihenfolge,
 Regressionstest zu prüfen. Ein erfolgreicher Suchmaschinenabruf des öffentlichen
 Textes belegt die Adresse, ist aber kein Ersatz für eine eigene Beweiserfassung
 durch das BeweisLab.
+
+## Aura-Frontend: BeweisLab-Start wird als fremde Browser-Origin abgewiesen
+
+### Symptom
+
+Das über den lokalen Aura-Frontendserver unter `http://127.0.0.1:4173/beweis-labor`
+geöffnete BeweisLab lud vollständig. Beim Start einer Erfassung antwortete der
+Stream-Endpunkt jedoch mit HTTP 403 und der sichtbaren Meldung
+`Fremde Browser-Origin ist nicht zulässig.`
+
+### Ursache und Diagnose
+
+Der Vite-Proxy leitete `/api` korrekt an `http://127.0.0.1:8000` weiter und setzte
+mit `changeOrigin` den Ziel-Host. Der vom Browser gesendete `Origin`-Header blieb
+aber `http://127.0.0.1:4173`. Die unveränderte Same-Origin-Prüfung in
+`muclegal/ui.py` verglich diesen Header mit dem bereits auf Port 8000 umgeschriebenen
+Host und wies die Anfrage deshalb korrekt ab. Ein leerer Test-POST an
+`/api/v1/tenor-drafts` reproduzierte vor der Korrektur HTTP 403.
+
+### Lösung
+
+Nur der lokale `/api`-Proxy setzt den weitergeleiteten Origin-Header nun explizit
+auf `http://127.0.0.1:8000`. Die Backend-Sicherheitsprüfung wird nicht gelockert;
+direkte Anfragen mit einer fremden Origin bleiben unzulässig. BeweisLab, Artefakte
+und statische Dateien werden weiterhin ausschließlich an den lokalen
+FastAPI-Prozess weitergeleitet.
+
+### Verifikation und verbleibende Grenze
+
+Der identische leere Test-POST liefert über Port 4173 nach der Korrektur HTTP 422
+für die erwarteten fehlenden Pflichtfelder statt HTTP 403. Damit erreicht die
+Anfrage den regulären Request-Validator, ohne einen Erfassungslauf zu starten.
+Der Browser-Smoke-Test prüft zusätzlich den sichtbaren Startpfad und das Fehlen
+einer 403-Origin-Meldung. Die Proxy-Korrektur gilt nur für die lokale
+Entwicklungsadresse auf Port 4173; wird der Frontend-Port geändert, muss das lokale
+Proxy-Ziel konsistent angepasst oder Frontend und Backend unter derselben Origin
+ausgeliefert werden.

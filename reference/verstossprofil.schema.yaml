@@ -1,0 +1,109 @@
+# Verstoßprofil — Eingabeschema der Tenorschreibhilfe
+# Dies ist die Datenstruktur, die statt eines Freitext-Sachverhalts übergeben wird.
+# Sie wird von Hand ausgefüllt ODER aus einem BeweisLab-Paket vorbefüllt.
+# Dieselbe Struktur erzeugt am Ende den Prüfauftrag für den Monitor.
+
+$schema: "tenorhilfe/verstossprofil/0.1"
+
+felder:
+  profil_id:
+    typ: string
+    pflicht: true
+    beispiel: "V-2026-014"
+
+  schuldner:
+    typ: object
+    pflicht: true
+    felder:
+      name: {typ: string, pflicht: true}
+      rechtsform: {typ: string, pflicht: false, hinweis: "steuert die Vollstreckungsperson in der Ordnungsmittelandrohung"}
+      rolle: {typ: enum, werte: [anbieter, plattform, verwender, vermittler]}
+
+  kanal:
+    typ: enum_mehrfach
+    pflicht: true
+    werte: [website, app, e_mail, social_media, offline]
+    steuert: >
+      Bei mehr als einem Kanal löst Prüfregel R-06 aus: ein domaingebundener
+      Anwendungsbereich (B-AB-02) wäre zu eng, Vorschlag B-AB-03.
+
+  fundort:
+    typ: object
+    pflicht: true
+    felder:
+      url: {typ: string}
+      seitenrolle: {typ: enum, werte: [startseite, agb, datenschutz, checkout, kontobereich, produktseite, sonstige]}
+      abschnitt: {typ: string, beispiel: "§ 5 Vertragslaufzeit"}
+      beleg:
+        anlage: {typ: string, beispiel: "K3"}
+        sha256: {typ: string, hinweis: "aus dem BeweisLab-Manifest"}
+        erfasst_am: {typ: date}
+
+  adressat:
+    typ: enum
+    pflicht: true
+    werte: [verbraucher, unternehmer, gemischt]
+    steuert: "Auswahl in adressatenkreis. Bei 'gemischt' Vorschlag B-AK-05 (negative Formulierung)."
+
+  vertragstyp:
+    typ: enum
+    werte: [dauerschuldverhaeltnis, kaufvertrag, dienstvertrag, kein_vertrag]
+
+  fallgruppe:
+    typ: enum
+    pflicht: true
+    werte: [kuendigungsbutton, agb_klausel, dark_pattern_dsa, consent_gestaltung, irrefuehrende_werbung, widerrufsbutton, preisangabe]
+    steuert: "Auswahl des Blocks in verbotene_handlung."
+
+  verstoss_modus:
+    typ: enum
+    pflicht: true
+    werte: [fehlt_vollstaendig, vorhanden_unzureichend, irrefuehrend_gestaltet, klausel_verwendet]
+    hinweis: >
+      Das entscheidende Feld. Die Verbraucherzentrale hat im Hackathon-Vortrag
+      ausdrücklich gesagt: es macht einen Unterschied, ob der Button ganz fehlt oder
+      falsch umgesetzt ist — dann braucht es einen anderen Tenor. Genau dieses Enum
+      steuert die Bausteinauswahl in Segment 5.
+
+  rechtsgrundlage:
+    typ: liste_geschlossen
+    pflicht: true
+    hinweis: >
+      Mehrfachauswahl aus einer gepflegten Normliste, KEIN Freitext. Verhindert
+      erfundene Normen. Löst Prüfregeln R-03, R-08 und R-09 aus.
+
+  beanstandeter_wortlaut:
+    typ: text
+    pflicht_wenn: "fallgruppe == agb_klausel"
+    hinweis: "WÖRTLICH. Wird unverändert in den Tenor übernommen (B-KV-04)."
+
+  wirkung:
+    typ: text
+    pflicht: true
+    max_saetze: 2
+    beispiel: "Die Kündigung wird erst nach einem zusätzlichen Telefonat wirksam."
+
+  gewuenschte_reichweite:
+    typ: enum
+    pflicht: true
+    werte: [konkrete_verletzungsform, kerngleich, inhaltsgleich]
+    steuert: "Position des Reichweiten-Reglers; wählt zwischen B-AB-02 / B-AB-03 / B-AB-03b."
+
+  bekannte_umgehungen:
+    typ: liste_text
+    pflicht: false
+    hinweis: >
+      Bereits beobachtete Ausweichgestaltungen. Löst Prüfregel R-07 aus und wird
+      im Vollprüfungs-Prompt als Testmenge verwendet: „Wäre diese Abwandlung von
+      dem formulierten Tenor erfasst?“
+
+ausgaben:
+  - name: tenorentwurf
+    beschreibung: "Drei Varianten (eng / kerngleich / weit), jede mit Baustein-IDs und Referenz-IDs."
+  - name: abgeleitete_pruefmerkmale
+    beschreibung: >
+      Prüfauftrag für den Monitor. Wird aus den pruefbare_merkmale der verwendeten
+      Referenzfälle plus den Slots des Verstoßprofils zusammengesetzt.
+    hinweis: >
+      Das ist die Systemgeschichte: eine Eingabe, zwei Ausgaben. Der Tenor erzeugt
+      seinen eigenen Prüfauftrag.

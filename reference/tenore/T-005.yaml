@@ -1,0 +1,123 @@
+id: T-005
+quelle: urteil
+gericht_az: "LG Köln, 31 O 88/11"
+datum: "2011-08-04"
+fundstelle_url: "https://de.openlegaldata.io/case/lg-koln-2011-08-04-31-o-8811"
+rechtskraeftig: unbekannt
+rechtskraft_hinweis: "Vor Verwendung Verfahrensstand prüfen. Alter Fall — Rechtslage zum P-Konto hat sich seit 2011 geändert (§ 850k ZPO a.F., heute §§ 899 ff. ZPO)."
+parteien:
+  klaeger: "Verbraucherschutzverband"
+  beklagte: "Kreditinstitut"
+zitat_geprueft: teilweise
+zitat_quelle: >
+  Übernommen aus der Team-Sammlung „Tenore_Beispiele” (Google Doc). Wortlaut stimmt mit
+  der dort angegebenen Quelle openlegaldata.io überein, wurde aber im Rahmen dieser
+  Recherche nicht am Volltext gegengeprüft. VOR DEM PITCH GEGENPRÜFEN.
+
+sachverhalt: >
+  Das beklagte Kreditinstitut verlangte von Verbrauchern, die im Rahmen eines
+  bestehenden Zahlungsdiensterahmenvertrages die Führung eines Pfändungsschutzkontos
+  verlangten, die Unterzeichnung einer Vereinbarung über einen Wechsel des Kontomodells
+  mit einem Pauschalpreis von 17,50 EUR monatlich.
+fallgruppe: agb_klausel
+verstoss_modus: klausel_verwendet
+kanal:
+  - offline
+  - website
+rechtsgrundlage:
+  - norm: "§ 1 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 850k ZPO (a.F.)"
+    funktion: anspruchsbegruendend
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+tenor_text: >
+  Die Beklagte wird unter Androhung eines vom Gericht für jeden Fall der Zuwiderhandlung
+  festzusetzenden Ordnungsgeldes bis zu 250.000,00 € - ersatzweise Ordnungshaft - oder
+  der Ordnungshaft bis zu 6 Monaten verurteilt, es zu unterlassen, von Verbrauchern, die
+  im Rahmen eines bestehenden Zahlungsdiensterahmenvertrages von der Beklagten die
+  Führung eines Pfändungsschutzkontos im Sinne von § 850k ZPO verlangen, die
+  Unterzeichnung einer Vereinbarung zu fordern, in der es heißt:
+  „Der Kontoinhaber und die Bank vereinbaren weiterhin einen Wechsel des Kontomodells
+  für das o.g. Kontokorrentkonto. Das Kontokorrentkonto wird künftig im Kontomodell
+  P-Konto geführt. Das Kontomodell P-Konto weist folgende wesentliche Merkmale auf:
+  Pauschalpreis 17,50 € monatlich (…)"
+verletzungsform_anlage: "Klauselwortlaut im Tenor selbst"
+
+tenor_bausteine:
+  - text: "unter Androhung eines vom Gericht für jeden Fall der Zuwiderhandlung
+      festzusetzenden Ordnungsgeldes bis zu 250.000,00 € - ersatzweise Ordnungshaft -
+      oder der Ordnungshaft bis zu 6 Monaten"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-04
+    anmerkung: "Ohne Benennung der Vollstreckungsperson — schwächste Variante im Register."
+  - text: "von Verbrauchern, die im Rahmen eines bestehenden Zahlungsdiensterahmenvertrages
+      von der Beklagten die Führung eines Pfändungsschutzkontos im Sinne von § 850k ZPO
+      verlangen"
+    funktion: adressatenkreis
+    baustein_id: B-AK-04
+  - text: "die Unterzeichnung einer Vereinbarung zu fordern, in der es heißt: [Klauseltext]"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-41
+  - text: "[wörtlicher Klauseltext]"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-04
+    anmerkung: >
+      Bei Klauselfällen ersetzt der wörtliche Klauseltext die Anlage. Das ist die
+      typische Bauform des Klausel-Tenors.
+
+kerngleich_umfasst:
+  - beschreibung: "Identische Klausel mit anderem Pauschalpreis"
+    begruendung: >
+      Zweifelhaft. Der Preis ist Teil des zitierten Wortlauts. OHNE die Formel
+      „oder eine inhaltsgleiche Klausel” (vgl. T-006) ist der Tenor auf den
+      wörtlichen Text begrenzt.
+    sicherheit: niedrig
+  - beschreibung: "Sprachlich umformulierte Klausel mit demselben Regelungsgehalt"
+    begruendung: >
+      Nach allgemeinen Grundsätzen erfasst ein Klausel-Tenor auch inhaltsgleiche
+      Klauseln (§ 11 UKlaG-Rechtsprechung). Der Tenor selbst sagt das aber nicht.
+    sicherheit: niedrig
+
+nicht_umfasst:
+  - beschreibung: "P-Konto-Umstellung ohne Entgeltvereinbarung"
+    begruendung: "Der beanstandete Regelungsgehalt entfällt vollständig."
+    sicherheit: hoch
+  - beschreibung: "Entgeltklausel gegenüber Unternehmern"
+    begruendung: "Der Tenor ist auf Verbraucher begrenzt."
+    sicherheit: hoch
+  - beschreibung: "Berufen auf die Klausel in Altverträgen"
+    begruendung: >
+      Der Tenor untersagt nur, die Unterzeichnung zu FORDERN. Das Berufen auf
+      bereits unterzeichnete Vereinbarungen ist nicht erfasst — vgl. den doppelten
+      Verbotsausspruch in T-006.
+    sicherheit: mittel
+
+nachtraeglich_bewertet:
+  zu_eng: ja
+  hinweis: >
+    Zwei Lücken:
+    (1) Kein doppelter Verbotsausspruch (Verwenden UND Berufen) — Altverträge bleiben
+        unberührt. Vgl. T-006 und § 11 UKlaG.
+    (2) Keine Formel „oder eine inhaltsgleiche Klausel” — der Tenor hängt am
+        wörtlichen Klauseltext einschließlich des konkreten Betrags. Eine Änderung
+        des Preises auf 17,90 € könnte bereits durchrutschen.
+    Beides sind heute Standardbausteine (B-VH-42, B-VH-43) und sollten bei jedem
+    Klauselfall geprüft werden.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+pruefbare_merkmale:
+  - merkmal: "Entgeltklausel für P-Konto in Preis- und Leistungsverzeichnis"
+    pruefung: "Volltextsuche im PLV-PDF nach /P-Konto|Pfändungsschutzkonto/ und
+      benachbarten Betragsangaben"
+    automatisierbar: true
+  - merkmal: "Formulartext der Umstellungsvereinbarung"
+    pruefung: "manuell — Formular in der Regel nicht öffentlich abrufbar"
+    automatisierbar: false
+
+sicherheit: mittel
+uneinigkeit: null
+geprueft_von: "Claude (Übernahme aus Team-Sammlung + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

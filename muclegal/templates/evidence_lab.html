@@ -5,11 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MucLegal · BeweisLab</title>
   <style>
-    :root { color-scheme:light; --ink:#16312a; --muted:#687872; --line:#dfe7e3; --soft:#f4f8f6; --green:#176b51; --green-dark:#0f513d; --amber:#915b13; --red:#a23f37; }
+    :root {
+      color-scheme:light;
+      --ink:oklch(0.21 0.03 264); --muted:oklch(0.55 0.02 258);
+      --line:oklch(0.90 0.004 265); --soft:oklch(0.972 0.003 265);
+      --green:oklch(0.67 0.13 231); --green-dark:oklch(0.57 0.14 231);
+      --amber:oklch(0.58 0.14 62); --red:oklch(0.50 0.19 27);
+      --sidebar:#fff; --sidebar-accent:oklch(0.965 0.004 265);
+    }
     * { box-sizing:border-box; }
-    body { margin:0; background:#fbfcfb; color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    body { margin:0; background:#fff; color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
     button,input { font:inherit; }
-    button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible { outline:3px solid #9bcdb9; outline-offset:2px; }
+    button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible { outline:3px solid color-mix(in srgb,var(--green) 40%,transparent); outline-offset:2px; }
+    .aura-shell { min-height:100vh; display:flex; width:100%; background:#fff; }
+    .aura-sidebar { position:sticky; top:0; z-index:40; width:248px; height:100vh; flex:0 0 248px; display:flex; flex-direction:column; border-right:1px solid var(--line); background:var(--sidebar); transition:width .2s ease,flex-basis .2s ease; }
+    .aura-sidebar.collapsed { width:72px; flex-basis:72px; }
+    .aura-brand { height:64px; display:flex; align-items:center; gap:12px; padding:0 16px; color:var(--ink); text-decoration:none; }
+    .aura-mark { width:32px; height:32px; display:grid; flex:0 0 auto; place-items:center; border-radius:50%; background:var(--green); color:#fff; font-size:14px; font-weight:650; }
+    .aura-brand-name { overflow:hidden; font-family:"Bodoni Moda",Georgia,serif; font-size:18px; letter-spacing:-.01em; white-space:nowrap; }
+    .aura-nav { display:flex; flex:1; flex-direction:column; gap:4px; padding:8px 12px; }
+    .aura-nav a,.aura-collapse { min-height:40px; display:flex; align-items:center; gap:12px; border:0; border-radius:999px; background:transparent; color:var(--muted); padding:0 12px; font-size:14px; text-decoration:none; white-space:nowrap; cursor:pointer; transition:background .15s ease,color .15s ease; }
+    .aura-nav a:hover,.aura-collapse:hover,.aura-nav a[aria-current=page] { background:var(--sidebar-accent); color:var(--ink); }
+    .aura-nav a[aria-current=page] { font-weight:600; }
+    .aura-icon { width:18px; height:18px; flex:0 0 auto; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.75; }
+    .aura-label { overflow:hidden; text-overflow:ellipsis; }
+    .aura-sidebar.collapsed .aura-brand-name,.aura-sidebar.collapsed .aura-label { display:none; }
+    .aura-sidebar-foot { border-top:1px solid var(--line); padding:12px; }
+    .aura-collapse { width:100%; }
+    .lab-page { min-width:0; flex:1; }
     header { border-bottom:1px solid var(--line); background:#fff; }
     .head { width:min(960px,calc(100% - 32px)); min-height:72px; display:flex; align-items:center; gap:14px; margin:auto; }
     .logo { width:164px; max-height:43px; object-fit:contain; object-position:left center; }
@@ -18,11 +41,11 @@
     .verification-control { display:flex; align-items:center; gap:6px; margin-left:auto; }
     .verification-switch { display:flex; align-items:center; gap:7px; color:#6c7471; font-size:11px; font-weight:720; cursor:pointer; user-select:none; }
     .verification-switch input { position:absolute; width:1px; height:1px; opacity:0; }
-    .switch-track { position:relative; width:32px; height:18px; border:1px solid #aeb7b3; border-radius:999px; background:#d9dddb; transition:.16s ease; pointer-events:none; }
+    .switch-track { position:relative; width:32px; height:18px; border:1px solid var(--line); border-radius:999px; background:var(--soft); transition:.16s ease; pointer-events:none; }
     .switch-track::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #26332e40; transition:.16s ease; }
-    .verification-switch input:checked + .switch-track { border-color:#606865; background:#737b78; }
+    .verification-switch input:checked + .switch-track { border-color:var(--green); background:var(--green); }
     .verification-switch input:checked + .switch-track::after { transform:translateX(14px); }
-    .verification-switch input:focus-visible + .switch-track { outline:3px solid #9bcdb9; outline-offset:2px; }
+    .verification-switch input:focus-visible + .switch-track { outline:3px solid color-mix(in srgb,var(--green) 40%,transparent); outline-offset:2px; }
     .verification-switch input:disabled + .switch-track { opacity:.5; }
     .back { margin-left:12px; color:var(--muted); font-size:12px; text-decoration:none; }
     main { width:min(960px,calc(100% - 32px)); margin:clamp(34px,6vh,62px) auto 70px; }
@@ -30,7 +53,7 @@
     .kicker { color:var(--green); font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
     h2,p { margin:0; }
     .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; margin-top:10px; }
-    .url-input { width:100%; height:50px; border:1px solid #cfdad5; border-radius:11px; background:#fff; color:var(--ink); padding:0 15px; box-shadow:0 1px 2px rgb(20 50 41 / .04); }
+    .url-input { width:100%; height:50px; border:1px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); padding:0 15px; box-shadow:0 1px 2px rgb(15 23 42 / .04); }
     .start { height:50px; display:inline-flex; align-items:center; justify-content:center; gap:9px; border:0; border-radius:11px; background:var(--green); color:#fff; padding:0 20px; font-weight:760; cursor:pointer; }
     .start:hover { background:var(--green-dark); }
     .god-mode-check { min-height:50px; display:flex; align-items:center; gap:8px; border:2px solid #8b0000; border-radius:11px; background:#fff4f2; color:#720000; padding:0 12px; font-size:11px; font-weight:800; cursor:pointer; }
@@ -39,28 +62,28 @@
     .spinner { width:17px; height:17px; border:2px solid #ffffff66; border-top-color:#fff; border-radius:50%; animation:spin .75s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
     .micro { display:flex; align-items:center; gap:6px; margin-top:9px; color:var(--muted); font-size:11px; }
-    .verification-note { margin-top:10px; border-left:3px solid #747b78; padding:6px 9px; background:#f0f1f0; color:#505754; font-size:11px; }
-    .info { width:19px; height:19px; display:inline-grid; place-items:center; flex:0 0 auto; border:1px solid #b9c8c1; border-radius:50%; background:#fff; color:var(--green); padding:0; font:750 11px/1 Georgia,serif; cursor:pointer; }
-    .trace { margin-top:20px; border:1px solid #d7e5dd; border-radius:12px; background:#f3f8f5; overflow:hidden; box-shadow:0 1px 2px rgb(20 50 41 / .03); }
-    .trace summary { display:flex; align-items:center; gap:9px; min-height:48px; padding:0 15px; color:#3f5d51; cursor:pointer; list-style:none; font-weight:680; }
+    .verification-note { margin-top:10px; border-left:3px solid var(--green); padding:6px 9px; background:var(--soft); color:var(--muted); font-size:11px; }
+    .info { width:19px; height:19px; display:inline-grid; place-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--green); padding:0; font:750 11px/1 Georgia,serif; cursor:pointer; }
+    .trace { margin-top:20px; border:1px solid var(--line); border-radius:12px; background:var(--soft); overflow:hidden; box-shadow:0 1px 2px rgb(15 23 42 / .03); }
+    .trace summary { display:flex; align-items:center; gap:9px; min-height:48px; padding:0 15px; color:var(--ink); cursor:pointer; list-style:none; font-weight:680; }
     .trace summary::-webkit-details-marker { display:none; }
     .chevron { color:var(--muted); transition:transform .18s ease; }
     .trace[open] .chevron { transform:rotate(90deg); }
-    .run-state { max-width:58%; margin-left:auto; overflow:hidden; color:#6a8177; font-size:11px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .run-state { max-width:58%; margin-left:auto; overflow:hidden; color:var(--muted); font-size:11px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
     .run-state.ok { color:var(--green); }
     .run-state.warn { color:var(--amber); }
-    .events { max-height:340px; overflow:auto; border-top:1px solid #dfeae3; padding:12px 16px 15px; scroll-behavior:smooth; }
+    .events { max-height:340px; overflow:auto; border-top:1px solid var(--line); padding:12px 16px 15px; scroll-behavior:smooth; }
     .event { position:relative; display:grid; grid-template-columns:18px minmax(0,1fr); gap:9px; padding:5px 0 13px; }
-    .event:not(:last-child)::before { content:""; position:absolute; left:4px; top:15px; bottom:-2px; width:1px; background:#c9ddd1; }
-    .event-dot { position:relative; z-index:1; width:9px; height:9px; margin-top:5px; border:2px solid #85aa98; border-radius:50%; background:#f3f8f5; }
-    .event.done .event-dot { border-color:#4b8a70; background:#4b8a70; }
-    .event.active .event-dot { border-color:#3e8066; background:#dceee5; box-shadow:0 0 0 4px rgb(62 128 102 / .12); animation:pulse 1.5s ease-in-out infinite; }
+    .event:not(:last-child)::before { content:""; position:absolute; left:4px; top:15px; bottom:-2px; width:1px; background:color-mix(in srgb,var(--green) 24%,var(--line)); }
+    .event-dot { position:relative; z-index:1; width:9px; height:9px; margin-top:5px; border:2px solid color-mix(in srgb,var(--green) 62%,white); border-radius:50%; background:var(--soft); }
+    .event.done .event-dot { border-color:var(--green); background:var(--green); }
+    .event.active .event-dot { border-color:var(--green); background:color-mix(in srgb,var(--green) 20%,white); box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 15%,transparent); animation:pulse 1.5s ease-in-out infinite; }
     .event.failed .event-dot,.event.warning .event-dot { border-color:#b97724; background:#f8dfbd; }
-    @keyframes pulse { 50% { box-shadow:0 0 0 7px rgb(62 128 102 / 0); } }
+    @keyframes pulse { 50% { box-shadow:0 0 0 7px color-mix(in srgb,var(--green) 0%,transparent); } }
     .event-top { display:flex; align-items:baseline; gap:8px; }
-    .event b { color:#345648; font-size:11px; font-weight:700; }
-    .event time { color:#82958c; font-size:10px; }
-    .event p { margin-top:2px; color:#536d62; font-size:12px; }
+    .event b { color:var(--ink); font-size:11px; font-weight:700; }
+    .event time { color:var(--muted); font-size:10px; }
+    .event p { margin-top:2px; color:var(--muted); font-size:12px; }
     .protection { margin-top:18px; border:2px solid #d99331; border-radius:12px; background:#fff5e4; padding:17px 18px; color:#673b08; }
     .protection strong { display:block; font-size:16px; letter-spacing:.025em; }
     .protection p { margin-top:5px; font-size:13px; }
@@ -70,22 +93,22 @@
     .outcome-pill.success { background:#dff3e9; color:#0f5d43; }
     .outcome-pill.warning { background:#fff0d8; color:#75440a; }
     .outcome-pill.danger { background:#fbe4e1; color:#8a2f28; }
-    .result-summary p { color:#455c53; font-size:13px; }
+    .result-summary p { color:var(--muted); font-size:13px; }
     .result-summary p strong { color:var(--ink); }
     .download { justify-self:start; margin-top:3px; border:1px solid #b9cec4; border-radius:8px; background:#fff; color:var(--green-dark); padding:7px 10px; font-size:11px; font-weight:740; text-decoration:none; }
     .download:hover { background:#f0f6f3; }
     .pills { display:flex; flex-wrap:wrap; gap:7px; overflow:visible; padding:12px 1px 9px; }
     .pill-wrap { position:relative; display:flex; align-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:999px; background:#fff; }
-    .pill-wrap.active { border-color:#78ae9a; background:#eaf5f0; }
+    .pill-wrap.active { border-color:color-mix(in srgb,var(--green) 60%,white); background:color-mix(in srgb,var(--green) 10%,white); }
     .pill-wrap.warning { border-color:#d6a15e; background:#fff6e9; color:#744713; }
     .pill-wrap.unavailable { background:#f5f6f5; color:#98a39e; border-style:dashed; }
     .pill { min-height:34px; border:0; border-radius:999px; background:transparent; color:inherit; padding:0 6px 0 12px; font-size:11px; font-weight:720; cursor:pointer; white-space:nowrap; }
     .pill:disabled { cursor:not-allowed; }
     .pill-wrap .info { width:17px; height:17px; margin-right:8px; border-color:transparent; background:transparent; font-size:10px; }
-    .pill-menu { position:absolute; z-index:30; top:calc(100% + 7px); left:0; min-width:220px; max-width:min(330px,calc(100vw - 34px)); border:1px solid #cad8d1; border-radius:11px; background:#fff; padding:6px; box-shadow:0 14px 36px rgb(19 49 40 / .16); }
+    .pill-menu { position:absolute; z-index:30; top:calc(100% + 7px); left:0; min-width:220px; max-width:min(330px,calc(100vw - 34px)); border:1px solid var(--line); border-radius:11px; background:#fff; padding:6px; box-shadow:0 14px 36px rgb(15 23 42 / .16); }
     .pill-wrap:last-child .pill-menu { right:0; left:auto; }
     .pill-menu button { width:100%; display:block; border:0; border-radius:7px; background:transparent; color:var(--ink); padding:9px 10px; text-align:left; font-size:11px; font-weight:680; cursor:pointer; }
-    .pill-menu button:hover,.pill-menu button:focus-visible { background:#edf6f1; }
+    .pill-menu button:hover,.pill-menu button:focus-visible { background:var(--sidebar-accent); }
     .pill-menu button:disabled { color:#98a39e; cursor:not-allowed; }
     .pill-menu-separator { height:1px; margin:5px 6px; background:var(--line); }
     .viewer { min-height:430px; margin-top:5px; border:1px solid var(--line); border-radius:13px; background:#fff; overflow:hidden; }
@@ -94,8 +117,8 @@
     .viewer-head a { margin-left:auto; color:var(--green); font-size:11px; font-weight:750; text-decoration:none; }
     .gallery-controls { display:flex; align-items:center; gap:7px; margin-left:auto; }
     .gallery-controls button { border:1px solid #cad5d0; background:#fff; border-radius:7px; padding:4px 8px; cursor:pointer; }
-    .capture-status { color:#52665f; font-size:11px; font-weight:760; }
-    .viewer-body { min-height:384px; max-height:70vh; overflow:auto; background:#fafcfb; }
+    .capture-status { color:var(--muted); font-size:11px; font-weight:760; }
+    .viewer-body { min-height:384px; max-height:70vh; overflow:auto; background:var(--soft); }
     .empty { min-height:384px; display:grid; place-items:center; padding:30px; color:var(--muted); text-align:center; }
     pre { margin:0; padding:17px; white-space:pre-wrap; word-break:break-word; font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; }
     .viewer-body img,.viewer-body iframe { width:100%; min-height:560px; border:0; object-fit:contain; }
@@ -104,12 +127,26 @@
     .legal-list h3 { margin:0 0 8px; font-size:12px; }
     .legal-link { display:block; margin:7px 0; padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--green-dark); text-decoration:none; }
     .legal-link small { display:block; margin-top:2px; color:var(--muted); word-break:break-all; }
-    .popover { position:fixed; z-index:50; width:min(280px,calc(100vw - 24px)); border:1px solid #cbd8d2; border-radius:10px; background:#fff; padding:11px 12px; color:#44564f; box-shadow:0 14px 38px rgb(19 49 40 / .16); font-size:12px; }
+    .popover { position:fixed; z-index:50; width:min(280px,calc(100vw - 24px)); border:1px solid var(--line); border-radius:10px; background:#fff; padding:11px 12px; color:var(--ink); box-shadow:0 14px 38px rgb(15 23 42 / .16); font-size:12px; }
     [hidden] { display:none !important; }
-    @media (max-width:650px) { .head { min-height:62px; } .logo { width:125px; } .brand-rule,.back,.verification-label { display:none; } main { margin-top:30px; } .url-form { grid-template-columns:1fr; } .start { width:100%; } .run-state { max-width:45%; } .viewer { min-height:360px; } .viewer-body,.empty { min-height:315px; } }
+    @media (max-width:850px) { .aura-sidebar { width:72px; flex-basis:72px; } .aura-brand-name,.aura-label { display:none; } }
+    @media (max-width:650px) { .aura-sidebar { position:fixed; inset:auto 0 0; z-index:45; width:100%; height:64px; flex-basis:auto; border-top:1px solid var(--line); border-right:0; } .aura-brand,.aura-sidebar-foot { display:none; } .aura-nav { flex-direction:row; justify-content:space-around; padding:8px; } .aura-nav a { width:44px; justify-content:center; padding:0; } .lab-page { padding-bottom:64px; } .head { min-height:62px; } .logo { width:125px; } .brand-rule,.back,.verification-label { display:none; } main { margin-top:30px; } .url-form { grid-template-columns:1fr; } .start { width:100%; } .run-state { max-width:45%; } .viewer { min-height:360px; } .viewer-body,.empty { min-height:315px; } }
   </style>
 </head>
 <body>
+<div class="aura-shell">
+  <aside id="aura-sidebar" class="aura-sidebar" aria-label="Hauptnavigation">
+    <a class="aura-brand" href="/"><span class="aura-mark">M</span><span class="aura-brand-name">MucLegal</span></a>
+    <nav class="aura-nav">
+      <a href="/" title="Home"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-7h6v7"></path></svg><span class="aura-label">Home</span></a>
+      <a href="/archiv" title="Archiv"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M5 6v15h14V6"></path><path d="M8 3h8l2 3H6l2-3Z"></path><path d="M9 11h6"></path></svg><span class="aura-label">Archiv</span></a>
+      <a href="/hinweise" title="Hinweise"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg><span class="aura-label">Hinweise</span></a>
+      <a href="/neu" title="Neu hinzufügen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg><span class="aura-label">Neu hinzufügen</span></a>
+      <a href="/beweis-labor" aria-current="page" title="BeweisLab"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"></path><path d="M8 15h8"></path></svg><span class="aura-label">BeweisLab</span></a>
+    </nav>
+    <div class="aura-sidebar-foot"><button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><span class="aura-label">Einklappen</span></button></div>
+  </aside>
+  <div class="lab-page">
   <header><div class="head"><img class="logo" src="/static/muclegal-logo-light.png" alt="MucLegal"><span class="brand-rule"></span><span class="brand-name">BeweisLab</span><div class="verification-control"><label class="verification-switch" for="verification-mode"><input id="verification-mode" type="checkbox" checked><span class="switch-track" aria-hidden="true"></span><span class="verification-label">Automatische Überprüfung</span></label><button class="info" type="button" data-info="Standardmäßig beginnt das BeweisLab mit dem direkten öffentlichen Abruf. Erst wenn dabei ein tatsächlicher Seitenschutz oder eine reine JavaScript-Hülle erkannt wird, schaltet es automatisch in den Überprüfungsmodus und lädt die Seite einmalig in einem echten Browser. Vor Screenshots darf es ausschließlich sichtbare, eindeutig datensparsame Cookie-Optionen wie „Alle ablehnen“ oder „Nur notwendige“ wählen. CAPTCHAs, Logins und andere Seitenelemente werden nicht bedient; keine Tarntechniken werden verwendet. Schalte diese Automatik aus, wenn nach einem Schutzbefund kein Browser-Abruf erfolgen soll." aria-label="Mehr Informationen zur automatischen Überprüfung">i</button></div><a class="back" href="/">Fallmonitor</a></div></header>
   <main>
     <section class="hero">
@@ -149,10 +186,14 @@
       </section>
     </section>
   </main>
+  </div>
+</div>
   <div id="popover" class="popover" role="dialog" hidden></div>
 
 <script>
 (() => {
+  const auraSidebar=document.getElementById("aura-sidebar"),auraCollapse=document.getElementById("aura-collapse");
+  auraCollapse?.addEventListener("click",()=>{const collapsed=auraSidebar.classList.toggle("collapsed");auraCollapse.setAttribute("aria-label",collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen")});
   const terminal=new Set(["completed","completed_with_warnings","failed","protected","baseline_created","unchanged"]);
   const toolLabels={queued:"Vorbereitung",fetch:"Seite abrufen",browser:"Browser-Erfassung",normalize:"Inhalt aufbereiten",legal_pages:"Rechtstexte suchen",screenshot:"Ansicht festhalten",compare:"Stand einordnen",anthropic:"KI-Analyse",warc:"Archiv erstellen",manifest:"Prüfwerte bilden",timestamp:"Zeitpunkt belegen"};
   const help={raw_html:"HTML bedeutet Hypertext Markup Language. Das ist der unveränderte technische Quelltext der tatsächlich erfassten Seite.",response_headers:"HTTP bedeutet Hypertext Transfer Protocol. Diese Kopfdaten enthalten technische Angaben des Webservers, etwa Inhaltstyp und Abrufzeitpunkt.",normalized_text:"Bereinigter Seiteninhalt ohne typische flüchtige Bestandteile. Er dient später dem stabilen Vergleich.",god_mode_editorial_summary:"Nur im God Mode erzeugte, paraphrasierte OpenAI-Analysedarstellung. Sie ist keine wortgetreue Archivkopie und nicht juristisch verwertbar; maßgeblich bleiben die lokalen Primärartefakte.",god_mode_ai_usage:"Protokolliert Modell, Textbegrenzung, Cachetreffer, Tokenverbrauch und geschätzte Kosten. API-Schlüssel und übertragener Text werden darin nicht gespeichert.",legal_pages:"AGB steht für Allgemeine Geschäftsbedingungen. Hier stehen die gefundenen Rechtstext-Links sowie getrennt die für das Bild tatsächlich gewählte Klauselseite.",capture_transparency:"Dokumentiert überprüfbar, wie die Seite erfasst wurde: Browserkennung, Automatisierungserkennung, Proxy, frischer Browserzustand, robots.txt sowie angefragte und tatsächlich erfasste URL.",previous_normalized_text:"Der normalisierte Inhalt des vorherigen Abrufs.",diff:"Diff ist die Kurzform für Difference, also Unterschied. Gezeigt wird der konkrete Textunterschied zwischen zwei Seitenständen.",requested_page_screenshot:"Screenshot des sichtbaren Zustands unter der ursprünglich eingegebenen URL. Bei Seitenschutz kann dies eine Challenge- oder Anmeldeseite sein; sie wird nicht als erfolgreich erfasste Website ausgegeben.",screenshot:"Ganzseiten-Aufnahme der tatsächlich erfassten URL. Wenn Chromium auf der Hosting-Laufzeit abbricht, wird stattdessen ein deutlich beschriftetes, browserloses Beweisbild aus dem gespeicherten HTML gezeigt; das ist keine pixelgetreue Live-Aufnahme. PNG bedeutet Portable Network Graphics.",agb_screenshot:"Bild des eigentlichen AGB-Klauseltexts. Ist der zuerst gefundene AGB-Link nur eine Übersicht, wird innerhalb derselben Website eine konkrete Klauselseite ausgewählt. Navigation und Fußzeile werden in der browserlosen Ansicht ausgeblendet. Gefundene und tatsächlich abgebildete URL sowie der SHA-256-Prüfwert stehen im Beweispaket.",privacy_screenshot:"Aufnahme des ersten öffentlichen Links zur Datenschutzerklärung. Bei einem Chromium-Abbruch kann dies ein deutlich beschriftetes HTML-Beweisbild statt einer pixelgetreuen Live-Aufnahme sein. URL, Art der Aufnahme und SHA-256-Prüfwert stehen im Beweispaket.",warc:"WARC bedeutet Web ARChive. Das Archivformat speichert den abgerufenen Seiteninhalt zusammen mit technischen Abrufinformationen gemeinsam in einer Beweisdatei.",cdx:"CDX bezeichnet die Indexdatei eines Webarchivs. Sie hilft dabei, einzelne Abrufe innerhalb einer WARC-Datei gezielt wiederzufinden.",warc_status:"Dokumentiert, ob die WARC-Aufnahme vollständig war oder aus welchem Grund sie nicht erzeugt werden konnte.",manifest:"Das Manifest ist die Inhaltsliste des Beweispakets. SHA-256 bedeutet Secure Hash Algorithm mit 256 Bit. Der daraus gebildete Hash ist ein digitaler Fingerabdruck: Schon eine kleine Dateiänderung erzeugt einen anderen Prüfwert.",manifest_digest:"Der Manifest-Hash ist der digitale SHA-256-Fingerabdruck der gesamten Inhaltsliste. Er ermöglicht die spätere Integritätsprüfung des Beweispakets.",timestamp_query:"RFC 3161 ist ein technischer Standard für vertrauenswürdige Zeitstempel; RFC bedeutet Request for Comments. Diese Datei enthält die Anfrage an den Zeitstempeldienst.",timestamp_response:"Antwort der TSA auf die Zeitstempelanfrage. TSA bedeutet Time Stamping Authority, also Zeitstempelstelle. Sie ordnet den Manifest-Hash einem überprüfbaren Zeitpunkt zu.",wayback_status:"Status einer optionalen zusätzlichen Archivierung bei der Wayback Machine, einem öffentlichen Webarchiv.",report:"Lesbarer PDF-Bericht über Aufnahme, Integrität und offene menschliche Prüfung. PDF bedeutet Portable Document Format."};

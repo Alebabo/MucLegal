@@ -1,0 +1,480 @@
+# Bausteinbibliothek für die Tenorschreibhilfe
+# Stand: 2026-08-21
+#
+# Jeder Baustein ist aus mindestens einem wörtlich erfassten Tenor des Registers
+# extrahiert. Kein Baustein ohne belegt_in. Das Modell darf ausschließlich aus
+# dieser Bibliothek auswählen und die {{Slots}} füllen — es formuliert keine
+# Bausteine frei. Ausnahme: Segment 5 (verbotene Handlung), siehe unten.
+
+meta:
+  version: "0.1"
+  segmentreihenfolge:
+    - ordnungsmittelandrohung   # nur wenn position=eingeschoben
+    - verpflichtungsformel
+    - adressatenkreis
+    - anwendungsbereich
+    - verbotene_handlung
+    - ausnahmevorbehalt
+    - konkrete_verletzungsform
+    - ordnungsmittelandrohung   # nur wenn position=nachgestellt
+  slot_syntax: "{{name}}"
+  regel: >
+    Segmente 1-4, 6 und 7 werden ausgewählt, nicht generiert. Nur die verbotene
+    Handlung darf das Modell aus dem Verstoßprofil neu formulieren — und auch dann
+    nur unter Verwendung eines der Muster aus verbotene_handlung.
+
+# =====================================================================
+# SEGMENT: Verpflichtungsformel
+# =====================================================================
+verpflichtungsformel:
+  - id: B-VF-01
+    text: "Die Beklagte wird verurteilt, es zu unterlassen,"
+    belegt_in: [T-001, T-002, T-003, T-004, T-005, T-006, T-007]
+    haeufigkeit: 7
+    empfehlung: standard
+  - id: B-VF-02
+    text: "Der Beklagten wird untersagt,"
+    belegt_in: [T-008]
+    haeufigkeit: 1
+    hinweis: >
+      Passivisch. Gleichwertig, aber seltener. Bei nachgestellter
+      Ordnungsmittelandrohung (B-OM-06) üblich.
+
+# =====================================================================
+# SEGMENT: Ordnungsmittelandrohung (§ 890 ZPO)
+# =====================================================================
+# DETERMINISTISCHE PRÜFUNG: Fehlt dieses Segment vollständig, ist das ein
+# Befund vom Typ fehlender_baustein mit schwere=hoch. Kein Modellaufruf nötig.
+ordnungsmittelandrohung:
+  - id: B-OM-01
+    position: eingeschoben
+    text: >
+      es bei Vermeidung eines vom Gericht für jeden Fall der Zuwiderhandlung
+      festzusetzenden Ordnungsgeldes von bis zu € 250.000,00, ersatzweise Ordnungshaft
+      oder Ordnungshaft bis zu sechs Monaten, letztere zu vollziehen an
+      {{vollstreckungsperson}},
+    slots:
+      vollstreckungsperson: "z. B. „ihrem Geschäftsführer“"
+    belegt_in: [T-004]
+  - id: B-OM-02
+    position: eingeschoben
+    text: >
+      es bei Meidung eines für jeden Fall der Zuwiderhandlung fälligen Ordnungsgeldes
+      bis zu € 250.000,00, ersatzweise Ordnungshaft oder Ordnungshaft bis zu sechs
+      Monaten, letztere zu vollziehen an {{vollstreckungsperson}},
+    slots:
+      vollstreckungsperson: "z. B. „den Geschäftsführern der Komplementär GmbH“ / „den Mitgliedern der Geschäftsführung der Komplementärin“"
+    belegt_in: [T-001, T-002]
+  - id: B-OM-03
+    position: eingeschoben
+    text: >
+      es bei Meidung eines für jeden Fall der Zuwiderhandlung vom Gericht
+      festzusetzenden Ordnungsgeldes bis zu EUR 250.000,00, ersatzweise Ordnungshaft,
+      oder einer Ordnungshaft bis zu sechs Monaten, wobei die Ordnungshaft an
+      {{vollstreckungsperson}} zu vollziehen ist, und insgesamt zwei Jahre nicht
+      übersteigen darf,
+    slots:
+      vollstreckungsperson: "z. B. „ihren jeweiligen gesetzlichen Vertretern“"
+    belegt_in: [T-003]
+    empfehlung: vollstaendigste
+    hinweis: >
+      Einzige Variante im Register mit der Zwei-Jahres-Obergrenze der Ordnungshaft
+      (§ 890 Abs. 1 S. 2 ZPO). Bei Neuformulierung diese Variante wählen.
+  - id: B-OM-04
+    position: eingeschoben
+    text: >
+      unter Androhung eines vom Gericht für jeden Fall der Zuwiderhandlung
+      festzusetzenden Ordnungsgeldes bis zu 250.000,00 € — ersatzweise Ordnungshaft —
+      oder der Ordnungshaft bis zu sechs Monaten,
+    belegt_in: [T-005]
+    warnung: >
+      Ohne Benennung der Vollstreckungsperson. Bei juristischen Personen ist die
+      Benennung erforderlich, weil Ordnungshaft nur gegen natürliche Personen
+      vollstreckt werden kann. NICHT als Vorschlag anbieten, sondern nur als
+      Referenz führen.
+  - id: B-OM-05
+    position: eingeschoben
+    text: >
+      es bei Vermeidung eines für jeden Fall der Zuwiderhandlung festzusetzenden
+      Ordnungsgeldes bis zu 250.000,00 €, ersatzweise Ordnungshaft bis zu sechs Monaten
+      oder Ordnungshaft bis zu sechs Monaten, zu vollstrecken an
+      {{vollstreckungsperson}},
+    belegt_in: [T-006]
+  - id: B-OM-06
+    position: nachgestellt
+    text: >
+      Der Beklagten wird für jeden Fall der schuldhaften Zuwiderhandlung ein
+      Ordnungsgeld bis zu € 250.000,00 (ersatzweise Ordnungshaft bis zu sechs Wochen)
+      oder Ordnungshaft bis zu sechs Monaten, zu vollstrecken an
+      {{vollstreckungsperson}}, angedroht.
+    slots:
+      vollstreckungsperson: "z. B. „deren Vorstand“"
+    belegt_in: [T-008]
+    hinweis: >
+      Eigener Tenorabsatz nach dem Verbot. Das Prüfmodul muss beide Anordnungen
+      kennen und darf eine nachgestellte Androhung nicht als fehlend melden.
+
+# =====================================================================
+# SEGMENT: Adressatenkreis
+# =====================================================================
+adressatenkreis:
+  - id: B-AK-01
+    text: "im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern"
+    belegt_in: [T-001, T-002, T-003, T-004]
+    haeufigkeit: 4
+    empfehlung: standard
+  - id: B-AK-02
+    text: "gegenüber Verbrauchern (§ 13 BGB)"
+    belegt_in: [T-007]
+    hinweis: >
+      Mit Normverweis. Vorzugswürdig bei Klauselfällen, weil das
+      Vollstreckungsgericht den Verbraucherbegriff nicht auslegen muss.
+  - id: B-AK-03
+    text: "im geschäftlichen Verkehr gegenüber Verbrauchern in {{gebiet}}"
+    slots:
+      gebiet: "z. B. „Deutschland“"
+    belegt_in: [T-008]
+    hinweis: "Räumliche Begrenzung — relevant bei Anbietern mit Sitz im EU-Ausland."
+  - id: B-AK-04
+    text: "von Verbrauchern, die {{qualifikation}}"
+    slots:
+      qualifikation: "z. B. „im Rahmen eines bestehenden Zahlungsdiensterahmenvertrages die Führung eines Pfändungsschutzkontos verlangen“"
+    belegt_in: [T-005]
+    hinweis: "Qualifizierter Adressatenkreis — verengt bewusst auf eine Fallkonstellation."
+  - id: B-AK-05
+    text: >
+      sofern nicht der Vertrag mit einer Person abgeschlossen wird, die in Ausübung
+      ihrer gewerblichen oder selbstständigen beruflichen Tätigkeit handelt (Unternehmer)
+    belegt_in: [T-006]
+    empfehlung: weiteste
+    hinweis: >
+      NEGATIVE Formulierung. Wirkt weiter als B-AK-01, weil auch Fälle erfasst werden,
+      in denen die Verbrauchereigenschaft streitig ist. Bei Klauselfällen mit
+      gemischtem Kundenkreis vorzugswürdig.
+
+# =====================================================================
+# SEGMENT: Anwendungsbereich
+# =====================================================================
+# HIER ENTSTEHT DER HÄUFIGSTE ZU-ENG-FEHLER. Reihenfolge = Reichweite aufsteigend.
+anwendungsbereich:
+  - id: B-AB-02
+    reichweite: eng
+    text: >
+      auf der Internetseite {{url}}, die den Abschluss von {{vertragsgegenstand}} in
+      Form von Dauerschuldverhältnissen auf elektronischem Weg ermöglicht,
+    slots:
+      url: "konkrete Domain"
+      vertragsgegenstand: "z. B. „entgeltlichen Abonnements“ / „kostenpflichtigen Dauerschuldverhältnissen über PAY-TV-Inhalte“"
+    belegt_in: [T-001, T-002]
+    warnung: >
+      Bindet an EINE Domain. Verlagerung in App, auf Subdomain oder Zweitmarke ist
+      nicht erfasst. In beiden Belegfällen war der Tenor deshalb zu eng.
+      Nur wählen, wenn der Sachverhalt eine Beschränkung erzwingt.
+  - id: B-AB-03
+    reichweite: technikneutral
+    text: "in Telemedien"
+    belegt_in: [T-004]
+    empfehlung: vorzugswuerdig
+    hinweis: >
+      Der beste Anwendungsbereichs-Baustein im Register. Keine Domain, keine
+      Plattform, keine Seitenrolle. Erfasst Website, App und Smart-TV-Oberfläche.
+      Standardvorschlag, wenn der Sachverhalt keine Beschränkung erzwingt.
+  - id: B-AB-03b
+    reichweite: technikneutral
+    text: >
+      auf Internetseiten und in Anwendungen, die den Abschluss von Verträgen über
+      Dauerschuldverhältnisse auf elektronischem Weg ermöglichen,
+    belegt_in: []
+    status: vorschlag
+    warnung: >
+      NICHT AUS EINEM ERFASSTEN TENOR BELEGT. Konstruiert aus B-AB-02 unter Übernahme
+      der funktionalen Auslegung des Webseitenbegriffs aus den Entscheidungsgründen
+      T-001 Rn. 24. Muss als Vorschlag gekennzeichnet und juristisch freigegeben
+      werden, bevor das System ihn ausgibt.
+  - id: B-AB-04
+    reichweite: mittel
+    text: "im Internet unter {{url}} für {{gegenstand}} zu werben bzw. werben zu lassen"
+    slots:
+      url: "konkrete Domain"
+      gegenstand: "z. B. „den Kauf von Tickets“"
+    belegt_in: [T-003]
+    hinweis: >
+      „bzw. werben zu lassen“ erstreckt das Verbot auf Beauftragte und Dienstleister
+      (§ 8 Abs. 2 UWG). Wird häufig vergessen und sollte bei jedem Werbefall
+      vorgeschlagen werden.
+  - id: B-AB-05
+    reichweite: ausloesebedingung
+    text: "gegenüber Verbrauchern, die {{zustand}}"
+    slots:
+      zustand: "z. B. „im Warenkorb eine angebotene kostenpflichtige Ticketversicherung nicht ausgewählt haben und den Bestellvorgang über den Button ‚Weiter zur Kasse‘ fortsetzen“"
+    belegt_in: [T-003]
+    hinweis: >
+      Beschreibt den Zustand, in dem das Verbot greift. Nicht der Anwendungsbereich
+      im engeren Sinn, sondern eine Auslösebedingung. Bei Prozessgestaltungen
+      (Checkout, Kündigungsstrecke) unverzichtbar.
+  - id: B-AB-06
+    reichweite: mittel
+    text: "in Bezug auf Dauerschuldverhältnisse"
+    belegt_in: [T-006]
+  - id: B-AB-07
+    reichweite: eng
+    text: "bei {{produkt}}-Verträgen"
+    slots:
+      produkt: "z. B. „BahnCard“"
+    belegt_in: [T-007]
+    warnung: "Bindet an ein Produkt. Zweitmarken und Nachfolgeprodukte nicht erfasst."
+
+# =====================================================================
+# SEGMENT: Verbotene Handlung
+# =====================================================================
+# Das einzige Segment, in dem das Modell aus dem Verstoßprofil neu formulieren darf.
+# Auswahl erfolgt über fallgruppe + verstoss_modus.
+verbotene_handlung:
+
+  kuendigungsbutton:
+    - id: B-VH-11
+      verstoss_modus: [vorhanden_unzureichend, fehlt_vollstaendig]
+      text: >
+        die gesetzlich vorgeschriebene Kündigungsschaltfläche nicht unmittelbar
+        und/oder leicht zugänglich vorzuhalten
+      belegt_in: [T-002]
+      hinweis: "Abstrakter Teil am Gesetzeswortlaut des § 312k Abs. 2 S. 4 BGB."
+    - id: B-VH-11b
+      verstoss_modus: [vorhanden_unzureichend]
+      text: >
+        sondern so, dass {{umgehungsmechanismus}} oder inhaltsgleiche Gestaltungen
+        die Schaltfläche „{{beschriftung}}“ sichtbar wird
+      slots:
+        umgehungsmechanismus: "z. B. „erst nach Klick auf ‚Weitere Links einblenden‘“"
+        beschriftung: "z. B. „Kündigen“"
+      belegt_in: [T-002]
+      warnung: >
+        „oder inhaltsgleiche Gestaltungen“ schützt nur innerhalb DESSELBEN
+        Umgehungsmechanismus. In T-002 hat die Beklagte danach den Mechanismus
+        gewechselt (Zwei-Button-Lösung) und ein drittes Verfahren war nötig.
+        Wenn der Sachverhalt es zulässt, den Erfolg statt des Mechanismus beschreiben.
+    - id: B-VH-12
+      verstoss_modus: [vorhanden_unzureichend]
+      text: >
+        {{ort}} einen Link „{{beschriftung}}“ bereit zu stellen, der nach Betätigung
+        nicht unmittelbar zu einer Bestätigungsseite führt
+      slots:
+        ort: "z. B. „im Footer der Startseite“"
+        beschriftung: "Linktext"
+      belegt_in: [T-001]
+      warnung: >
+        Doppelt verengt: Ort UND Beschriftung. Eine Verlagerung des Links an eine
+        andere Stelle beendet die Tenorwirkung. Nur wählen, wenn der Ort tragend ist.
+    - id: B-VH-13
+      verstoss_modus: [vorhanden_unzureichend]
+      text: >
+        eine Kündigung nur nach vorheriger Anmeldung mit Zugangsdaten zu ermöglichen,
+        ohne zugleich eine Kündigung allein durch Angabe von Namen und weiteren
+        gängigen Identifizierungsmerkmalen wie Anschrift und/oder Geburtsdatum anzubieten
+      belegt_in: []
+      status: vorschlag
+      quelle_der_formulierung: "T-001, Entscheidungsgründe Rn. 27 — nicht aus dem Tenor"
+      warnung: "NICHT TENORIERT GEWESEN. Als Vorschlag kennzeichnen, juristisch freigeben."
+
+  dark_pattern:
+    - id: B-VH-21
+      verstoss_modus: [irrefuehrend_gestaltet]
+      text: >
+        ein Fenster einzublenden, in dem die Verbraucher noch einmal zu einer
+        Entscheidung über {{gegenstand}} aufgefordert werden
+      slots:
+        gegenstand: "z. B. „die Ticketversicherung“"
+      belegt_in: [T-003]
+      warnung: >
+        Erfasst nur ein „eingeblendetes Fenster“. Eine als eigene Seite ausgeführte
+        Zwischenaufforderung ist wortlautmäßig etwas anderes. Erwägen:
+        „ein Fenster einzublenden oder eine Zwischenseite anzuzeigen“.
+      kombinationsregel: >
+        Nach T-003 tragen weder Framing allein noch einmaliges Nagging allein den
+        Tenor. Erst die Kombination mit einem angstauslösenden Ablehnungstext
+        überschritt die Erheblichkeitsschwelle. Ein Dark-Pattern-Tenor muss die
+        Kombination beschreiben — sonst droht Teilabweisung mit Kostenfolge.
+
+  consent_gestaltung:
+    - id: B-VH-31
+      verstoss_modus: [irrefuehrend_gestaltet]
+      text: >
+        für die domainübergreifende Aufzeichnung und Auswertung des Nutzerverhaltens
+        zu Analyse- und Marketingzwecken Informationen auf dem Endgerät des Nutzers zu
+        speichern oder auf Informationen zuzugreifen, die bereits im Endgerät der
+        Nutzer hinterlegt sind
+      belegt_in: [T-004]
+      hinweis: >
+        Bewusst technologieoffen formuliert. Das Gericht hat das ausdrücklich
+        gebilligt (Rn. 79: Auswechselbarkeit der Tracking-Technologien).
+
+  agb_klausel:
+    - id: B-VH-41
+      verstoss_modus: [klausel_verwendet]
+      text: "die Unterzeichnung einer Vereinbarung zu fordern, in der es heißt:"
+      belegt_in: [T-005]
+    - id: B-VH-42
+      verstoss_modus: [klausel_verwendet]
+      text: >
+        die nachfolgende oder eine inhaltsgleiche Klausel zu verwenden
+      belegt_in: [T-006, T-007]
+      empfehlung: pflicht
+      hinweis: "„oder eine inhaltsgleiche Klausel“ ist die Kerngleichheits-Erweiterung."
+    - id: B-VH-43
+      verstoss_modus: [klausel_verwendet]
+      text: "oder sich auf eine solche Klausel zu berufen"
+      belegt_in: [T-007]
+      empfehlung: pflicht
+      hinweis: >
+        DER DOPPELAUSSPRUCH. Ohne ihn bleiben Altverträge unberührt (§ 11 UKlaG).
+        Fehlt in T-005 und T-006 — in beiden Fällen als zu eng bewertet.
+
+  irrefuehrende_werbung:
+    - id: B-VH-51
+      verstoss_modus: [irrefuehrend_gestaltet]
+      text: "mit {{aussage}} zu werben"
+      slots:
+        aussage: "die beanstandete Werbeaussage, möglichst wörtlich"
+      belegt_in: [T-008]
+
+# =====================================================================
+# SEGMENT: Ausnahmevorbehalt
+# =====================================================================
+ausnahmevorbehalt:
+  - id: B-AV-01
+    text: >
+      sofern die Speicherung oder der Endgerätezugriff für den Betrieb der Website
+      nicht unbedingt notwendig ist
+    belegt_in: [T-004]
+  - id: B-AV-02
+    text: >
+      ohne vor Beginn des Nutzungsvorgangs eine informierte und freiwillige
+      Einwilligung der Nutzer einzuholen
+    belegt_in: [T-004]
+    hinweis: >
+      Negative Tatbestandsvoraussetzungen aus dem Gesetzeswortlaut sind nach T-004
+      Rn. 78 unschädlich für die Bestimmtheit, SOLANGE der übrige Antrag durch einen
+      Anlagenbezug konkretisiert ist. Ohne Anlagenbezug wird der Tenor angreifbar.
+
+# =====================================================================
+# SEGMENT: Konkrete Verletzungsform
+# =====================================================================
+# DETERMINISTISCHE PRÜFUNG: Fehlt dieses Segment, ist das ein Befund vom Typ
+# fehlender_baustein mit schwere=hoch, sofern die verbotene Handlung abstrakt
+# formuliert ist (§ 253 Abs. 2 Nr. 2 ZPO).
+konkrete_verletzungsform:
+  - id: B-KV-01
+    text: "wenn dies geschieht wie in Anlage {{anlage}} dargestellt"
+    belegt_in: [T-004]
+  - id: B-KV-02
+    text: "wenn dies geschieht wie in Anlage {{anlage}}"
+    belegt_in: [T-001]
+  - id: B-KV-03
+    text: "wenn dies geschieht wie nachstehend abgebildet:"
+    belegt_in: [T-002, T-003]
+    hinweis: >
+      Abbildung wird in den Tenor eingebettet. Bei Gestaltungsfällen die robusteste
+      Variante, weil die Verletzungsform Bestandteil des Titels wird und im
+      Ordnungsmittelverfahren nicht erst aus der Akte gezogen werden muss.
+    empfehlung: bei_gestaltungsfaellen
+  - id: B-KV-04
+    text: "[wörtlicher Klauseltext im Tenor]"
+    belegt_in: [T-005, T-006, T-007]
+    hinweis: "Bei Klauselfällen ersetzt der Klauselwortlaut die Anlage."
+  - id: B-KV-05
+    text: "wie geschehen in {{fundstelle}} (Anlage {{anlage}})"
+    slots:
+      fundstelle: "z. B. „im Schreiben der Beklagten vom 12.04.2021“"
+    belegt_in: [T-008]
+    hinweis: >
+      Die klassische „wie geschehen“-Formel des § 8 UWG-Tenors. Bindet das Verbot an
+      die festgestellte Verletzungsform und beseitigt Bestimmtheitsbedenken.
+
+# =====================================================================
+# DETERMINISTISCHE PRÜFREGELN (Prüfschritt 0, kein Modellaufruf)
+# =====================================================================
+pruefregeln:
+  - id: R-01
+    bedingung: "kein Baustein aus ordnungsmittelandrohung vorhanden"
+    befund_typ: fehlender_baustein
+    schwere: hoch
+    meldung: >
+      Ordnungsmittelandrohung nach § 890 ZPO fehlt. Ohne sie ist der Titel nicht
+      unmittelbar vollstreckbar; die Androhung müsste nachträglich beantragt werden.
+  - id: R-02
+    bedingung: "ordnungsmittelandrohung vorhanden, aber ohne Vollstreckungsperson UND Schuldner ist juristische Person"
+    befund_typ: unbestimmt
+    schwere: mittel
+    meldung: >
+      Ordnungshaft kann nur gegen natürliche Personen vollstreckt werden. Bei
+      juristischen Personen ist die Vollstreckungsperson zu benennen (vgl. B-OM-03).
+    referenz: [T-005]
+  - id: R-03
+    bedingung: "rechtsgrundlage enthält § 1 UKlaG oder § 2 UKlaG UND fallgruppe = agb_klausel UND B-VH-43 fehlt"
+    befund_typ: zu_eng
+    schwere: hoch
+    meldung: >
+      Doppelter Verbotsausspruch fehlt. Untersagt ist nur das Verwenden, nicht das
+      Sich-Berufen. Altverträge bleiben unberührt (§ 11 UKlaG).
+    referenz: [T-007, T-005, T-006]
+    vorschlag: "oder sich auf eine solche Klausel zu berufen"
+  - id: R-04
+    bedingung: "fallgruppe = agb_klausel UND B-VH-42 fehlt"
+    befund_typ: zu_eng
+    schwere: hoch
+    meldung: >
+      Formel „oder eine inhaltsgleiche Klausel“ fehlt. Der Tenor hängt am wörtlichen
+      Klauseltext; eine sprachliche Umformulierung rutscht durch.
+    referenz: [T-005]
+  - id: R-05
+    bedingung: "verbotene Handlung ist abstrakt formuliert UND kein Baustein aus konkrete_verletzungsform vorhanden"
+    befund_typ: unbestimmt
+    schwere: hoch
+    meldung: >
+      Abstrakter Verbotsteil ohne Bezug auf die konkrete Verletzungsform. Ein
+      gesetzeswiederholender Antrag genügt § 253 Abs. 2 Nr. 2 ZPO in der Regel nicht.
+    referenz: [T-004]
+  - id: R-06
+    bedingung: "anwendungsbereich enthält eine konkrete Domain UND verstoss_profil.kanal enthält mehr als einen Kanal"
+    befund_typ: zu_eng
+    schwere: hoch
+    meldung: >
+      Der Tenor nennt eine einzelne Internetseite, der Sachverhalt umfasst aber
+      mehrere Kanäle. Verlagerung in die App oder auf eine andere Domain wäre nicht
+      erfasst.
+    referenz: [T-001, T-002, T-003]
+    vorschlag_baustein: B-AB-03
+  - id: R-07
+    bedingung: "anwendungsbereich enthält eine konkrete Domain UND verstoss_profil.bekannte_umgehungen ist nicht leer"
+    befund_typ: zu_eng
+    schwere: hoch
+    meldung: >
+      Es sind bereits Umgehungen dokumentiert. Ein domaingebundener Anwendungsbereich
+      erfasst diese voraussichtlich nicht.
+    referenz: [T-002]
+  - id: R-08
+    bedingung: "rechtsgrundlage enthält „Art. 25 DSA“ als anspruchsgrundlage"
+    befund_typ: normbezug
+    schwere: hoch
+    meldung: >
+      Art. 25 DSA ist gegenüber der UGP-Richtlinie subsidiär (Art. 25 Abs. 2 DSA).
+      Bei geschäftlichen Handlungen gegenüber Verbrauchern ist der Anspruch auf
+      §§ 3 Abs. 2, 4a Abs. 1 S. 2 Nr. 3 UWG zu stützen; Art. 25 DSA wirkt nur als
+      Auslegungsmaßstab.
+    referenz: [T-003]
+  - id: R-09
+    bedingung: "rechtsgrundlage enthält „§ 25 TTDSG“"
+    befund_typ: normbezug
+    schwere: niedrig
+    meldung: >
+      Das TTDSG wurde zum 14.05.2024 in TDDDG umbenannt. Aktuelle Bezeichnung: § 25 TDDDG.
+    referenz: [T-004]
+  - id: R-10
+    bedingung: "fallgruppe = dark_pattern UND nur ein Gestaltungsmerkmal beschrieben"
+    befund_typ: ueberdehnt
+    schwere: mittel
+    meldung: >
+      Nach T-003 tragen weder farbliche Hervorhebung allein noch einmaliges
+      Nachfragen allein einen Unterlassungstenor. Die Kombination beschreiben,
+      sonst droht Teilabweisung mit Kostenfolge.
+    referenz: [T-003]

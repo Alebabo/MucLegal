@@ -1,0 +1,179 @@
+id: T-004
+quelle: urteil
+gericht_az: "LG München I, 33 O 14776/19"
+datum: "2022-11-29"
+fundstelle_url: "https://www.gesetze-bayern.de/Content/Document/Y-300-Z-GRURRS-B-2022-N-39300"
+fundstelle_zusatz: "GRUR-RS 2022, 39300; MMR 2023, 222; ZD 2023, 223; K&R 2023, 220. PDF (Scan): https://www.vzbv.de/sites/default/files/2023-01/LG%20M%C3%BCnchen%20I_29.11.2022.pdf"
+rechtskraeftig: unbekannt
+rechtskraft_hinweis: "Vor Verwendung Verfahrensstand prüfen."
+parteien:
+  klaeger: "Verbraucherzentrale Bundesverband e.V. (vzbv)"
+  beklagte: "BurdaForward GmbH (www.focus.de), Rubrumberichtigung von Focus Online Group GmbH"
+zitat_geprueft: true
+zitat_quelle: "gesetze-bayern.de, Volltext, abgerufen 2026-08-21"
+
+# --- Was war der Fall ---
+sachverhalt: >
+  Beim Aufruf des Nachrichtenportals erschien eine Consent Management Platform nach dem
+  Standard IAB TCF 2.0. Auf der ersten Ebene standen nur „Akzeptieren“ (blau hervorgehoben)
+  und „Einstellungen“ zur Verfügung; eine Ablehnung war erst auf der zweiten Ebene
+  möglich, wo „Alle Akzeptieren“ erneut hervorgehoben und „alle ablehnen“ unauffällig
+  gestaltet war. Der TC String wurde als Cookie auf dem Endgerät gespeichert und diente
+  der domainübergreifenden Nachverfolgung.
+fallgruppe: consent_gestaltung
+verstoss_modus: irrefuehrend_gestaltet
+kanal:
+  - website
+rechtsgrundlage:
+  - norm: "§ 2 Abs. 1 S. 1, Abs. 2 S. 1 Nr. 11 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 25 TTDSG"
+    funktion: anspruchsbegruendend
+    anmerkung: >
+      Heute § 25 TDDDG (Umbenennung des TTDSG zum 14.05.2024). Bei Neuformulierung
+      die aktuelle Normbezeichnung verwenden.
+  - norm: "Art. 4 Nr. 11, Art. 7 DSGVO"
+    funktion: auslegungsmassstab
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+# --- Der Tenor (wörtlich, Ziffer I) ---
+tenor_text: >
+  I. Die Beklagte wird verurteilt, es bei Vermeidung eines vom Gericht für jeden Fall der
+  Zuwiderhandlung festzusetzenden Ordnungsgeldes von bis zu € 250.000,00, ersatzweise
+  Ordnungshaft oder Ordnungshaft bis zu sechs Monaten, letztere zu vollziehen an ihrem
+  Geschäftsführer, zu unterlassen, im Rahmen geschäftlicher Handlungen gegenüber
+  Verbrauchern in Telemedien für die domainübergreifende Aufzeichnung und Auswertung des
+  Nutzerverhaltens zu Analyse- und Marketingzwecken Informationen auf dem Endgerät des
+  Nutzers zu speichern oder auf Informationen zuzugreifen, die bereits im Endgerät der
+  Nutzer hinterlegt sind, sofern die Speicherung oder der Endgerätezugriff für den
+  Betrieb der Website nicht unbedingt notwendig ist, ohne vor Beginn des Nutzungsvorgangs
+  eine informierte und freiwillige Einwilligung der Nutzer für den Zugriff auf deren
+  Endgeräte oder Endgeräteinformationen einzuholen, wenn dies geschieht wie in
+  Anlage K 58 dargestellt.
+verletzungsform_anlage: "Anlage K 58 (Gesamtausdruck der CMP, 142 Bildschirmansichten)"
+
+teilabweisung:
+  vorhanden: true
+  beschreibung: >
+    Klageanträge 2 (Informationspflichten) und 3 (Art. 26 Abs. 2 S. 2 DSGVO,
+    gemeinsame Verantwortlichkeit) wurden abgewiesen. Kosten: Kläger ¾, Beklagte ¼.
+  lehre_fuer_tenorierung: >
+    Wer eine Klage auf § 25 TTDSG/TDDDG stützt, kann darauf keine eigenständigen
+    Informationspflichten stützen. Die Anträge kosteten ¾ der Kosten. Anspruchsgrundlage
+    und Antragsumfang müssen zusammenpassen.
+
+# --- Bausteine ---
+tenor_bausteine:
+  - text: "es bei Vermeidung eines vom Gericht für jeden Fall der Zuwiderhandlung
+      festzusetzenden Ordnungsgeldes von bis zu € 250.000,00, ersatzweise Ordnungshaft
+      oder Ordnungshaft bis zu sechs Monaten, letztere zu vollziehen an ihrem Geschäftsführer"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-01
+  - text: "im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern"
+    funktion: adressatenkreis
+    baustein_id: B-AK-01
+  - text: "in Telemedien"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-03
+    anmerkung: >
+      TECHNIKNEUTRAL. Der beste Anwendungsbereichs-Baustein im gesamten Register:
+      keine Domain, keine Plattform, keine Seitenrolle. Erfasst Website, App und
+      Smart-TV-Oberfläche gleichermaßen. Vorbild für Fälle, in denen der Sachverhalt
+      keine Beschränkung auf eine Domain erzwingt.
+  - text: "für die domainübergreifende Aufzeichnung und Auswertung des Nutzerverhaltens
+      zu Analyse- und Marketingzwecken Informationen auf dem Endgerät des Nutzers zu
+      speichern oder auf Informationen zuzugreifen, die bereits im Endgerät der Nutzer
+      hinterlegt sind"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-31
+  - text: "sofern die Speicherung oder der Endgerätezugriff für den Betrieb der Website
+      nicht unbedingt notwendig ist"
+    funktion: ausnahmevorbehalt
+    baustein_id: B-AV-01
+    anmerkung: >
+      Negative Tatbestandsvoraussetzung, aus dem Gesetzeswortlaut übernommen.
+      Nach Rn. 78 unschädlich für die Bestimmtheit, solange der übrige Antrag
+      hinreichend konkretisiert ist.
+  - text: "ohne vor Beginn des Nutzungsvorgangs eine informierte und freiwillige
+      Einwilligung der Nutzer für den Zugriff auf deren Endgeräte oder
+      Endgeräteinformationen einzuholen"
+    funktion: ausnahmevorbehalt
+    baustein_id: B-AV-02
+  - text: "wenn dies geschieht wie in Anlage K 58 dargestellt"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-01
+
+bestimmtheit_lehre: >
+  Rn. 77-79 ist die wichtigste Passage im Register zum Thema Bestimmtheit:
+  Ein abstrakt formulierter Verbotsteil ist zulässig, WENN er durch Bezugnahme auf die
+  konkrete Verletzungsform (hier: Anlage K 58) präzisiert wird. Diese Zweiteilung —
+  abstrakte Handlungsbeschreibung PLUS konkreter Anlagenbezug — ist die Bauform, mit der
+  ein Tenor gleichzeitig weit und bestimmt sein kann. Das Gericht begründet die Weite
+  ausdrücklich mit der Auswechselbarkeit der Tracking-Technologien (Rn. 79).
+
+# --- Reichweite ---
+kerngleich_umfasst:
+  - beschreibung: "CMP eines anderen Anbieters mit demselben zweistufigen Aufbau
+      (Ablehnen erst auf zweiter Ebene)"
+    begruendung: >
+      Tragendes Element ist nach Rn. 112 die fehlende Freiwilligkeit wegen des
+      Mehraufwands für die Ablehnung, nicht der konkrete CMP-Anbieter.
+    sicherheit: mittel
+  - beschreibung: "Andere Tracking-Technologie (Fingerprinting statt Cookie) bei
+      unverändertem Einwilligungsmechanismus"
+    begruendung: >
+      Der Tenor benennt bewusst keine konkrete Technologie; Rn. 79 begründet das mit
+      der Auswechselbarkeit.
+    sicherheit: hoch
+
+nicht_umfasst:
+  - beschreibung: "Ablehnen-Button gleichrangig auf der ersten Ebene, Speicherung
+      erst nach aktiver Zustimmung"
+    begruendung: "Freiwilligkeit gegeben; alle tragenden Elemente entfallen."
+    sicherheit: hoch
+  - beschreibung: "PUR-Abo-Modell (Einwilligung oder Bezahlung)"
+    begruendung: >
+      Anderer Sachverhalt; die Freiwilligkeitsfrage stellt sich unter anderen
+      Vorzeichen. Nicht Gegenstand dieses Verfahrens.
+    sicherheit: mittel
+  - beschreibung: "Unzureichende Informationen in der Datenschutzerklärung"
+    begruendung: >
+      Ausdrücklich abgewiesen (Klageanträge 2 und 3). § 25 TTDSG statuiert nach
+      Auffassung der Kammer keine eigenständigen Informationspflichten.
+    sicherheit: hoch
+
+nachtraeglich_bewertet:
+  zu_eng: nein
+  hinweis: >
+    Dieser Tenor ist im Anwendungsbereich vorbildlich weit („in Telemedien“) und im
+    Verbotsteil durch den Anlagenbezug bestimmt. Er ist das positive Gegenstück zu
+    T-001 und T-002 und sollte im System als Vorbild für den Reichweiten-Slider
+    „kerngleich“ hinterlegt sein.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+# --- Brücke zum Monitor ---
+pruefbare_merkmale:
+  - merkmal: "Ablehnen-Option auf der ersten Ebene des Consent-Banners vorhanden"
+    pruefung: "Im Banner-Container nach Button mit Text /ablehnen|nur notwendig|reject/i
+      suchen, ohne vorherige Interaktion"
+    automatisierbar: true
+  - merkmal: "Optische Gleichrangigkeit von Zustimmen und Ablehnen"
+    pruefung: "Fläche, Hintergrundfarbe und Kontrastverhältnis beider Buttons vergleichen"
+    automatisierbar: true
+  - merkmal: "Keine nicht-notwendigen Cookies vor Interaktion"
+    pruefung: "Frischer Browserkontext, Seite laden, keine Interaktion, document.cookie
+      und Storage gegen Liste bekannter Tracker abgleichen"
+    automatisierbar: true
+  - merkmal: "Keine Drittanbieter-Requests vor Interaktion"
+    pruefung: "Netzwerkmitschnitt vor erster Interaktion, Third-Party-Domains auflisten"
+    automatisierbar: true
+  - merkmal: "Bewertung, ob ein Cookie technisch notwendig ist"
+    pruefung: "manuell — rechtliche Wertung, nicht automatisierbar"
+    automatisierbar: false
+
+sicherheit: hoch
+uneinigkeit: null
+geprueft_von: "Claude (Recherche + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

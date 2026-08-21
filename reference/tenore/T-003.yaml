@@ -1,0 +1,190 @@
+id: T-003
+quelle: urteil
+gericht_az: "OLG Bamberg, 3 UKl 11/24 e"
+datum: "2025-02-05"
+fundstelle_url: "https://www.gesetze-bayern.de/Content/Document/Y-300-Z-GRURRS-B-2025-N-6221"
+fundstelle_zusatz: "GRUR-RR 2025, 238; CR 2025, 470; VuR 2025, 225. PDF (Scan): https://www.vzbv.de/sites/default/files/2025-03/OLG%20Bamberg_05.02.2025.pdf"
+rechtskraeftig: false
+rechtskraft_hinweis: "Revision nicht zugelassen; Verfahren beim BGH unter I ZR 56/25 anhängig. Vor Verwendung Verfahrensstand prüfen."
+parteien:
+  klaeger: "Verbraucherzentrale Bundesverband e.V. (vzbv)"
+  beklagte: "CTS Eventim AG & Co. KGaA"
+zitat_geprueft: true
+zitat_quelle: "gesetze-bayern.de, Volltext, abgerufen 2026-08-21"
+
+# --- Was war der Fall ---
+sachverhalt: >
+  Im Warenkorb wurde eine kostenpflichtige Ticketversicherung zentriert und mit blauem
+  Hintergrund hervorgehoben angeboten. Wählte der Besteller sie nicht aus und klickte
+  auf „Weiter zur Kasse“, öffnete sich ein Pop-up, in dem der Abschluss erneut empfohlen
+  wurde. Zur Auswahl standen ein weiß unterlegter Button „ich trage das volle Risiko“
+  und ein blau unterlegter Button mit dem Versicherungsangebot.
+fallgruppe: dark_pattern_dsa
+verstoss_modus: irrefuehrend_gestaltet
+kanal:
+  - website
+rechtsgrundlage:
+  - norm: "§ 2 Abs. 1 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 3 Abs. 2 UWG"
+    funktion: anspruchsbegruendend
+  - norm: "§ 4a Abs. 1 S. 2 Nr. 3, S. 3 UWG"
+    funktion: anspruchsbegruendend
+  - norm: "Art. 25 Abs. 1, Abs. 3 DSA (VO (EU) 2022/2065)"
+    funktion: auslegungsmassstab
+    anmerkung: >
+      WICHTIG: Das Gericht hat Art. 25 DSA gerade NICHT unmittelbar angewendet
+      (Bereichsausnahme Art. 25 Abs. 2 DSA zugunsten der UGP-RL). Art. 25 DSA wirkt
+      nur über § 3 Abs. 2 und § 4a UWG als Auslegungsmaßstab. Wer § 2 Abs. 2 Nr. 57
+      UKlaG i.V.m. Art. 25 DSA als Anspruchsgrundlage in den Tenor schreibt, liegt
+      nach dieser Entscheidung falsch.
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+# --- Der Tenor (wörtlich, Ziffer 1) ---
+tenor_text: >
+  Die Beklagte wird verurteilt, es bei Meidung eines für jeden Fall der Zuwiderhandlung
+  vom Gericht festzusetzenden Ordnungsgeldes bis zu EUR 250.000,00, ersatzweise
+  Ordnungshaft, oder einer Ordnungshaft bis zu sechs Monaten, wobei die Ordnungshaft an
+  ihren jeweiligen gesetzlichen Vertretern zu vollziehen ist, und insgesamt zwei Jahre
+  nicht übersteigen darf, zu unterlassen, im Rahmen geschäftlicher Handlungen gegenüber
+  Verbrauchern im Internet unter https://www.eventim.de für den Kauf von Tickets zu
+  werben bzw. werben zu lassen und in diesem Zusammenhang gegenüber Verbrauchern, die im
+  Warenkorb eine angebotene kostenpflichtige Ticketversicherung nicht ausgewählt haben
+  und den Bestellvorgang über den Button „Weiter zur Kasse“ fortsetzen, ein Fenster
+  einzublenden, in dem die Verbraucher noch einmal zu einer Entscheidung über die
+  Ticketversicherung aufgefordert werden, wenn dies geschieht wie nachstehend abgebildet:
+  [Bildschirmabbildung im Urteil]
+verletzungsform_anlage: "In den Tenor eingebettete Bildschirmabbildung (Anlage K 2 / K 6)"
+
+teilabweisung:
+  vorhanden: true
+  beschreibung: >
+    Der erste Klageantrag — das Angebot der Ticketversicherung im Warenkorb blau
+    hervorzuheben (Anlage K 1 / K 5) — wurde ABGEWIESEN. Das Gericht bejahte zwar ein
+    „Framing“ i.S.v. Art. 25 Abs. 3 lit. a DSA (Rn. 32), verneinte aber die
+    Erheblichkeitsschwelle (Rn. 38): Der Ticketerwerb nehme grafisch mehr Raum ein,
+    die Alternative sei ohne Weiteres wahrnehmbar. Kosten gegeneinander aufgehoben.
+  lehre_fuer_tenorierung: >
+    Farbliche Hervorhebung allein trägt keinen Unterlassungstenor. Auch wiederholte
+    Nachfrage allein trägt ihn nicht (Rn. 45: „sanftes Nagging“). Erst die KOMBINATION
+    aus Nagging, Framing und dem angstauslösenden Ablehnungstext „ich trage das volle
+    Risiko“ überschritt die Schwelle (Rn. 50). Ein Dark-Pattern-Tenor muss deshalb
+    die Kombination beschreiben, nicht das Einzelmerkmal.
+
+# --- Warum der Tenor so aussieht ---
+tenor_bausteine:
+  - text: "es bei Meidung eines für jeden Fall der Zuwiderhandlung vom Gericht
+      festzusetzenden Ordnungsgeldes bis zu EUR 250.000,00, ersatzweise Ordnungshaft,
+      oder einer Ordnungshaft bis zu sechs Monaten, wobei die Ordnungshaft an ihren
+      jeweiligen gesetzlichen Vertretern zu vollziehen ist, und insgesamt zwei Jahre
+      nicht übersteigen darf"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-03
+    anmerkung: "Vollständigste Variante im Register — mit Zwei-Jahres-Obergrenze."
+  - text: "im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern"
+    funktion: adressatenkreis
+    baustein_id: B-AK-01
+  - text: "im Internet unter https://www.eventim.de für den Kauf von Tickets zu werben
+      bzw. werben zu lassen"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-04
+    anmerkung: >
+      „bzw. werben zu lassen“ erfasst Beauftragte und Dienstleister —
+      vgl. § 8 Abs. 2 UWG. Wichtiger Baustein, wird oft vergessen.
+  - text: "gegenüber Verbrauchern, die im Warenkorb eine angebotene kostenpflichtige
+      Ticketversicherung nicht ausgewählt haben und den Bestellvorgang über den Button
+      „Weiter zur Kasse“ fortsetzen"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-05
+    anmerkung: "Auslösebedingung — beschreibt den Zustand, in dem das Verbot greift."
+  - text: "ein Fenster einzublenden, in dem die Verbraucher noch einmal zu einer
+      Entscheidung über die Ticketversicherung aufgefordert werden"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-21
+  - text: "wenn dies geschieht wie nachstehend abgebildet"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-03
+    anmerkung: >
+      Hier trägt die Abbildung die volle Last. Ohne sie wäre der Tenor nach der
+      eigenen Begründung des Gerichts zu weit, weil einmaliges Nachfragen für sich
+      genommen zulässig ist.
+
+# --- Reichweite ---
+kerngleich_umfasst:
+  - beschreibung: "Pop-up mit demselben Aufbau, aber Ablehnungstext „ich verzichte auf
+      jeden Schutz“"
+    begruendung: >
+      Tragend ist nach Rn. 50 die angstauslösende Wirkung des Ablehnungstextes in
+      Verbindung mit dem Nagging, nicht die konkrete Wortwahl.
+    sicherheit: mittel
+  - beschreibung: "Dasselbe Pop-up für ein anderes Zusatzprodukt (z. B. Garantieverlängerung)
+      mit angstauslösendem Ablehnungstext"
+    begruendung: >
+      Der Tenor nennt ausdrücklich „Ticketversicherung“. Ein anderes Produkt ist vom
+      Wortlaut nicht erfasst.
+    sicherheit: niedrig
+    hinweis: "Eher nicht_umfasst — als Uneinigkeitsfall geführt."
+
+nicht_umfasst:
+  - beschreibung: "Blaue Hervorhebung des Versicherungsangebots im Warenkorb ohne Pop-up"
+    begruendung: >
+      Ausdrücklich abgewiesen (Rn. 39). Framing allein überschreitet die
+      Erheblichkeitsschwelle nicht.
+    sicherheit: hoch
+  - beschreibung: "Einmaliges Pop-up mit neutralem Ablehnungstext („Nein, danke“) und
+      gleich großen Buttons"
+    begruendung: >
+      Rn. 45: einmaliges Nachfragen ist zulässig. Rn. 47: gleich große Alternativen
+      sind kein unzulässiges Framing. Ohne den angstauslösenden Text fehlt das
+      tragende Element.
+    sicherheit: hoch
+  - beschreibung: "Dasselbe Pop-up in der Eventim-App"
+    begruendung: "Der Tenor nennt „im Internet unter https://www.eventim.de“."
+    sicherheit: hoch
+  - beschreibung: "Pop-up erscheint erst nach dem Klick auf „Zur Kasse“ auf einer
+      Folgeseite statt als eingeblendetes Fenster"
+    begruendung: >
+      Der Tenor untersagt, „ein Fenster einzublenden“. Eine eigenständige Zwischenseite
+      ist wortlautmäßig etwas anderes — Umgehungsrisiko.
+    sicherheit: mittel
+
+# --- Lernsignal ---
+nachtraeglich_bewertet:
+  zu_eng: ja
+  hinweis: >
+    Zwei erkennbare Verengungen:
+    (1) „im Internet unter https://www.eventim.de“ — App und weitere Domains
+        (eventim.ch, .at, White-Label-Shops) sind nicht erfasst.
+    (2) „ein Fenster einzublenden“ — eine als eigene Seite ausgeführte
+        Zwischenaufforderung ist wortlautmäßig kein eingeblendetes Fenster.
+    Für vergleichbare Fälle: technikneutraler Anwendungsbereich (B-AB-03) und
+    „ein Fenster oder eine Zwischenseite einzublenden oder anzuzeigen“.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+# --- Brücke zum Monitor ---
+pruefbare_merkmale:
+  - merkmal: "Interstitial nach Klick auf „Weiter zur Kasse“ ohne ausgewählte Versicherung"
+    pruefung: "Warenkorb befüllen, Versicherungs-Checkbox nicht setzen, Button klicken,
+      auf neu erscheinendes Element mit role=dialog / z-index-Overlay prüfen"
+    automatisierbar: true
+  - merkmal: "Ablehnungs-Button trägt angstauslösenden Text"
+    pruefung: "Text des Ablehnungs-Buttons gegen Wortliste prüfen (Risiko, Verzicht,
+      ungeschützt, volle Haftung). Nur Prüfhinweis, keine automatische Wertung"
+    automatisierbar: true
+    hinweis: "Die rechtliche Wertung bleibt zwingend beim Menschen."
+  - merkmal: "Optische Gleichwertigkeit der beiden Auswahl-Buttons"
+    pruefung: "Bounding-Box-Fläche und Kontrastverhältnis beider Buttons vergleichen"
+    automatisierbar: true
+  - merkmal: "Anzahl der Nachfragen im Bestellprozess"
+    pruefung: "manuell — vollständiger Bestellprozess bis zur Zahlung erforderlich"
+    automatisierbar: false
+
+sicherheit: hoch
+uneinigkeit: >
+  Bei „Dasselbe Pop-up für ein anderes Zusatzprodukt“ ist vertretbar, dies als
+  kerngleich zu behandeln (Schutzzweck) oder als neuen Sachverhalt (Wortlaut).
+  Uneinigkeit bewusst stehen gelassen, sicherheit auf niedrig gesetzt.
+geprueft_von: "Claude (Recherche + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

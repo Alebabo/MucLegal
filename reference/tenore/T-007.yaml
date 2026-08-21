@@ -1,0 +1,138 @@
+id: T-007
+quelle: urteil
+gericht_az: "OLG Frankfurt am Main, 6 U 206/23"
+datum: "2024-12-18"
+fundstelle_url: "https://www.bundesjustizamt.de/DE/Themen/Verbraucherrechte/VerbandsklageregisterMusterfeststellungsklagenregister/Verbandsklagenregister/Unterlassungsklagen/Klagen/2024/056/UKlag_56_2024_node.html"
+fundstelle_hinweis: >
+  Amtliche Bekanntmachung im Verbandsklagenregister des Bundesamts für Justiz.
+  Dort wird der Antragswortlaut öffentlich bekanntgemacht — die beste frei zugängliche
+  Quelle für Tenorwortlaute überhaupt.
+rechtskraeftig: unbekannt
+parteien:
+  klaeger: "Verbraucherzentrale Thüringen e.V."
+  beklagte: "DB Fernverkehr AG"
+zitat_geprueft: teilweise
+zitat_quelle: >
+  Übernommen aus der Team-Datei „Unterlassungstenore Referenzsammlung.md”. Der Wortlaut
+  enthält Auslassungen ([...]). Am Volltext des Verbandsklagenregisters GEGENPRÜFEN und
+  Auslassungen schließen.
+
+sachverhalt: >
+  Die Beklagte verwendete bei BahnCard-Verträgen gegenüber Verbrauchern eine Klausel,
+  nach der sich die BahnCard automatisch um ein weiteres Jahr verlängert, wenn sie nicht
+  sechs Wochen vor Laufzeitende schriftlich gekündigt wird.
+fallgruppe: agb_klausel
+verstoss_modus: klausel_verwendet
+kanal:
+  - website
+rechtsgrundlage:
+  - norm: "§ 1 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 309 Nr. 9 BGB"
+    funktion: anspruchsbegruendend
+    anmerkung: "Beim Gegenprüfen verifizieren; auch § 307 BGB und § 13 BGB kommen in Betracht."
+  - norm: "§ 11 UKlaG"
+    funktion: wirkung_altvertraege
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+tenor_text: >
+  Die Beklagte wird verurteilt, es [...] zu unterlassen, bei BahnCard-Verträgen [...]
+  die nachfolgende oder eine inhaltsgleiche Klausel gegenüber Verbrauchern (§ 13 BGB)
+  zu verwenden oder sich auf eine solche Klausel zu berufen:
+  „Sie wird automatisch um ein weiteres Jahr verlängert, wenn sie nicht 6 Wochen vor
+  Laufzeitende schriftlich gekündigt wird."
+tenor_luecken: >
+  Zwei Auslassungen: (1) die Ordnungsmittelandrohung, (2) eine Präzisierung nach
+  „bei BahnCard-Verträgen”. Beide im Verbandsklagenregister nachtragen.
+verletzungsform_anlage: "Klauselwortlaut im Tenor selbst"
+
+tenor_bausteine:
+  - text: "[Ordnungsmittelandrohung — im vorliegenden Auszug ausgelassen]"
+    funktion: ordnungsmittelandrohung
+    baustein_id: null
+    anmerkung: "LÜCKE — nachtragen."
+  - text: "gegenüber Verbrauchern (§ 13 BGB)"
+    funktion: adressatenkreis
+    baustein_id: B-AK-02
+    anmerkung: >
+      Mit Normverweis. Präziser als das bloße „gegenüber Verbrauchern”, weil im
+      Vollstreckungsverfahren der Verbraucherbegriff nicht mehr auslegungsbedürftig ist.
+  - text: "bei BahnCard-Verträgen"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-07
+  - text: "die nachfolgende oder eine inhaltsgleiche Klausel [...] zu verwenden"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-42
+  - text: "oder sich auf eine solche Klausel zu berufen"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-43
+    anmerkung: >
+      DER DOPPELAUSSPRUCH. Der wichtigste Einzelbaustein für § 1 UKlaG-Fälle.
+      Ohne ihn bleiben Altverträge unberührt (§ 11 UKlaG). Fehlt in T-005 und T-006.
+  - text: "„Sie wird automatisch um ein weiteres Jahr verlängert, wenn sie nicht
+      6 Wochen vor Laufzeitende schriftlich gekündigt wird.“"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-04
+
+kerngleich_umfasst:
+  - beschreibung: "Verlängerung um zwölf Monate statt um ein Jahr"
+    begruendung: "Inhaltlich identisch; von „oder eine inhaltsgleiche Klausel” erfasst."
+    sicherheit: hoch
+  - beschreibung: "Kündigungsfrist auf einen Monat verkürzt, automatische Verlängerung
+      um ein Jahr bleibt"
+    begruendung: >
+      Tragendes Element ist die automatische Jahresverlängerung. Ob die Fristverkürzung
+      die Inhaltsgleichheit entfallen lässt, hängt vom Grund der Unwirksamkeit ab —
+      beim Gegenprüfen der Entscheidungsgründe klären.
+    sicherheit: mittel
+  - beschreibung: "Beibehaltung der Klausel in laufenden BahnCard-Verträgen und
+      Abrechnung der Verlängerung"
+    begruendung: "Ausdrücklich erfasst durch „oder sich auf eine solche Klausel zu berufen”."
+    sicherheit: hoch
+
+nicht_umfasst:
+  - beschreibung: "Automatische Verlängerung auf unbestimmte Zeit mit monatlicher
+      Kündigungsmöglichkeit"
+    begruendung: >
+      Entspricht der gesetzlichen Vorgabe des § 309 Nr. 9 BGB n.F.; der beanstandete
+      Regelungsgehalt entfällt.
+    sicherheit: hoch
+  - beschreibung: "Dieselbe Klausel in einem anderen Produkt der Beklagten
+      (z. B. Abo-Ticket)"
+    begruendung: "Der Anwendungsbereich nennt „bei BahnCard-Verträgen”."
+    sicherheit: mittel
+  - beschreibung: "Dieselbe Klausel gegenüber Geschäftskunden"
+    begruendung: "Auf Verbraucher i.S.d. § 13 BGB begrenzt."
+    sicherheit: hoch
+
+nachtraeglich_bewertet:
+  zu_eng: nein
+  hinweis: >
+    Strukturell der beste Klausel-Tenor im Register: Doppelausspruch (verwenden UND
+    berufen) plus Inhaltsgleichheits-Formel plus Verbraucherbegriff mit Normverweis.
+    Einzige erkennbare Verengung: die Bindung an ein einzelnes Produkt
+    („bei BahnCard-Verträgen”). Ob das im konkreten Fall geboten war, lässt sich ohne
+    die Entscheidungsgründe nicht beurteilen.
+    Dieser Tenor sollte im System die Vorlage für die Fallgruppe agb_klausel sein.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+pruefbare_merkmale:
+  - merkmal: "Verlängerungsklausel in den aktuellen Beförderungsbedingungen"
+    pruefung: "AGB-/BB-Seite abrufen, Suche nach /verlängert sich|automatisch um ein
+      (weiteres )?Jahr|zwölf Monate/"
+    automatisierbar: true
+  - merkmal: "Darstellung der Laufzeit im Bestellprozess"
+    pruefung: "Produktseite und Checkout auf Laufzeit- und Verlängerungsangaben prüfen"
+    automatisierbar: true
+  - merkmal: "Berufen auf die Klausel gegenüber Bestandskunden"
+    pruefung: >
+      manuell — nur über Verbraucherbeschwerden feststellbar. Zugleich der
+      praktisch wichtigste Prüfpunkt, weil dort der Doppelausspruch wirkt.
+    automatisierbar: false
+
+sicherheit: mittel
+uneinigkeit: null
+geprueft_von: "Claude (Übernahme aus Team-Sammlung + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false
