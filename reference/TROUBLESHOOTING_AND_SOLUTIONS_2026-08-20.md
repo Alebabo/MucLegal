@@ -1,6 +1,6 @@
 # BeweisLab: Fehlerbilder und Lösungen
 
-Stand: 20.08.2026
+Stand: 21.08.2026
 Betriebsart: ausschließlich lokal unter `http://127.0.0.1:8000/beweis-labor`
 
 ## Diagnose-Reihenfolge
@@ -672,3 +672,90 @@ powershell -ExecutionPolicy Bypass -File scripts/start-local-beweislab.ps1
 
 Danach `/beweis-labor` öffnen und URL-Feld, Automatikschalter, Prüfverlauf,
 Vollständigkeitsstatus, Kachelgalerie, Originaldownload, Info-Popover und ZIP prüfen.
+
+## Temu- und Adidas-Rechtstextpfade fehlten bei Start auf der Domainwurzel
+
+### Symptom
+
+Ein BeweisLab-Lauf mit `https://www.temu.com/` prüfte neun allgemeine
+Rechtstextpfade, aber nicht die bekannte deutsche AGB-URL
+`https://www.temu.com/de/terms-of-use.html`. Entsprechend konnte auch
+`https://www.temu.com/de/privacy-policy.html` fehlen. Für Adidas konnte
+`https://www.adidas.de/terms_and_conditions` übersehen werden, wenn der Link
+nicht im gespeicherten HTML stand.
+
+### Ursache und Diagnose
+
+`_legal_subpage_candidates` leitete eine Sprachkennung nur aus dem ersten
+Segment der eingegebenen URL ab. Bei der Domainwurzel `/` gab es kein Segment
+`de`; deshalb entstanden nur nicht lokalisierte Standardpfade. Der gespeicherte
+Temu-`protection_report.json` bestätigte, dass die beiden `/de/`-Ziele im
+betroffenen Lauf nicht geprüft wurden. Die bereitgestellte Temu-`robots.txt`
+enthält für den Projekt-User-Agent kein Verbot dieser Rechtstextpfade; sie war
+nicht die Ursache.
+
+### Lösung
+
+Eine kleine zentrale Zuordnung priorisiert jetzt für passende Hosts immer die
+belegten öffentlichen Ziele:
+
+- `temu.com`: `/de/terms-of-use.html` und `/de/privacy-policy.html`,
+- `adidas.de`: `/terms_and_conditions`.
+
+Die Zuordnung gilt sowohl für die normale Rechtstextsuche als auch für den
+Schutzseiten-Fallback. Bekannte Website-Pfade stehen jeweils vor allgemeinen
+Pfadkandidaten und werden in `legal_pages.json` mit
+`source: known_site_public_path` ausgewiesen.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests prüfen Domainwurzel, lokalisierte Temu-URL, Kandidatenreihenfolge
+und die Ausgabe in `legal_pages.json`. Die Änderung stellt nur sicher, dass die
+richtige URL versucht und dokumentiert wird. Liefert Temu oder Adidas dort eine
+JavaScript-Challenge, einen leeren Browserzustand, Login oder sonstigen
+Seitenschutz, bleibt der Lauf weiterhin ehrlich begrenzt; es wird keine
+Schutzmaßnahme umgangen.
+
+## Rechtstext-Fallback fehlte bei allgemeinen Erfassungsfehlern und im God Mode
+
+### Symptom
+
+Die öffentlichen AGB- und Datenschutzpfade wurden nur dann als Ausweichziele
+geprüft, wenn der Hauptseitenfehler zuvor ausdrücklich als Seitenschutz erkannt
+worden war. Endete die Browser-Erfassung dagegen mit leerem Text, einem
+Verbindungsfehler oder einer sonstigen technischen Ausnahme, erzeugte der
+Workflow unmittelbar ein Fehlerpaket. Das galt auch für einen fehlgeschlagenen
+God-Mode-Lauf.
+
+### Ursache und Diagnose
+
+Der Rechtstext-Fallback war in `_run_impl` ausschließlich an den Fehlercode
+`protected_or_login_page` gekoppelt. Der allgemeine Abschluss in `run` kannte
+nur das terminale Fehlerpaket. Der Temu-Lauf mit leerem Browserzustand bestätigte
+diesen Pfad: Das Paket enthielt den Hauptseitenfehler, aber keine Liste der
+anschließend geprüften AGB- und Datenschutzziele.
+
+### Lösung
+
+Vor dem allgemeinen Fehlerabschluss startet für jede gültige HTTP(S)-Zielseite
+jetzt derselbe begrenzte Rechtstext-Fallback. Er prüft die bekannten und
+allgemeinen öffentlichen AGB- und Datenschutzpfade; Kindläufe dürfen den
+Fallback nicht erneut starten. Ein bereits vorhandener Browser-Screenshot des
+Fehlerzustands bleibt erhalten. Schutz-, Normalisierungs- und sonstige
+Technikfehler werden im Paket getrennt bezeichnet. Auch God Mode nutzt diesen
+Weg, behält aber seine getrennte Speicherung und den Hinweis
+`GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`.
+
+Der Fallback startet bewusst nicht bei ungültigen URLs, eingebetteten
+Zugangsdaten, privaten Zielen oder einer ausdrücklichen Ablehnung durch
+`robots.txt`. Dadurch werden die bestehenden Zugriffsgrenzen nicht ausgeweitet.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests bestätigen den Fallback nach leerem Direkt- und Browserinhalt,
+die erhaltene Fehleraufnahme, die Temu-Reihenfolge mit
+`/de/terms-of-use.html` und `/de/privacy-policy.html` sowie die Weitergabe des
+God-Mode-Status. Sind auch diese Unterseiten blockiert oder technisch leer,
+enthält das Hinweispaket die vollständig geprüfte Pfadliste und die einzelnen
+Fehler. Das ist ein Nachweis des Erfassungsversuchs, kein Beweis für den Inhalt
+oder das Fehlen einer Klausel.

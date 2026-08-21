@@ -228,6 +228,63 @@ class LiveWorkflowTests(unittest.TestCase):
             legal_pages["datenschutz"][0]["url"],
         )
 
+    def test_known_site_legal_paths_are_always_discovered(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "page.html"
+            html_path.write_text(
+                "<html><body><main>Öffentliche Seite</main></body></html>",
+                encoding="utf-8",
+            )
+
+            temu_path = root / "temu-legal-pages.json"
+            _discover_legal_pages(html_path, "https://www.temu.com/", temu_path)
+            temu = json.loads(temu_path.read_text(encoding="utf-8"))
+
+            adidas_path = root / "adidas-legal-pages.json"
+            _discover_legal_pages(html_path, "https://www.adidas.de/", adidas_path)
+            adidas = json.loads(adidas_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            "https://www.temu.com/de/terms-of-use.html", temu["agb"][0]["url"]
+        )
+        self.assertEqual(
+            "https://www.temu.com/de/privacy-policy.html",
+            temu["datenschutz"][0]["url"],
+        )
+        self.assertEqual("known_site_public_path", temu["agb"][0]["source"])
+        self.assertEqual(
+            "https://www.adidas.de/terms_and_conditions", adidas["agb"][0]["url"]
+        )
+        self.assertEqual("known_site_public_path", adidas["agb"][0]["source"])
+
+    def test_failure_discovery_keeps_one_agb_and_privacy_fallback_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            html_path = root / "page.html"
+            html_path.write_text(
+                "<html><body><main>Erreichbare Rechtstext-Unterseite</main></body></html>",
+                encoding="utf-8",
+            )
+            output_path = root / "legal-pages.json"
+            _discover_legal_pages(
+                html_path,
+                "https://shop.example/terms",
+                output_path,
+                fallback_source_url="https://shop.example/",
+            )
+            legal_pages = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("https://shop.example/terms-of-use.html", legal_pages["agb"][0]["url"])
+        self.assertEqual(
+            "https://shop.example/privacy-policy.html",
+            legal_pages["datenschutz"][0]["url"],
+        )
+        self.assertEqual("fallback_public_path", legal_pages["agb"][0]["source"])
+        self.assertEqual(
+            "fallback_public_path", legal_pages["datenschutz"][0]["source"]
+        )
+
     def test_empty_main_creates_terminal_result_instead_of_normalization_exception(self) -> None:
         with tempfile.TemporaryDirectory() as output, LiveServer() as server:
             _LiveHandler.page = b"<html><body><main></main></body></html>"
@@ -244,10 +301,22 @@ class LiveWorkflowTests(unittest.TestCase):
             run_result = json.loads(
                 Path(case["artifacts"]["run_result"]).read_text(encoding="utf-8")
             )
+            protection = json.loads(
+                Path(case["artifacts"]["protection_report"]).read_text(encoding="utf-8")
+            )
 
         self.assertEqual("completed_with_warnings", result.status)
         self.assertEqual("nicht_erfassbar", case["technical_result"]["code"])
         self.assertEqual("normalization_error", run_result["failure_code"])
+        self.assertTrue(
+            any("terms" in url or url.endswith("/agb") for url in protection["checked_subpages"])
+        )
+        self.assertTrue(
+            any(
+                "privacy" in url or url.endswith("/datenschutz")
+                for url in protection["checked_subpages"]
+            )
+        )
 
     def test_robots_disallow_creates_terminal_refusal_record(self) -> None:
         with tempfile.TemporaryDirectory() as output, LiveServer() as server:
@@ -408,7 +477,50 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn("requested", case["capture_galleries"])
         self.assertEqual("normalization_error", run_result["failure_code"])
         self.assertIn("NormalizationError", protection["technical_error"])
+        self.assertEqual(
+            [
+                "https://www.temu.com/de/terms-of-use.html",
+                "https://www.temu.com/de/privacy-policy.html",
+            ],
+            protection["checked_subpages"][:2],
+        )
         self.assertNotIn("NormalizationError", result.message)
+
+    def test_god_mode_failure_still_starts_public_legal_page_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            fallback_result = LiveWorkflowResult(
+                "completed_with_warnings", "Rechtstext-Fallback abgeschlossen."
+            )
+            with patch.object(
+                workflow,
+                "_run_impl",
+                side_effect=NormalizationError(
+                    "Die konfigurierte Extraktion ergab keinen relevanten Text."
+                ),
+            ), patch.object(
+                workflow,
+                "_try_public_legal_subpages",
+                return_value=fallback_result,
+            ) as fallback:
+                result = workflow.run(
+                    "https://www.temu.com/",
+                    capture_baseline=True,
+                    browser_mode=True,
+                    god_mode=True,
+                )
+
+        self.assertIs(fallback_result, result)
+        self.assertEqual("https://www.temu.com/", fallback.call_args.args[0])
+        self.assertTrue(fallback.call_args.kwargs["god_mode"])
+        self.assertEqual("leerer_browserzustand", fallback.call_args.kwargs["failure_kind"])
+        self.assertEqual("normalization_error", fallback.call_args.kwargs["failure_code"])
 
     def test_authorized_god_mode_is_separate_marked_and_ignores_robots(self) -> None:
         from PIL import Image
@@ -1724,12 +1836,25 @@ class LiveUiTests(unittest.TestCase):
 
     def test_legal_fallback_candidates_keep_origin_and_locale(self) -> None:
         candidates = _legal_subpage_candidates("https://www.temu.com/de")
-        self.assertIn("https://www.temu.com/de/terms-of-use.html", candidates)
+        self.assertEqual("https://www.temu.com/de/terms-of-use.html", candidates[0])
         self.assertIn("https://www.temu.com/de/privacy-policy.html", candidates)
         self.assertIn("https://www.temu.com/de-en/privacy-policy.html", candidates)
         self.assertIn("https://www.temu.com/policies/terms-of-service", candidates)
         self.assertIn("https://www.temu.com/policies/privacy-policy", candidates)
         self.assertTrue(all(url.startswith("https://www.temu.com/") for url in candidates))
+
+        root_candidates = _legal_subpage_candidates("https://www.temu.com/")
+        self.assertEqual(
+            "https://www.temu.com/de/terms-of-use.html", root_candidates[0]
+        )
+        self.assertEqual(
+            "https://www.temu.com/de/privacy-policy.html", root_candidates[1]
+        )
+
+        adidas_candidates = _legal_subpage_candidates("https://www.adidas.de/")
+        self.assertEqual(
+            "https://www.adidas.de/terms_and_conditions", adidas_candidates[0]
+        )
 
 
 if __name__ == "__main__":

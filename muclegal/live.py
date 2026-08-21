@@ -49,6 +49,15 @@ ROBOTS_UNCHECKED_NOTICE = (
     "eigenverantwortlich zu prüfen."
 )
 GOD_MODE_NOTICE = "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR"
+KNOWN_SITE_LEGAL_PATHS: dict[str, dict[str, tuple[str, ...]]] = {
+    "temu.com": {
+        "agb": ("/de/terms-of-use.html",),
+        "datenschutz": ("/de/privacy-policy.html",),
+    },
+    "adidas.de": {
+        "agb": ("/terms_and_conditions",),
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -187,6 +196,33 @@ class LiveMonitorWorkflow:
         except Exception as exc:
             if not (capture_baseline and allow_protected_fallback):
                 raise
+            fallback_url = blocked_source_url or url
+            if _can_attempt_public_legal_fallback(fallback_url, exc):
+                failure_kind = _legal_fallback_failure_kind(exc)
+                failure_code = _legal_fallback_failure_code(exc)
+                problem_type = _legal_fallback_problem_type(exc)
+                progress(
+                    "legal_pages",
+                    "Die Hauptseite konnte nicht regulär erfasst werden. Vor dem Abschluss "
+                    "werden öffentliche AGB- und Datenschutzpfade geprüft.",
+                )
+                try:
+                    return self._try_public_legal_subpages(
+                        fallback_url,
+                        problem_type,
+                        progress,
+                        browser_mode=browser_mode,
+                        blocked_source_url=fallback_url,
+                        blocked_source_type=problem_type,
+                        god_mode=god_mode,
+                        failure_kind=failure_kind,
+                        failure_code=failure_code,
+                        technical_error=f"{type(exc).__name__}: {exc}",
+                    )
+                except Exception:
+                    # The original terminal record remains the authoritative failure
+                    # if even the bounded legal-page fallback cannot be packaged.
+                    pass
             progress(
                 "manifest",
                 "Der vorhandene Seiten- oder Fehlerzustand wird als abgeschlossenes Hinweispaket gesichert.",
@@ -302,6 +338,7 @@ class LiveMonitorWorkflow:
             snapshot.raw_html_path,
             outcome.url,
             Path(snapshot.raw_html_path).parent / "legal-pages.json",
+            fallback_source_url=blocked_source_url,
         )
         screenshot: ScreenshotCapture | None = None
         screenshot_error: str | None = None
@@ -1350,14 +1387,25 @@ class LiveMonitorWorkflow:
         blocked_source_url: str,
         blocked_source_type: str,
         god_mode: bool = False,
+        failure_kind: str = "schutzseite",
+        failure_code: str | None = None,
+        technical_error: str | None = None,
     ) -> LiveWorkflowResult:
         progress(
             "legal_pages",
-            f"Seitenschutz erkannt ({protection_type}) Direkt öffentliche AGB- und Datenschutzseiten werden einzeln geprüft.",
+            f"Hauptseite nicht regulär erfassbar ({protection_type}) Direkt öffentliche "
+            "AGB- und Datenschutzseiten werden einzeln geprüft.",
         )
-        protected_screenshot: ScreenshotCapture | None = None
+        browser_capture = getattr(self.fetcher, "last_browser_capture", None)
+        browser_screenshot = getattr(browser_capture, "screenshot", None)
+        protected_screenshot: ScreenshotCapture | None = (
+            browser_screenshot
+            if browser_screenshot is not None
+            and Path(getattr(browser_screenshot, "path", "")).is_file()
+            else None
+        )
         screenshot_failure: str | None = None
-        if self.screenshot_capturer is not None:
+        if protected_screenshot is None and self.screenshot_capturer is not None:
             progress(
                 "screenshot",
                 "Der sichtbare Zustand der eingegebenen Hauptseite wird getrennt festgehalten.",
@@ -1423,6 +1471,9 @@ class LiveMonitorWorkflow:
             failures=failures,
             progress=progress,
             god_mode=god_mode,
+            failure_kind=failure_kind,
+            failure_code=failure_code,
+            technical_error=technical_error,
         )
 
     def _capture_protection_evidence(
@@ -1436,6 +1487,9 @@ class LiveMonitorWorkflow:
         failures: list[str],
         progress: ProgressCallback,
         god_mode: bool = False,
+        failure_kind: str = "schutzseite",
+        failure_code: str | None = None,
+        technical_error: str | None = None,
     ) -> LiveWorkflowResult:
         """Create a reviewable package even when every public target remains protected."""
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -1452,6 +1506,9 @@ class LiveMonitorWorkflow:
             {
                 "requested_url": protected_url,
                 "protection_type": protection_type,
+                "failure_kind": failure_kind,
+                "failure_code": failure_code,
+                "technical_error": technical_error,
                 "verification_mode": browser_mode,
                 "result": "manual_capture_required",
                 "checked_subpages": candidates,
@@ -1474,7 +1531,7 @@ class LiveMonitorWorkflow:
             bundled_artifacts=bundled_artifacts,
             role_captures={"main": None, "requested": protected_screenshot},
             legal_screenshot_statuses={},
-            protection_type=protection_type,
+            protection_type=(protection_type if failure_kind == "schutzseite" else None),
             requested_url=protected_url,
             captured_url=protected_url,
             browser_run_root=getattr(self.fetcher, "last_capture_run_root", None),
@@ -1485,6 +1542,20 @@ class LiveMonitorWorkflow:
             "reason": "Kein dahinterliegender Seiteninhalt für WARC erfasst.",
         }
         _write_json(capture_metrics_path, protection_metrics)
+        if failure_kind != "schutzseite":
+            capture_completeness = "technisch_fehlgeschlagen"
+            run_result_path = bundled_artifacts["run_result"]
+            run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+            run_result.update({
+                "status": capture_completeness,
+                "failure_code": failure_code or "technical_failure",
+                "failure_kind": failure_kind,
+            })
+            _write_json(run_result_path, run_result)
+            capture_index_path = bundled_artifacts["capture_index"]
+            capture_index = json.loads(capture_index_path.read_text(encoding="utf-8"))
+            capture_index["capture_completeness"] = capture_completeness
+            _write_json(capture_index_path, capture_index)
 
         transparency_path = artifacts_dir / "capture_transparency.yaml"
         robots_metadata = self.fetcher.robots_metadata()
@@ -1499,8 +1570,10 @@ class LiveMonitorWorkflow:
         )
         protection_transparency = {
             "erfassungsmodus": (
-                "browsergestuetzter_schutzbefund" if browser_mode
-                else "direkter_http_schutzbefund"
+                "browsergestuetzter_schutzbefund" if browser_mode and failure_kind == "schutzseite"
+                else "direkter_http_schutzbefund" if failure_kind == "schutzseite"
+                else "browsergestuetzter_fehlerbefund" if browser_mode
+                else "direkter_fehlerbefund"
             ),
             "user_agent": self.fetcher.policy.user_agent,
             "navigator.webdriver": None,
@@ -1520,7 +1593,10 @@ class LiveMonitorWorkflow:
             "god_mode": god_mode,
             "god_mode_notice": GOD_MODE_NOTICE if god_mode else None,
             "angefragte_url": protected_url,
-            "seitenschutz": protection_type,
+            "seitenschutz": protection_type if failure_kind == "schutzseite" else None,
+            "technisches_problem": (
+                protection_type if failure_kind != "schutzseite" else None
+            ),
             "tatsaechlich_erfasste_url": None,
             "gepruefte_rechtstext_unterseiten": len(candidates),
             "herkunft": "eigene_infrastruktur_ohne_proxy",
@@ -1586,9 +1662,12 @@ class LiveMonitorWorkflow:
             robots_status=str(protection_transparency.get("robots_txt") or ""),
             failure_code=(
                 "captcha" if "captcha" in protection_type.casefold() else
-                "login_required" if "login" in protection_type.casefold() else None
+                "login_required" if "login" in protection_type.casefold() else
+                failure_code or (
+                    "normalization_error" if failure_kind == "leerer_browserzustand" else None
+                )
             ),
-            failure_kind="schutzseite",
+            failure_kind=failure_kind,
             god_mode=god_mode,
         )
         result_assessment_path = artifacts_dir / "result-assessment.json"
@@ -1617,7 +1696,11 @@ class LiveMonitorWorkflow:
         assessment = {
             "ergebnis": "nicht_bewertet",
             "confidence": 0.0,
-            "begruendung": "Seitenschutz verhinderte eine inhaltliche Erfassung.",
+            "begruendung": (
+                "Seitenschutz verhinderte eine inhaltliche Erfassung."
+                if failure_kind == "schutzseite" else
+                "Ein technisches Problem verhinderte eine inhaltliche Erfassung der Hauptseite."
+            ),
             "tatsachenbasis": [
                 protection_type,
                 f"{len(candidates)} direkte Rechtstext-Unterseiten geprüft.",
@@ -1662,7 +1745,11 @@ class LiveMonitorWorkflow:
             "url": protected_url,
             "erkannt_am": datetime.now(timezone.utc).isoformat(),
             "vorher": "Kein Vorherzustand.",
-            "nachher": "Inhalt wegen Seitenschutz nicht erfasst.",
+            "nachher": (
+                "Inhalt wegen Seitenschutz nicht erfasst."
+                if failure_kind == "schutzseite" else
+                "Inhalt der Hauptseite wegen eines technischen Problems nicht erfasst."
+            ),
             "assessment": assessment,
             "evidence": evidence,
             "evidence_suitability": evidence_suitability,
@@ -1671,7 +1758,11 @@ class LiveMonitorWorkflow:
         }
         report_path = Path(self.report_builder(report_data, bundle / "pruefbericht.pdf"))
         warnings = [
-            f"SEITENSCHUTZ ERKANNT: {protection_type}",
+            (
+                f"SEITENSCHUTZ ERKANNT: {protection_type}"
+                if failure_kind == "schutzseite" else
+                f"TECHNISCHES ERFASSUNGSPROBLEM: {protection_type}"
+            ),
             f"{len(failures)} Rechtstext-Unterseiten konnten nicht erfasst werden.",
         ]
         if robots_unchecked:
@@ -1683,12 +1774,16 @@ class LiveMonitorWorkflow:
         case_record = {
             **report_data,
             "tenor": self.tenor,
-            "capture_mode": "protected_review",
+            "capture_mode": (
+                "protected_review" if failure_kind == "schutzseite"
+                else "technical_failure_with_legal_fallback"
+            ),
             "capture_completeness": capture_completeness,
             "capture_galleries": capture_galleries,
             "requested_url": protected_url,
-            "blocked_url": protected_url,
-            "protection_type": protection_type,
+            "blocked_url": protected_url if failure_kind == "schutzseite" else None,
+            "protection_type": protection_type if failure_kind == "schutzseite" else None,
+            "failure_kind": failure_kind,
             "captured_url": None,
             "capture_transparency": protection_transparency,
             "technical_result": result_assessment.to_dict(),
@@ -2289,7 +2384,13 @@ def _god_mode_banner_font(image_font: Any, size: int) -> Any:
     return image_font.load_default(size=size)
 
 
-def _discover_legal_pages(raw_html_path: str | Path, source_url: str, output_path: Path) -> Path:
+def _discover_legal_pages(
+    raw_html_path: str | Path,
+    source_url: str,
+    output_path: Path,
+    *,
+    fallback_source_url: str | None = None,
+) -> Path:
     """Find linked legal pages in the captured HTML without following click paths."""
     raw_html = Path(raw_html_path).read_bytes()
     document = lxml_html.fromstring(raw_html)
@@ -2300,6 +2401,28 @@ def _discover_legal_pages(raw_html_path: str | Path, source_url: str, output_pat
     findings: dict[str, list[dict[str, Any]]] = {key: [] for key in categories}
     seen: dict[str, set[str]] = {key: set() for key in categories}
     source_host = (urlsplit(source_url).hostname or "").lower()
+    for category, candidates in _known_site_legal_urls(source_url).items():
+        for candidate in candidates:
+            seen[category].add(candidate)
+            findings[category].append({
+                "label": "Bekannter öffentlicher Rechtstextpfad für diese Website",
+                "url": candidate,
+                "same_domain": True,
+                "document_type": category,
+                "source": "known_site_public_path",
+            })
+    if fallback_source_url is not None:
+        for category, candidate in _fallback_legal_targets(fallback_source_url).items():
+            if candidate in seen[category]:
+                continue
+            seen[category].add(candidate)
+            findings[category].append({
+                "label": "AGB" if category == "agb" else "Datenschutzerklärung",
+                "url": candidate,
+                "same_domain": True,
+                "document_type": category,
+                "source": "fallback_public_path",
+            })
     for anchor in document.xpath("//a[@href]"):
         href = str(anchor.get("href") or "").strip()
         if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
@@ -2343,8 +2466,10 @@ def _discover_legal_pages(raw_html_path: str | Path, source_url: str, output_pat
     payload = {
         "source_url": source_url,
         "method": (
-            "Linksuche im gespeicherten HTML; bei erkannter Shopify-Seite zusätzlich "
-            "zwei bekannte öffentliche Rechtstextpfade; keine Klickpfade aufgerufen."
+            "Priorisierte bekannte öffentliche Website-Pfade und Linksuche im gespeicherten "
+            "HTML; bei erkannter Shopify-Seite zusätzlich zwei Plattformpfade; keine "
+            "Klickpfade aufgerufen. Bei einem Hauptseitenfehler wird je ein öffentlicher "
+            "AGB- und Datenschutzpfad als dokumentiertes Ausweichziel berücksichtigt."
         ),
         "agb": findings["agb"][:20],
         "datenschutz": findings["datenschutz"][:20],
@@ -2358,6 +2483,11 @@ def _legal_subpage_candidates(source_url: str) -> list[str]:
     origin = f"{parsed.scheme}://{parsed.netloc}"
     segments = [segment for segment in parsed.path.split("/") if segment]
     locale = segments[0] if segments and len(segments[0]) in {2, 5} else None
+    candidates = [
+        candidate
+        for category_candidates in _known_site_legal_urls(source_url).values()
+        for candidate in category_candidates
+    ]
     paths: list[str] = []
     if locale:
         paths.extend([
@@ -2374,7 +2504,72 @@ def _legal_subpage_candidates(source_url: str) -> list[str]:
         "/privacy-policy.html", "/privacy-and-cookie-policy.html", "/datenschutz",
         "/policies/terms-of-service", "/policies/privacy-policy",
     ])
-    return list(dict.fromkeys(urljoin(origin, path) for path in paths))
+    candidates.extend(urljoin(origin, path) for path in paths)
+    return list(dict.fromkeys(candidates))
+
+
+def _fallback_legal_targets(source_url: str) -> dict[str, str]:
+    targets: dict[str, str] = {}
+    for candidate in _legal_subpage_candidates(source_url):
+        role = _legal_role_for_url(candidate)
+        category = "datenschutz" if role == "privacy" else role
+        if category in {"agb", "datenschutz"}:
+            targets.setdefault(category, candidate)
+        if len(targets) == 2:
+            break
+    return targets
+
+
+def _can_attempt_public_legal_fallback(source_url: str, error: Exception) -> bool:
+    """Keep fallback bounded to valid web targets and never override access refusals."""
+    parsed = urlsplit(source_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    if isinstance(error, FetchFailure) and error.code in {
+        "credentials_in_url",
+        "invalid_url",
+        "non_public_target",
+        "robots_disallowed",
+    }:
+        return False
+    return True
+
+
+def _legal_fallback_failure_kind(error: Exception) -> str:
+    if isinstance(error, FetchFailure) and error.code == "protected_or_login_page":
+        return "schutzseite"
+    if isinstance(error, NormalizationError):
+        return "leerer_browserzustand"
+    return "technischer_fehler"
+
+
+def _legal_fallback_failure_code(error: Exception) -> str:
+    if isinstance(error, FetchFailure):
+        return error.code
+    if isinstance(error, NormalizationError):
+        return "normalization_error"
+    return "technical_failure"
+
+
+def _legal_fallback_problem_type(error: Exception) -> str:
+    if isinstance(error, FetchFailure):
+        return str(error).removeprefix("Abruf abgebrochen: ")
+    if isinstance(error, NormalizationError):
+        return "Kein relevanter Text aus dem HTTP- oder Browserzustand extrahierbar."
+    return f"{type(error).__name__}: {error}"
+
+
+def _known_site_legal_urls(source_url: str) -> dict[str, tuple[str, ...]]:
+    parsed = urlsplit(source_url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    for domain, categories in KNOWN_SITE_LEGAL_PATHS.items():
+        if host in {domain, f"www.{domain}"}:
+            return {
+                category: tuple(urljoin(origin, path) for path in paths)
+                for category, paths in categories.items()
+            }
+    return {}
 
 
 def _same_document_url(left: str, right: str) -> bool:
