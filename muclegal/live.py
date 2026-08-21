@@ -34,6 +34,7 @@ from muclegal.llm import (
     analyze_clause_pairs_and_store,
 )
 from muclegal.llm.analyzer import build_model_input
+from muclegal.llm.god_mode_summary import create_god_mode_editorial_analysis
 from muclegal.normalize import NormalizationConfig, NormalizationError, split_clauses
 from muclegal.clause_diff import pair_clause_changes
 from muclegal.pipeline import check_url
@@ -101,6 +102,7 @@ class LiveMonitorWorkflow:
         report_builder: Callable[[dict[str, Any], str | Path], str] = build_pdf_report,
         wayback_client: WaybackClient | None = None,
         screenshot_capturer: Callable[[str, Path], ScreenshotCapture] | None = None,
+        god_mode_editorial_builder: Callable[..., Any] = create_god_mode_editorial_analysis,
     ) -> None:
         self.store = Path(store).resolve()
         self.store.mkdir(parents=True, exist_ok=True)
@@ -122,6 +124,7 @@ class LiveMonitorWorkflow:
         self.report_builder = report_builder
         self.wayback_client = wayback_client or WaybackClient()
         self.screenshot_capturer = screenshot_capturer
+        self.god_mode_editorial_builder = god_mode_editorial_builder
 
     def use_approved_tenor(self, draft: TenorDraft) -> Path:
         """Persist a human-approved draft and make it the next run's monitoring tenor."""
@@ -956,6 +959,7 @@ class LiveMonitorWorkflow:
                     "browser_rendering",
                     "screenshots",
                     "normalisierung",
+                    "optionale_openai_redaktionelle_textanalyse",
                 ],
                 "notice": GOD_MODE_NOTICE,
             })
@@ -1045,6 +1049,44 @@ class LiveMonitorWorkflow:
                 "reason": warc_status,
             }
         _write_json(metrics_path, metrics_document)
+
+        editorial_analysis = None
+        if god_mode:
+            progress(
+                "anthropic",
+                "OpenAI erstellt kostenbegrenzt redaktionelle Zusammenfassungen der lokal "
+                "normalisierten Seitentexte; Primärartefakte werden nicht übertragen.",
+            )
+            try:
+                editorial_analysis = self.god_mode_editorial_builder(
+                    bundle=bundle,
+                    page_artifacts_index=bundled_artifacts["page_artifacts_index"],
+                    cache_directory=self.store / "god-mode-ai-cache",
+                    output_directory=bundle / "analysis" / "editorial",
+                )
+            except Exception as exc:
+                warnings.append(
+                    "Die optionale OpenAI-Zusammenfassung konnte nicht gestartet werden "
+                    f"({type(exc).__name__}); die lokalen Primärartefakte bleiben vollständig erhalten."
+                )
+            if editorial_analysis is not None:
+                bundled_artifacts.update(editorial_analysis.artifacts)
+            if editorial_analysis is not None and editorial_analysis.status in {
+                "failed",
+                "generated_with_errors",
+            }:
+                warnings.append(
+                    "Die optionale OpenAI-Zusammenfassung ist ganz oder teilweise fehlgeschlagen; "
+                    "die lokalen Primärartefakte bleiben vollständig erhalten."
+                )
+            elif (
+                editorial_analysis is not None
+                and editorial_analysis.status == "skipped_no_api_key"
+            ):
+                warnings.append(
+                    "Die optionale OpenAI-Zusammenfassung wurde ohne OPENAI_API_KEY "
+                    "übersprungen; die lokalen Primärartefakte wurden vollständig erzeugt."
+                )
 
         if god_mode:
             _mark_god_mode_bundle(bundle)
@@ -1167,7 +1209,20 @@ class LiveMonitorWorkflow:
             "god_mode_notice": GOD_MODE_NOTICE if god_mode else None,
             "evidence_suitability": evidence_suitability,
             "evidence_suitability_notice": evidence_suitability_notice,
-            "analysis_mode": "capture_only",
+            "analysis_mode": (
+                "capture_plus_non_evidentiary_editorial_summary"
+                if editorial_analysis is not None
+                and "god_mode_editorial_summary" in editorial_analysis.artifacts
+                else "capture_only"
+            ),
+            "editorial_analysis": (
+                {
+                    "status": editorial_analysis.status,
+                    "total_estimated_cost_usd": editorial_analysis.total_estimated_cost_usd,
+                    "pages": list(editorial_analysis.page_results),
+                }
+                if editorial_analysis is not None else None
+            ),
             "schema_valid": True,
             "snapshot_sha256": snapshot.normalized_sha256,
             "previous_snapshot_sha256": outcome.previous_sha256,
@@ -1189,6 +1244,12 @@ class LiveMonitorWorkflow:
                 *([] if outcome.previous_normalized_text_path else ["previous_normalized_text"]),
                 *([] if outcome.diff_path else ["diff"]),
                 "model_input", "model_output", "clause_model_input", "clause_model_output",
+                *(
+                    []
+                    if editorial_analysis is not None
+                    and "god_mode_editorial_summary" in editorial_analysis.artifacts
+                    else ["god_mode_editorial_summary"]
+                ),
             ],
             "artifacts": {
                 **{label: str(path) for label, path in bundled_artifacts.items()},
@@ -1212,13 +1273,24 @@ class LiveMonitorWorkflow:
         if robots_unchecked:
             message = ROBOTS_UNCHECKED_NOTICE
         if warnings:
+            visible_warning = next(
+                (warning for warning in warnings if "OPENAI_API_KEY" in warning),
+                warnings[0],
+            )
             message = (
-                GOD_MODE_NOTICE + " Technische Demonstrationserfassung abgeschlossen."
+                GOD_MODE_NOTICE + " Hinweis: " + visible_warning
                 if god_mode else ROBOTS_UNCHECKED_NOTICE if robots_unchecked else
                 "Beweiserfassung abgeschlossen; einzelne Beweiselemente sind offen."
             )
         states = {step: "success" for step in PIPELINE_STEPS}
-        states["anthropic"] = "skipped"
+        states["anthropic"] = (
+            "warning"
+            if editorial_analysis is not None
+            and editorial_analysis.status in {"failed", "generated_with_errors"}
+            else "success"
+            if editorial_analysis is not None and editorial_analysis.status == "generated"
+            else "skipped"
+        )
         if screenshot_error:
             states["screenshot"] = "warning"
         if "WARC konnte nicht vollständig erzeugt oder validiert werden." in warnings:

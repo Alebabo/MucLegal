@@ -159,6 +159,30 @@ class LiveWorkflowTests(unittest.TestCase):
     def test_authorized_god_mode_is_separate_marked_and_ignores_robots(self) -> None:
         from PIL import Image
 
+        def fake_editorial_builder(**kwargs):
+            output_directory = Path(kwargs["output_directory"])
+            output_directory.mkdir(parents=True, exist_ok=True)
+            summary = output_directory.parent / "god-mode-editorial-summary.md"
+            usage = output_directory.parent / "god-mode-ai-usage.json"
+            summary.write_text(
+                "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR\n\n"
+                "Redaktionelle Testzusammenfassung",
+                encoding="utf-8",
+            )
+            usage.write_text(
+                json.dumps({"total_api_calls": 0, "total_estimated_cost_usd": 0.0}),
+                encoding="utf-8",
+            )
+            return SimpleNamespace(
+                status="generated",
+                artifacts={
+                    "god_mode_editorial_summary": summary,
+                    "god_mode_ai_usage": usage,
+                },
+                page_results=(),
+                total_estimated_cost_usd=0.0,
+            )
+
         def fake_screenshot(url: str, destination: str | Path):
             del url
             path = Path(destination)
@@ -185,6 +209,7 @@ class LiveWorkflowTests(unittest.TestCase):
                 tsa_client=FakeTsaClient(),
                 report_builder=fake_report,
                 screenshot_capturer=fake_screenshot,
+                god_mode_editorial_builder=fake_editorial_builder,
             )
             result = workflow.run(
                 server.url,
@@ -199,6 +224,12 @@ class LiveWorkflowTests(unittest.TestCase):
             authorization = json.loads(
                 Path(case["artifacts"]["god_mode_authorization"]).read_text(encoding="utf-8")
             )
+            ai_usage = json.loads(
+                Path(case["artifacts"]["god_mode_ai_usage"]).read_text(encoding="utf-8")
+            )
+            editorial_summary = Path(
+                case["artifacts"]["god_mode_editorial_summary"]
+            ).read_text(encoding="utf-8")
             with Image.open(case["artifacts"]["screenshot"]) as image:
                 banner_pixel = image.convert("RGB").getpixel((1, 1))
             archive = CaseArchive(root)
@@ -215,11 +246,75 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(normalized.startswith("GOD MODE"))
         self.assertIn("GOD MODE", manifest["notice"])
         self.assertTrue(authorization["activated"])
+        self.assertIn("optionale_openai_redaktionelle_textanalyse", authorization["enabled_functions"])
+        self.assertEqual(0, ai_usage["total_api_calls"])
+        self.assertIn("Redaktionelle Testzusammenfassung", editorial_summary)
+        self.assertTrue(
+            any(
+                item["label"] == "god_mode_editorial_summary"
+                for item in manifest["artifacts"]
+            )
+        )
         self.assertLess(banner_pixel[1], 40)
         self.assertEqual([], regular_cases)
         self.assertEqual(1, len(god_cases))
         self.assertFalse(regular_latest_exists)
         self.assertTrue(god_latest_exists)
+
+    def test_god_mode_without_openai_key_is_a_visible_non_blocking_warning(self) -> None:
+        from PIL import Image
+
+        def fake_screenshot(url: str, destination: str | Path):
+            del url
+            path = Path(destination)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (40, 40), "white").save(path, format="PNG")
+            return SimpleNamespace(
+                path=str(path),
+                sha256="1" * 64,
+                size_bytes=path.stat().st_size,
+                capture_state="page_content",
+                state_reason=None,
+                interactions=(),
+                artifact_directory=None,
+            )
+
+        def skipped_editorial_builder(**kwargs):
+            output_directory = Path(kwargs["output_directory"])
+            output_directory.mkdir(parents=True, exist_ok=True)
+            usage = output_directory.parent / "god-mode-ai-usage.json"
+            usage.write_text(
+                json.dumps({"configured": False, "total_api_calls": 0}),
+                encoding="utf-8",
+            )
+            return SimpleNamespace(
+                status="skipped_no_api_key",
+                artifacts={"god_mode_ai_usage": usage},
+                page_results=(),
+                total_estimated_cost_usd=0.0,
+            )
+
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            workflow = LiveMonitorWorkflow(
+                Path(output),
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+                screenshot_capturer=fake_screenshot,
+                god_mode_editorial_builder=skipped_editorial_builder,
+            )
+            result = workflow.run(
+                server.url,
+                capture_baseline=True,
+                browser_mode=True,
+                god_mode=True,
+            )
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertIn("OPENAI_API_KEY", result.message)
+        self.assertEqual("skipped", result.step_states["anthropic"])
 
     def test_unchecked_robots_marks_case_manifest_zip_and_ui_as_not_evidence_suitable(self) -> None:
         with tempfile.TemporaryDirectory() as output, LiveServer() as server:
@@ -1294,6 +1389,7 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn("Prüfverlauf", page.text)
         self.assertNotIn("ANTHROPIC_API_KEY", page.text)
         self.assertNotIn("Anthropic wurde nicht aufgerufen", page.text)
+        self.assertIn('anthropic:"KI-Analyse"', page.text)
         self.assertIn("Beweispaket herunterladen", page.text)
         self.assertIn("SEITENSCHUTZ ERKANNT", page.text)
         self.assertEqual(202, started.status_code)

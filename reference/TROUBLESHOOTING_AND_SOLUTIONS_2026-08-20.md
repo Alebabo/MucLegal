@@ -345,6 +345,65 @@ auslöst und die PDF-Antwort im eingebetteten Viewer geladen wird. Ob ein Browse
 darstellt oder an eine konfigurierte externe Anwendung übergibt, bleibt eine lokale
 Browser-Einstellung; die HTTP-Antwort fordert keinen Download mehr an.
 
+## God-Mode-KI-Textbudget überschritt die konfigurierte Grenze
+
+### Symptom
+
+Der Regressionstest erwartete bei `MUCLEGAL_OPENAI_MAX_INPUT_CHARS=24000` höchstens 24.000
+übertragene Zeichen, das Aufrufprotokoll wies aber 24.056 Zeichen aus.
+
+### Ursache und Diagnose
+
+Die stratifizierte Kürzung behält Anfang, Mitte und Ende des sichtbaren Texts. Zwischen diesen
+drei Ausschnitten stehen zwei identische Kürzungsmarker. Die Budgetrechnung zog irrtümlich nur
+einen Marker ab. Der Test prüft die tatsächlich an die Responses API übergebene Textlänge und
+machte die Abweichung deshalb vor einem Live-Aufruf sichtbar.
+
+### Lösung
+
+Vom konfigurierten Zeichenlimit wird nun die Länge beider Marker abgezogen, bevor das verbleibende
+Budget auf Anfang, Mitte und Ende verteilt wird. Das Limit bezieht sich ausschließlich auf den
+gerenderten Quelltext; die kurzen Rollen-, URL- und Zeitmetadaten sind separat.
+
+### Verifikation und verbleibende Grenze
+
+Der Unit-Test erzwingt exakt 24.000 Quelltextzeichen, höchstens 900 Ausgabetokens, `store=False`,
+keine Tools und `reasoning.effort=none`. Tokenzahlen können wegen der Modelltokenisierung nicht
+vorab exakt aus Zeichen berechnet werden; tatsächliche Input-/Outputtokens und eine Kostenschätzung
+werden deshalb nach jedem Aufruf in `god-mode-ai-usage.json` protokolliert.
+
+## Optionale OpenAI-Zusammenfassung darf die Beweisspur nicht ersetzen
+
+### Symptom und Risiko
+
+Eine redaktionell verdichtete Produktbeschreibung kann dynamische Empfehlungen reduzieren und
+Angaben paraphrasieren. Würde sie als Normaltext oder Primärbeweis gespeichert, gingen Wortlaut
+und Trennung zwischen technischer Erfassung und externer Analyse verloren.
+
+### Lösung
+
+Die Funktion läuft ausschließlich nach aktivierter God-Mode-Autorisierung und ausschließlich in
+`muclegal/llm/`. Übertragen wird je tatsächlich erfasster Seite nur ein begrenzter Ausschnitt des
+gerenderten Normaltexts; Roh-HTML, Header, WARC, Screenshots und Cookies verlassen die lokale
+Beweisspur nicht. Die schema-validierte Ausgabe liegt getrennt unter `analysis/editorial/` und als
+deutlich markierte `god-mode-editorial-summary.md` vor. Volltext-SHA-256, Modell, Promptversion,
+Cachetreffer, Tokenverbrauch und geschätzte Kosten stehen in `god-mode-ai-usage.json`; der
+API-Schlüssel und der übertragene Text werden dort nicht gespeichert. Ohne Schlüssel wird der
+Aufruf sichtbar übersprungen. Modellfehler verwerfen nur die Zusammenfassung und niemals die
+lokalen Primärartefakte.
+
+### Kostenkontrolle
+
+Standard ist `gpt-5.6-luna` mit 24.000 Eingabezeichen und 900 Ausgabetokens pro tatsächlich
+erfasster Seite. Identischer Volltext plus identische Modellkonfiguration ergeben einen lokalen
+Cachetreffer ohne neuen API-Aufruf. Abweichende Modelle können über `MUCLEGAL_OPENAI_MODEL`, die
+Limits über `MUCLEGAL_OPENAI_MAX_INPUT_CHARS` und `MUCLEGAL_OPENAI_MAX_OUTPUT_TOKENS` gesetzt
+werden. Die Kategorie ist `stichprobenartig`: Auch bei geändertem Inhalt erfolgt je URL und
+Seitenrolle standardmäßig höchstens ein kostenpflichtiger Aufruf innerhalb von sieben Tagen.
+Das Intervall ist über `MUCLEGAL_OPENAI_SAMPLE_INTERVAL_DAYS` konfigurierbar. Lokale
+Primärartefakte werden bei jedem gestarteten Lauf weiterhin erzeugt. Der Schlüssel wird nur aus
+`OPENAI_API_KEY` gelesen und gehört nicht ins Repository.
+
 ## Externe Zusatzdienste
 
 freeTSA und Wayback sind optionale Zusatzdienste. Ein Ausfall wird mit Status und Grund

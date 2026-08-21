@@ -65,6 +65,10 @@ CAPTURE_ROLE_TITLES = {
 ARTIFACT_DEFINITIONS = {
     "evidence_suitability": ("Hinweis", "Beweiseignung", "text"),
     "god_mode_authorization": ("Hinweis", "God-Mode-Autorisierung", "text"),
+    "god_mode_editorial_summary": (
+        "Analyse", "Redaktionelle KI-Zusammenfassung", "text"
+    ),
+    "god_mode_ai_usage": ("Analyse", "OpenAI-Kosten- und Aufrufprotokoll", "text"),
     "raw_html": ("Abruf", "Roh-HTML", "text"),
     "response_headers": ("Abruf", "Header", "text"),
     "normalized_text": ("Abruf", "Normalisierter Text", "text"),

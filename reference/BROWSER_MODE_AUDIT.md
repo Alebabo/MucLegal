@@ -110,6 +110,20 @@ Logins, Paywalls oder CAPTCHAs und fügt keine Stealth- oder Identitätstäuschu
 Regressionstests belegen die Trennung, das Ignorieren einer synthetisch untersagenden
 robots.txt, die sichtbaren Markierungen und die Checkbox-Weitergabe bis zum Workflow.
 
+Eine optionale OpenAI-Auswertung ist ausschließlich eine getrennte Analysespur im
+God Mode. Übertragen wird nur der auf eine feste Zeichenzahl begrenzte gerenderte
+Seitentext. Screenshots, Roh-HTML, Header, WARC und andere Primärartefakte verlassen
+die lokale Beweisspur nicht. Die Ausgabe ist eine paraphrasierte, klar als nicht
+beweisgeeignet markierte Arbeitshilfe und ersetzt weder den normalisierten Volltext
+noch ein anderes Primärartefakt. Ein lokaler Hash-Cache verhindert Wiederholungsaufrufe;
+Modell, Grenzen, Tokenverbrauch und geschätzte Kosten werden ohne API-Schlüssel und
+ohne übertragenen Text in `god-mode-ai-usage.json` protokolliert. Fehlt der Schlüssel
+oder fällt die API aus, bleibt die lokale Erfassung vollständig nutzbar und der
+Ausfall wird sichtbar als übersprungene optionale Analyse dokumentiert.
+Die Auswertung ist als `stichprobenartig` klassifiziert und wird je URL und Seitenrolle
+höchstens einmal innerhalb von sieben Tagen kostenpflichtig aufgerufen. Exakte
+Inhaltswiederholungen werden unabhängig davon aus dem lokalen Hash-Cache bedient.
+
 ### 5. Cookie- und Session-Persistenz — bestanden
 
 Für jeden Aufruf werden Browser und Context neu erzeugt
