@@ -76,7 +76,7 @@ Die Codepfade und Regressionstests müssen auf dieses Sollverhalten umgestellt w
 bis zu deren erfolgreicher Verifikation darf der Abschnitt nicht als „bestanden“
 bewertet werden.
 
-### 4a. God Mode — ausschließlich lokale Demonstration
+### 4a. God Mode — ausschließlich lokale Demonstration — umgesetzt am 21.08.2026
 
 Ein ausdrücklich aktivierter God Mode erteilt die umfassende technische Vollmacht des
 Challenge-Gebers für dessen bereitgestellte Challenge-Infrastruktur sowie für
@@ -95,9 +95,20 @@ müssen vollständig protokolliert werden.
 Alle erzeugten Ansichten und Artefakte tragen sichtbar
 `GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`, werden getrennt von der
 regulären Beweisspur gespeichert und dürfen weder als Beweis ausgegeben noch einer
-juristischen Kerngleichheitsprüfung zugeführt werden. Der Modus ist in diesem Audit
-eine Vorgabe; eine Implementierung gilt erst nach gesonderter technischer Prüfung als
-vorhanden.
+juristischen Kerngleichheitsprüfung zugeführt werden.
+
+Die Implementierung verlangt die ausdrückliche Checkbox `Autorisiert (God Mode)` neben
+der URL. Das Anklicken protokolliert die Nutzerbestätigung, dass Vollmacht und Rechtsrahmen
+vorab geklärt sind, und erzwingt den Browsermodus. Snapshots liegen unter
+`god-mode-snapshots/`, Pakete unter `god-mode-bundles/god-*`; reguläre Falllisten enthalten
+sie nicht. `god_mode_authorization.json` hält Zeitpunkt, Ziel, Vollmachtsgrundlage und
+freigeschaltete Funktionen vor der Manifestbildung fest. Bilder erhalten einen roten
+Banner, normalisierte Texte eine Kopfzeile, das Manifest ein Notice-Feld und PDF sowie ZIP
+eine durchgehende Demonstrationskennzeichnung. Der Modus löst weiterhin keine fremden
+Logins, Paywalls oder CAPTCHAs und fügt keine Stealth- oder Identitätstäuschung hinzu.
+
+Regressionstests belegen die Trennung, das Ignorieren einer synthetisch untersagenden
+robots.txt, die sichtbaren Markierungen und die Checkbox-Weitergabe bis zum Workflow.
 
 ### 5. Cookie- und Session-Persistenz — bestanden
 

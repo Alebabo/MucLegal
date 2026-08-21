@@ -54,8 +54,25 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
 
     assessment = report["assessment"]
     evidence = report["evidence"]
+    god_mode = bool(report.get("god_mode"))
+    evidence_suitable = report.get("evidence_suitability", "regulaer") == "regulaer"
     story = [
         Paragraph("MucLegal Prüfbericht", styles["TitleCustom"]),
+        *([] if not god_mode else [
+            paragraph(
+                "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR",
+                "Warning",
+            ),
+            Spacer(1, 3 * mm),
+        ]),
+        *([] if evidence_suitable or god_mode else [
+            paragraph(
+                "NICHT BEWEISGEEIGNET – robots.txt konnte nicht verlässlich geprüft werden. "
+                "Berechtigung, Nutzungsbedingungen und rechtliche Zulässigkeit sind eigenverantwortlich zu prüfen.",
+                "Warning",
+            ),
+            Spacer(1, 3 * mm),
+        ]),
         paragraph("Prüfentwurf - keine abschließende Rechtsentscheidung", "Warning"),
         Spacer(1, 6 * mm),
         Table(
@@ -183,7 +200,13 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
         canvas.line(18 * mm, 13 * mm, 192 * mm, 13 * mm)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(colors.HexColor("#4B5563"))
-        canvas.drawString(18 * mm, 8.5 * mm, "MucLegal - Prüfentwurf zur menschlichen Freigabe")
+        footer_label = (
+            "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR"
+            if god_mode else "NICHT BEWEISGEEIGNET – robots.txt ungeprüft"
+            if not evidence_suitable else
+            "MucLegal - Prüfentwurf zur menschlichen Freigabe"
+        )
+        canvas.drawString(18 * mm, 8.5 * mm, footer_label)
         canvas.drawRightString(192 * mm, 8.5 * mm, f"Seite {doc.page}")
         canvas.restoreState()
 

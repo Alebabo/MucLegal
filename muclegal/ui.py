@@ -54,7 +54,17 @@ TERMINAL_RUN_STATUSES = {
 }
 MAX_TEXT_PREVIEW_BYTES = 512 * 1024
 CASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+CAPTURE_ROLE_TITLES = {
+    "main": "Hauptseite",
+    "requested": "Angefragte Seite",
+    "agb": "AGB-Seite",
+    "privacy": "Datenschutz-Seite",
+    "agb_discovered": "AGB-Übersichtsseite",
+    "privacy_discovered": "Datenschutz-Übersichtsseite",
+}
 ARTIFACT_DEFINITIONS = {
+    "evidence_suitability": ("Hinweis", "Beweiseignung", "text"),
+    "god_mode_authorization": ("Hinweis", "God-Mode-Autorisierung", "text"),
     "raw_html": ("Abruf", "Roh-HTML", "text"),
     "response_headers": ("Abruf", "Header", "text"),
     "normalized_text": ("Abruf", "Normalisierter Text", "text"),
@@ -62,6 +72,7 @@ ARTIFACT_DEFINITIONS = {
     "capture_transparency": ("Abruf", "Erfassungstransparenz", "text"),
     "screenshot_interactions": ("Abruf", "Screenshot-Interaktionen", "text"),
     "capture_index": ("Abruf", "Erfassungsindex", "text"),
+    "page_artifacts_index": ("Abruf", "Seitenartefakt-Index", "text"),
     "capture_metrics": ("Abruf", "Ressourcenmessung", "text"),
     "run_result": ("Abruf", "Laufergebnis", "text"),
     "protection_report": ("Abruf", "Seitenschutz-Bericht", "text"),
@@ -92,6 +103,7 @@ class RunRequest(BaseModel):
     url: str | None = Field(default=None, max_length=2048)
     case_id: str | None = Field(default=None, max_length=128)
     verification_mode: bool = False
+    god_mode_authorized: bool = False
 
 
 class ScreenshotInput(BaseModel):
@@ -141,6 +153,7 @@ class RunState:
     audit_log: list[dict[str, str]] = field(default_factory=list)
     capture_baseline: bool = False
     verification_mode: bool = False
+    god_mode_authorized: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -169,6 +182,7 @@ class RunCoordinator:
         case_id: str | None = None,
         direct_url: bool = False,
         verification_mode: bool = False,
+        god_mode_authorized: bool = False,
         synchronous: bool = False,
     ) -> RunState:
         with self._lock:
@@ -194,12 +208,16 @@ class RunCoordinator:
                 target_url = url.strip()
             run = RunState(run_id=uuid.uuid4().hex, url=target_url)
             run.capture_baseline = direct_url
-            run.verification_mode = bool(verification_mode and direct_url)
+            run.god_mode_authorized = bool(god_mode_authorized and direct_url)
+            run.verification_mode = bool((verification_mode or run.god_mode_authorized) and direct_url)
             run.audit_log.append({
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "step": "queued",
                 "state": "queued",
                 "message": (
+                    "GOD MODE autorisiert: Vollmacht und Rechtsrahmen wurden per Checkbox bestätigt; "
+                    "robots.txt, Browser, Screenshots und Normalisierung sind für das Ziel freigeschaltet."
+                    if run.god_mode_authorized else
                     "Prüflauf angelegt; der Überprüfungsmodus wird bei tatsächlichem Seitenschutz automatisch aktiviert."
                     if run.verification_mode
                     else "Prüflauf ohne automatische Browser-Überprüfung angelegt; es wurden noch keine Beweise bewertet."
@@ -248,6 +266,7 @@ class RunCoordinator:
             case_id = (self._runs[run_id].monitoring_result or {}).get("case_id")
             capture_baseline = self._runs[run_id].capture_baseline
             verification_mode = self._runs[run_id].verification_mode
+            god_mode_authorized = self._runs[run_id].god_mode_authorized
         try:
             if case_id and self.case_repository is not None and self.domain_monitor is not None:
                 domain_result = self.domain_monitor.run(self.case_repository.get(case_id), progress)
@@ -255,12 +274,17 @@ class RunCoordinator:
             else:
                 domain_result = None
                 if capture_baseline:
-                    if verification_mode:
+                    if god_mode_authorized:
                         result = self.workflow.run(
                             url,
                             progress,
                             capture_baseline=True,
                             browser_mode=True,
+                            god_mode=True,
+                        )
+                    elif verification_mode:
+                        result = self.workflow.run(
+                            url, progress, capture_baseline=True, browser_mode=True
                         )
                     else:
                         result = self.workflow.run(url, progress, capture_baseline=True)
@@ -329,12 +353,25 @@ class CaseArchive:
     def __init__(self, store_root: str | Path) -> None:
         self.store_root = Path(store_root).resolve()
         self.bundle_root = (self.store_root / "bundles").resolve()
+        self.god_bundle_root = (self.store_root / "god-mode-bundles").resolve()
 
     def list(self) -> list[dict]:
         cases: list[dict] = []
         if not self.bundle_root.is_dir():
             return cases
         for case_path in self.bundle_root.glob("*/case.json"):
+            try:
+                record = self._read(case_path)
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            cases.append(self._summary(case_path.parent.name, record))
+        return sorted(cases, key=lambda item: item["erkannt_am"], reverse=True)
+
+    def list_god_mode(self) -> list[dict]:
+        cases: list[dict] = []
+        if not self.god_bundle_root.is_dir():
+            return cases
+        for case_path in self.god_bundle_root.glob("god-*/case.json"):
             try:
                 record = self._read(case_path)
             except (OSError, ValueError, json.JSONDecodeError):
@@ -375,6 +412,12 @@ class CaseArchive:
                 artifact["status_reason"] = str(
                     custom_status.get("reason") or artifact["status_reason"]
                 )
+            if record.get("evidence_suitability", "regulaer") != "regulaer" and artifact["available"]:
+                artifact["status"] = "warning"
+                artifact["status_reason"] = (
+                    record.get("evidence_suitability_notice")
+                    or "Dieses Artefakt ist nicht als regulärer Beweis verwendbar."
+                )
             if (
                 label == "requested_page_screenshot"
                 and artifact["available"]
@@ -397,7 +440,12 @@ class CaseArchive:
                 gallery.get("originals", [])
                 if isinstance(gallery.get("originals"), list) else []
             )
+            documents = (
+                gallery.get("documents", [])
+                if isinstance(gallery.get("documents"), list) else []
+            )
             galleries[role] = {
+                "title": CAPTURE_ROLE_TITLES.get(role, role.replace("_", " ").title()),
                 "mode": gallery.get("mode"),
                 "capture_completeness": gallery.get("capture_completeness"),
                 "tile_count": len(tiles),
@@ -410,7 +458,27 @@ class CaseArchive:
                     f"/api/v1/cases/{case_id}/capture/{role}/originals/{index}"
                     for index in range(len(originals))
                 ],
+                "document_urls": [
+                    f"/api/v1/cases/{case_id}/capture/{role}/documents/{index}"
+                    for index in range(len(documents))
+                ],
             }
+            try:
+                self.capture_normalized_text_path(case_id, role)
+            except HTTPException:
+                galleries[role]["normalized_text_url"] = None
+            else:
+                galleries[role]["normalized_text_url"] = (
+                    f"/api/v1/cases/{case_id}/capture/{role}/normalized-text"
+                )
+            try:
+                self.capture_raw_html_path(case_id, role)
+            except HTTPException:
+                galleries[role]["raw_html_url"] = None
+            else:
+                galleries[role]["raw_html_url"] = (
+                    f"/api/v1/cases/{case_id}/capture/{role}/raw-html"
+                )
         return {**summary, "artifacts": artifacts, "capture_galleries": galleries}
 
     def artifact_path(self, case_id: str, label: str) -> Path:
@@ -426,7 +494,7 @@ class CaseArchive:
             raise HTTPException(404, "Bildserie nicht vorhanden.")
         if kind == "preview":
             relative = gallery.get("preview")
-        elif kind in {"tiles", "originals"} and index is not None:
+        elif kind in {"tiles", "originals", "documents"} and index is not None:
             values = gallery.get(kind)
             if not isinstance(values, list) or index < 0 or index >= len(values):
                 raise HTTPException(404, "Bild der Serie nicht vorhanden.")
@@ -442,6 +510,44 @@ class CaseArchive:
             raise HTTPException(404, "Bildpfad verlässt das Beweispaket.") from exc
         if not path.is_file():
             raise HTTPException(404, "Bilddatei fehlt.")
+        return path
+
+    def capture_normalized_text_path(self, case_id: str, role: str) -> Path:
+        case_path = self._case_path(case_id)
+        record = self._read(case_path)
+        gallery = record.get("capture_galleries", {}).get(role)
+        if not isinstance(gallery, dict):
+            raise HTTPException(404, "Seitentext nicht vorhanden.")
+        index_relative = gallery.get("index")
+        if not isinstance(index_relative, str):
+            raise HTTPException(404, "Seitentext nicht vorhanden.")
+        role_directory = (case_path.parent / index_relative).resolve().parent
+        path = (role_directory / "normalized-text.txt").resolve()
+        try:
+            role_directory.relative_to(case_path.parent.resolve())
+            path.relative_to(role_directory)
+        except ValueError as exc:
+            raise HTTPException(404, "Textpfad verlässt das Beweispaket.") from exc
+        if not path.is_file():
+            raise HTTPException(404, "Seitentext fehlt.")
+        return path
+
+    def capture_raw_html_path(self, case_id: str, role: str) -> Path:
+        case_path = self._case_path(case_id)
+        record = self._read(case_path)
+        gallery = record.get("capture_galleries", {}).get(role)
+        if not isinstance(gallery, dict):
+            raise HTTPException(404, "Seiten-HTML nicht vorhanden.")
+        relative = gallery.get("raw_html")
+        if not isinstance(relative, str):
+            raise HTTPException(404, "Seiten-HTML nicht vorhanden.")
+        path = (case_path.parent / relative).resolve()
+        try:
+            path.relative_to(case_path.parent.resolve())
+        except ValueError as exc:
+            raise HTTPException(404, "HTML-Pfad verlässt das Beweispaket.") from exc
+        if not path.is_file():
+            raise HTTPException(404, "Seiten-HTML fehlt.")
         return path
 
     def preview(self, case_id: str, label: str) -> str:
@@ -460,7 +566,8 @@ class CaseArchive:
     def build_download(self, case_id: str) -> Path:
         case_path = self._case_path(case_id)
         record = self._read(case_path)
-        archive_path = case_path.parent / f"beweispaket-{case_id}.zip"
+        prefix = "god-mode-demopaket" if record.get("god_mode") else "beweispaket"
+        archive_path = case_path.parent / f"{prefix}-{case_id}.zip"
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
             for path in sorted(case_path.parent.rglob("*")):
                 if not path.is_file() or path.resolve() == archive_path.resolve():
@@ -482,9 +589,10 @@ class CaseArchive:
     def _case_path(self, case_id: str) -> Path:
         if not CASE_ID_PATTERN.fullmatch(case_id):
             raise HTTPException(404, "Beweislauf nicht gefunden.")
-        path = (self.bundle_root / case_id / "case.json").resolve()
+        root = self.god_bundle_root if case_id.startswith("god-") else self.bundle_root
+        path = (root / case_id / "case.json").resolve()
         try:
-            path.relative_to(self.bundle_root)
+            path.relative_to(root)
         except ValueError as exc:
             raise HTTPException(404, "Beweislauf nicht gefunden.") from exc
         if not path.is_file():
@@ -552,6 +660,11 @@ class CaseArchive:
             "timestamp_status": evidence.get("timestamp_status"),
             "capture_completeness": record.get("capture_completeness"),
             "warnings": warnings if isinstance(warnings, list) else [],
+            "evidence_suitability": record.get("evidence_suitability", "regulaer"),
+            "evidence_suitability_notice": record.get("evidence_suitability_notice"),
+            "robots_txt_status": record.get("capture_transparency", {}).get("robots_txt"),
+            "god_mode": bool(record.get("god_mode")),
+            "god_mode_notice": record.get("god_mode_notice"),
         }
 
 class HumanReviewRepository:
@@ -734,15 +847,23 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                         {"detail": "Fremde Browser-Origin ist nicht zulässig."}, status_code=403
                     )
         response = await call_next(request)
+        inline_capture_document = bool(re.fullmatch(
+            r"/api/v1/cases/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/capture/"
+            r"[A-Za-z0-9_-]+/documents/\d+",
+            request.url.path,
+        ))
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = (
+            "SAMEORIGIN" if inline_capture_document else "DENY"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "img-src 'self' data:; "
             "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
             "frame-src 'self'; object-src 'none'; "
-            "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+            "base-uri 'none'; form-action 'self'; frame-ancestors "
+            + ("'self'" if inline_capture_document else "'none'")
         )
         return response
 
@@ -897,7 +1018,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if monitoring_cases is None and not anthropic_ready:
             raise HTTPException(503, "ANTHROPIC_API_KEY fehlt am Server.")
         try:
-            if payload.verification_mode:
+            if payload.verification_mode or payload.god_mode_authorized:
                 raise ValueError("Der Überprüfungsmodus ist ausschließlich im BeweisLab verfügbar.")
             run = coordinator.start(payload.url, case_id=payload.case_id)
         except RuntimeError as exc:
@@ -929,6 +1050,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 payload.url,
                 direct_url=True,
                 verification_mode=payload.verification_mode,
+                god_mode_authorized=payload.god_mode_authorized,
             )
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -948,6 +1070,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 payload.url,
                 direct_url=True,
                 verification_mode=payload.verification_mode,
+                god_mode_authorized=payload.god_mode_authorized,
             )
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -997,7 +1120,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     @app.get("/api/v1/cases")
     @app.get("/api/cases", include_in_schema=False)
     async def list_cases():
-        result = {"cases": archive.list()}
+        result = {"cases": archive.list(), "god_mode_cases": archive.list_god_mode()}
         if monitoring_cases is not None:
             result["monitoring_cases"] = [item.to_dict() for item in monitoring_cases.list()]
         return result
@@ -1030,6 +1153,34 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     async def capture_original(case_id: str, role: str, index: int):
         path = archive.capture_gallery_path(case_id, role, "originals", index)
         return FileResponse(path, filename=path.name)
+
+    @app.get("/api/v1/cases/{case_id}/capture/{role}/documents/{index}")
+    async def capture_document(case_id: str, role: str, index: int):
+        path = archive.capture_gallery_path(case_id, role, "documents", index)
+        return FileResponse(
+            path,
+            filename=path.name,
+            media_type="application/pdf",
+            content_disposition_type="inline",
+        )
+
+    @app.get("/api/v1/cases/{case_id}/capture/{role}/normalized-text")
+    async def capture_normalized_text(case_id: str, role: str):
+        path = archive.capture_normalized_text_path(case_id, role)
+        content = path.read_bytes()
+        truncated = len(content) > MAX_TEXT_PREVIEW_BYTES
+        text = content[:MAX_TEXT_PREVIEW_BYTES].decode("utf-8", errors="replace")
+        if truncated:
+            text += "\n\n[… Vorschau nach 512 KiB gekürzt; vollständige Datei im Beweispaket …]"
+        return PlainTextResponse(text)
+
+    @app.get("/api/v1/cases/{case_id}/capture/{role}/raw-html")
+    async def capture_raw_html(case_id: str, role: str):
+        path = archive.capture_raw_html_path(case_id, role)
+        return PlainTextResponse(
+            path.read_text(encoding="utf-8", errors="replace"),
+            headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
+        )
 
     @app.get("/artifact/{case_id}/{label}")
     async def historical_artifact(case_id: str, label: str):

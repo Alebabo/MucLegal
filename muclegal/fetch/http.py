@@ -85,6 +85,54 @@ class HttpFetcher:
         self._capture_controller = None
         self._capture_session_depth = 0
         self.last_capture_run_root: str | None = None
+        self._robots_checks: list[dict[str, str]] = []
+        self._god_mode = False
+
+    @contextmanager
+    def god_mode_session(self):
+        previous = self._god_mode
+        self._god_mode = True
+        try:
+            yield
+        finally:
+            self._god_mode = previous
+
+    def _respect_robots(self) -> bool:
+        return self.policy.respect_robots and not self._god_mode
+
+    def _begin_robots_monitor(self) -> None:
+        self._robots_checks = []
+
+    def _record_robots_check(self, *, url: str, status: str, reason: str) -> None:
+        self._robots_checks.append({"url": url, "status": status, "reason": reason})
+
+    def _robots_metadata(self) -> dict[str, object]:
+        unchecked = next(
+            (item for item in self._robots_checks if item["status"] == "ungeprueft"),
+            None,
+        )
+        status = "god_mode_ausdruecklich_ignoriert" if self._god_mode else (
+            "ungeprueft" if unchecked else (
+                "geprueft_abruf_erlaubt" if self._respect_robots()
+                else "laut_policy_nicht_geprueft"
+            )
+        )
+        return {
+            "robots_txt": status,
+            "robots_reason": (
+                unchecked["reason"] if unchecked else
+                "robots.txt wurde geprüft; der Abruf ist für den Projekt-User-Agent erlaubt."
+            ),
+            "robots_checks": [dict(item) for item in self._robots_checks],
+            "evidence_suitability": (
+                "nicht_juristisch_verwertbar" if self._god_mode else
+                "nicht_beweisgeeignet" if status == "ungeprueft" else "regulaer"
+            ),
+        }
+
+    def robots_metadata(self) -> dict[str, object]:
+        """Return the recorded robots result for the current top-level capture attempt."""
+        return self._robots_metadata()
 
     @contextmanager
     def capture_session(self, output_root: str | Path):
@@ -116,7 +164,8 @@ class HttpFetcher:
 
     def fetch(self, url: str) -> FetchResult:
         self._validate_url(url)
-        if self.policy.respect_robots:
+        self._begin_robots_monitor()
+        if self._respect_robots():
             self._require_robots_permission(url)
 
         last_failure: FetchFailure | None = None
@@ -134,7 +183,8 @@ class HttpFetcher:
     def fetch_in_browser(self, url: str) -> FetchResult:
         """Use a real browser only when explicitly enabled by the caller."""
         self._validate_url(url)
-        if self.policy.respect_robots:
+        self._begin_robots_monitor()
+        if self._respect_robots():
             self._require_robots_permission(url)
         if self._capture_controller is not None:
             result = self._capture_controller.capture_target(url, role="main").fetch_result
@@ -148,20 +198,29 @@ class HttpFetcher:
                 request_guard=self._browser_request_guard(),
             )
         metadata = dict(result.browser_metadata or {})
-        metadata["robots_txt"] = (
-            "geprueft_abruf_erlaubt"
-            if self.policy.respect_robots
-            else "laut_policy_nicht_geprueft"
-        )
-        return replace(result, browser_metadata=metadata)
+        metadata.update(self._robots_metadata())
+        result = replace(result, browser_metadata=metadata)
+        block_reason = _detect_block_page(result.decoded_html)
+        if block_reason and not self._god_mode:
+            raise FetchFailure(
+                "protected_or_login_page",
+                f"Abruf abgebrochen: {block_reason}",
+                status_code=result.status_code,
+                headers=result.headers,
+                body=result.body,
+                manual_review=True,
+            )
+        return result
 
     def capture_screenshot(self, url: str, destination: str | Path):
         """Capture one public page with the same URL and robots policy as regular fetching."""
         self._validate_url(url)
-        if self.policy.respect_robots:
+        self._begin_robots_monitor()
+        if self._respect_robots():
             self._require_robots_permission(url)
         from muclegal.fetch.playwright import (
             ScreenshotCaptureError,
+            _capture_html_evidence_image,
             capture_html_screenshot,
             capture_page_screenshot,
         )
@@ -173,8 +232,23 @@ class HttpFetcher:
             )
             target = self._capture_controller.capture_target(url, role=role)
             if target.screenshot is None:
-                raise ScreenshotCaptureError(
-                    f"Screenshot fehlt nach Browserphase {target.failure_phase or 'unbekannt'}."
+                artifact_root = Path(target.artifact_directory)
+                protection = _detect_block_page(target.fetch_result.decoded_html)
+                return _capture_html_evidence_image(
+                    target.fetch_result.decoded_html,
+                    target.fetch_result.final_url,
+                    artifact_root / "screenshot-full-page.png",
+                    protection=(
+                        "Autorisierter God-Mode-Zielzustand mit aktivem Seitenschutz."
+                        if self._god_mode and protection else protection
+                    ),
+                    fallback_reason=(
+                        f"{'God Mode: ' if self._god_mode else ''}Der Browserzustand wurde "
+                        "gesichert, aber die reguläre Screenshotphase "
+                        f"{target.failure_phase or 'unbekannt'} blieb ohne Bild."
+                    ),
+                    browser_error=target.failure_phase or "Screenshotphase ohne Bild",
+                    artifact_directory=artifact_root,
                 )
             return target.screenshot
 
@@ -206,7 +280,7 @@ class HttpFetcher:
                 if origin not in validated_origins:
                     self._validate_url(target_url)
                     validated_origins.add(origin)
-                if self.policy.respect_robots and origin not in robots_origins:
+                if self._respect_robots() and origin not in robots_origins:
                     self._require_robots_permission(target_url)
                     robots_origins.add(origin)
             else:
@@ -265,7 +339,7 @@ class HttpFetcher:
                 if origin not in validated_origins:
                     self._validate_url(target_url)
                     validated_origins.add(origin)
-                if self.policy.respect_robots and origin not in robots_origins:
+                if self._respect_robots() and origin not in robots_origins:
                     self._require_robots_permission(target_url)
                     robots_origins.add(origin)
                 return
@@ -335,33 +409,49 @@ class HttpFetcher:
                 rules = raw.decode(encoding, errors="replace")
         except error.HTTPError as exc:
             if exc.code == 404:
+                self._record_robots_check(
+                    url=robots_url,
+                    status="geprueft_abruf_erlaubt",
+                    reason="robots.txt ist nicht vorhanden (HTTP 404); keine Abrufregel festgestellt.",
+                )
                 return
-            raise FetchFailure(
-                "robots_unavailable",
-                f"robots.txt konnte nicht verlässlich geprüft werden (HTTP {exc.code}).",
-                status_code=exc.code,
-                manual_review=True,
-            ) from exc
+            self._record_robots_check(
+                url=robots_url,
+                status="ungeprueft",
+                reason=f"robots.txt konnte nicht verlässlich geprüft werden (HTTP {exc.code}).",
+            )
+            return
         except (error.URLError, TimeoutError, OSError) as exc:
-            raise FetchFailure(
-                "robots_unavailable",
-                f"robots.txt konnte nicht verlässlich geprüft werden: {exc}",
-                manual_review=True,
-            ) from exc
+            self._record_robots_check(
+                url=robots_url,
+                status="ungeprueft",
+                reason=f"robots.txt konnte nicht verlässlich geprüft werden: {exc}",
+            )
+            return
 
         parser = robotparser.RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(rules.splitlines())
         if not parser.can_fetch(self.policy.user_agent, url):
+            self._record_robots_check(
+                url=robots_url,
+                status="geprueft_abruf_untersagt",
+                reason="robots.txt untersagt den Abruf für diesen User-Agent.",
+            )
             raise FetchFailure(
                 "robots_disallowed",
                 "robots.txt untersagt den Abruf für diesen User-Agent.",
                 manual_review=True,
             )
+        self._record_robots_check(
+            url=robots_url,
+            status="geprueft_abruf_erlaubt",
+            reason="robots.txt erlaubt den Abruf für den Projekt-User-Agent.",
+        )
 
     def _fetch_once(self, url: str) -> FetchResult:
         redirects = _RedirectRecorder(
-            self._require_robots_permission if self.policy.respect_robots else lambda _url: None
+            self._require_robots_permission if self._respect_robots() else lambda _url: None
         )
         opener = request.build_opener(redirects)
         req = request.Request(
@@ -384,6 +474,21 @@ class HttpFetcher:
         except error.HTTPError as exc:
             body = exc.read()
             headers = tuple(exc.headers.items()) if exc.headers else ()
+            if exc.code in {401, 403, 407, 429}:
+                decoded_error = self._decode_body(body, exc.headers or Message())
+                detected = _detect_block_page(decoded_error)
+                protection = detected or (
+                    f"Art des Seitenschutzes: HTTP-Zugriffsschutz (Status {exc.code}). "
+                    "Ein transparenter Browser-Prüfversuch kann zulässig sein; Zugangshürden werden nicht überwunden."
+                )
+                raise FetchFailure(
+                    "protected_or_login_page",
+                    f"Abruf abgebrochen: {protection}",
+                    status_code=exc.code,
+                    headers=headers,
+                    body=body,
+                    manual_review=True,
+                ) from exc
             raise FetchFailure(
                 "http_error",
                 f"HTTP-Abruf fehlgeschlagen (Status {exc.code}).",
@@ -396,7 +501,7 @@ class HttpFetcher:
             raise FetchFailure("network_error", f"HTTP-Abruf fehlgeschlagen: {exc}") from exc
 
         block_reason = _detect_block_page(decoded)
-        if block_reason:
+        if block_reason and not self._god_mode:
             raise FetchFailure(
                 "protected_or_login_page",
                 f"Abruf abgebrochen: {block_reason}",
@@ -414,6 +519,7 @@ class HttpFetcher:
             redirect_chain=tuple(redirects.chain),
             body=body,
             decoded_html=decoded,
+            browser_metadata=self._robots_metadata(),
         )
 
     @staticmethod
@@ -460,4 +566,12 @@ def _detect_block_page(html: str) -> str | None:
         return "Art des Seitenschutzes: Cloudflare-Blockseite. Manuelle Prüfung erforderlich."
     if "/chl/js/" in sample and "challenge" in sample:
         return "Art des Seitenschutzes: JavaScript-Challenge. Direkte Rechtstext-Unterseiten werden geprüft."
+    if (
+        "triggered our security system" in visible_text
+        and ("cannot allow you" in visible_text or "prevent bots" in visible_text)
+    ):
+        return (
+            "Art des Seitenschutzes: Bot-Schutzseite trotz HTTP 200. "
+            "Der dahinterliegende Seiteninhalt wurde nicht erfasst."
+        )
     return None

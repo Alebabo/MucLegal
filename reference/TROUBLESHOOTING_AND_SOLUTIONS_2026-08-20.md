@@ -200,6 +200,151 @@ Rollenzuordnung öffentlicher Ersatzquellen. Der reale MediaMarkt-Lauf wurde weg
 Requestbudgets nicht wiederholt; eine spätere manuelle Abnahme muss den neuen Teilstatus bestätigen
 oder eine inhaltsreichere Same-Origin-Klauselseite belegen.
 
+## HTTP-200-Antwort enthält weiterhin eine Bot-Schutzseite
+
+### Symptom
+
+Der reale Adidas-Lauf vom 21.08.2026 erhielt direkt HTTP 403. Der transparente
+Browser-Prüfversuch antwortete anschließend mit HTTP 200, zeigte aber ausschließlich den Text
+„triggered our security system“ / „cannot allow you onto the site“. Der Lauf wurde zunächst als
+browsergestützt erfasster Seitenzustand beschrieben, obwohl nur die Schutzseite vorlag.
+
+### Ursache
+
+Der direkte HTTP-Pfad klassifizierte 403 nur als allgemeinen HTTP-Fehler. Nach dem Browserabruf
+wurde die vorhandene Schutzseitenerkennung nicht erneut auf den gerenderten DOM-Stand angewendet.
+Der HTTP-200-Status allein reichte deshalb irrtümlich für die weitere Normalisierung.
+
+### Diagnose
+
+`case.json`, der normalisierte Text und der PDF-Bericht enthielten ausschließlich den
+Adidas-Sicherheitshinweis. `capture_completeness` war bereits
+`durch_seitenschutz_begrenzt`; der gespeicherte Schutztext lieferte den entscheidenden Nachweis,
+dass kein dahinterliegender Shop-Inhalt erfasst worden war.
+
+### Lösung
+
+HTTP 401/403/407/429 wird als Zugriffsschutz an den bereits erlaubten, nicht getarnten
+Browser-Prüfschritt übergeben. Nach diesem Abruf wird der gerenderte DOM-Stand erneut auf
+eindeutige Schutzmerkmale geprüft. Die Adidas-Formulierung führt jetzt zu einem Schutzbefund;
+es wird kein dahinterliegender Inhalt behauptet. Ein ungeprüfter robots.txt-Status wird auch in
+diesem Schutzbefund, Manifest, PDF, ZIP und UI als `nicht_beweisgeeignet` fortgeführt. Fehlt der
+Schutzseiten-Screenshot, benennt auch die Abschlussmeldung ausdrücklich „ohne Screenshot“.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests decken HTTP 403, den HTTP-200-Bot-Schutztext und das ungeprüfte Schutzbefund-
+Paket ab. Die Erkennung bleibt bewusst konservativ und benötigt eindeutige, sichtbare
+Schutzformulierungen; unbekannte Anbietertexte können weiterhin eine manuelle Prüfung erfordern.
+
+## Rollenbezogene HTML-/Text-/Bild-Artefakte waren unvollständig
+
+### Symptom
+
+Ein Beweispaket konnte einen Haupt- oder Rechtstext-Screenshot enthalten, ohne für dieselbe
+tatsächlich besuchte URL im Rollenverzeichnis zugleich Roh-HTML und normalisierten Text
+nachzuweisen. Wurde eine Rechtstextübersicht auf eine konkrete Klauselseite aufgelöst, war
+außerdem nur die Zielseite vollständig gebündelt.
+
+### Ursache und Diagnose
+
+Browser-Fallbackbilder hatten kein eigenes `artifact_directory`; die Bündelung orientierte sich
+deshalb nur am Bildpfad. Die gefundene Übersichts-URL und die ausgewählte Klausel-URL wurden zwar
+getrennt dokumentiert, aber nicht als zwei Browserrollen archiviert. Zur Diagnose
+`capture-index.json`, `legal-pages.json` und `artifacts/roles/*` gemeinsam prüfen. Fehlt in einer
+besuchten Rolle eines von `raw.html`, `normalized-text.txt` oder einer PNG/WebP-Aufnahme, ist die
+Seitenerfassung unvollständig.
+
+### Lösung
+
+Browserabbruch-Fallbacks schreiben jetzt Roh-HTML, deterministischen Normaltext, Screenshot,
+Vorschau und Screenshot-Index in ein gemeinsames Rollenverzeichnis. Rechtstextübersicht und
+konkrete Klauselseite werden bei unterschiedlichen URLs getrennt erfasst.
+`page-artifacts-index.json` inventarisiert pro Rolle alle HTML-, Normaltext- und Bilddateien mit
+SHA-256 und setzt `required_artifacts_complete`; eine Lücke stuft den Gesamtlauf auf
+`teilweise_erfasst` herab.
+
+### Verifikation und verbleibende Grenze
+
+Unit- und UI-Tests prüfen den vollständigen Drei-Artefakt-Satz, den sicheren rollenbezogenen
+HTML-Endpunkt sowie den Browserabbruch-Fallback. Erfasst werden ausschließlich die im BeweisLab
+fachlich vorgesehenen und tatsächlich besuchten Seiten: Hauptseite, angefragte Schutzseite,
+ausgewählte AGB-/Datenschutzseite und gegebenenfalls deren Übersicht. Es findet kein unbegrenzter
+Crawl aller internen Links einer Website statt.
+
+## MediaMarkt-Datenschutztext enthielt nur Akkordeonüberschriften
+
+### Symptom
+
+Der normalisierte Text der MediaMarkt-Shop-Datenschutzhinweise enthielt nur Einleitung und zehn
+Abschnittsüberschriften. Inhaltliche Passagen zu Verantwortlichem, Logfiles, Empfängern,
+Drittländern und Betroffenenrechten fehlten trotz eines scheinbaren Abdeckungswerts von 100 %.
+
+### Ursache und Diagnose
+
+Die Akkordeon-Header sind `button`-Elemente mit `aria-expanded=false` und `aria-controls`. Die
+bisherige Filterlogik verwarf jedoch nach dem strukturellen CSS-Treffer alle Buttons, deren Text
+nicht „Mehr anzeigen“ lautete. Zusätzlich schließt MediaMarkt beim Öffnen eines Abschnitts den
+zuvor geöffneten Abschnitt wieder. Ein einzelner finaler DOM-/Screenshot-Zustand kann deshalb
+nicht alle Klauseln gleichzeitig enthalten. Diagnose: `interactions.json` zeigte null
+`legal_expansion`-Einträge; der vermeintliche Abdeckungswert verglich nur die bereits sichtbaren
+Überschriften mit sich selbst.
+
+### Lösung
+
+ARIA-Akkordeonbuttons mit `aria-controls` sind jetzt unabhängig von ihrer Beschriftung innerhalb
+des Rechtstextcontainers zulässig. Jeder Abschnitt wird sequenziell geöffnet; Ziel-ID, Vor-/
+Nachzustand und der unmittelbar sichtbare kontrollierte Text werden gesichert. Tabs ohne
+`aria-controls`, insbesondere Links zu einer anderen Datenschutzfassung, bleiben unangetastet.
+Der normalisierte Text wird aus allen gesicherten Sichtzuständen dedupliziert zusammengeführt.
+Zusätzlich entsteht `expanded-legal-print.pdf` als lokal erzeugte Druckfassung sämtlicher
+expandierter Blöcke sowie eine Metadatendatei, die sie ausdrücklich als abgeleitet und nicht als
+Website-Original kennzeichnet. Die UI bietet diese PDF unter „Druckfassungen“ an.
+
+### Verifikation und verbleibende Grenze
+
+Beim realen Lauf am 21.08.2026 wurden 10 von 10 Akkordeons mit 10 sichtbaren Blocktexten erfasst;
+der Normaltext wuchs von etwa 1.500 auf 45.372 Zeichen. Normaltext und PDF enthielten den
+Verantwortlichen, Logfile-/IP-Informationen und die Betroffenenrechte. `robots.txt` war geprüft
+und erlaubte den Abruf. Weil MediaMarkt immer nur einen Abschnitt gleichzeitig offen hält,
+zeigt der Live-Screenshot weiterhin einen einzelnen Akkordeonzustand; die vollständige
+Gesamtdarstellung liegt in Normaltext, Blockprotokoll und abgeleiteter PDF vor.
+
+## PDF-Druckfassung wurde im Beweisblock nur heruntergeladen
+
+### Symptom
+
+Die unter „Druckfassungen“ ausgewählte Rechtstext-PDF wurde zunächst sofort heruntergeladen.
+Nach Umstellung auf Inline-Auslieferung blieb der eingebettete PDF-Bereich weiterhin leer und
+zeigte „127.0.0.1 hat die Verbindung abgelehnt“, obwohl Datei, SHA-256 und Manifest korrekt waren.
+
+### Ursache und Diagnose
+
+Der Dokument-Endpunkt verwendete `FileResponse` mit Dateinamen, aber ohne abweichenden
+Content-Disposition-Typ. Starlette setzt dann standardmäßig `attachment`; ein Browser behandelt
+auch eine Iframe-Anfrage deshalb als Download. Der Playwright-E2E-Lauf zeigte beim Klick auf
+„Datenschutz-Seite · Druckfassung 1“ ein Download-Ereignis statt einer eingebetteten Anzeige.
+Im zweiten E2E-Lauf blockierten anschließend die globalen Header `X-Frame-Options: DENY` und
+`frame-ancestors 'none'` die jetzt inline gelieferte, gleichoriginige PDF.
+
+### Lösung
+
+Der pfadsichere Dokument-Endpunkt liefert Rechtstext-PDFs jetzt ausdrücklich als
+`application/pdf` mit `Content-Disposition: inline`. Der Link „Öffnen / laden“ bleibt erhalten;
+Browser können die Datei darüber weiterhin in einem eigenen PDF-Viewer öffnen oder speichern.
+Nur für den streng gematchten lokalen Dokument-Endpunkt erlauben die Frame-Header die Einbettung
+aus derselben Origin (`SAMEORIGIN` und `frame-ancestors 'self'`). Für alle HTML-Seiten und übrigen
+Endpunkte bleiben `DENY` und `frame-ancestors 'none'` unverändert aktiv.
+
+### Verifikation und verbleibende Grenze
+
+Der API-Regressionstest prüft Status 200, MIME-Typ, `inline` sowie die eng begrenzten Frame-Header
+und schließt `attachment` aus.
+Der lokale Browser-E2E-Test prüft zusätzlich, dass die Auswahl kein Download-Ereignis mehr
+auslöst und die PDF-Antwort im eingebetteten Viewer geladen wird. Ob ein Browser PDFs intern
+darstellt oder an eine konfigurierte externe Anwendung übergibt, bleibt eine lokale
+Browser-Einstellung; die HTTP-Antwort fordert keinen Download mehr an.
+
 ## Externe Zusatzdienste
 
 freeTSA und Wayback sind optionale Zusatzdienste. Ein Ausfall wird mit Status und Grund

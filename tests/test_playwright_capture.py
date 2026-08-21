@@ -33,6 +33,18 @@ class _CaptureHandler(BaseHTTPRequestHandler):
               <button id='accept'>Alle akzeptieren</button><button id='reject'>Alle ablehnen</button>
               </div><script>reject.onclick=()=>reject.parentElement.remove()</script>"""
             self.send_response(200)
+        elif self.path == "/accordion":
+            body = b"""<!doctype html><main><h1>Datenschutzhinweise</h1>
+              <button id='print'>Drucken / Speichern</button>
+              <section><button aria-expanded='false' aria-controls='part-1'>Verantwortlicher</button>
+              <div id='part-1' hidden>MMS E-Commerce GmbH, Ingolstadt.</div></section>
+              <section><button aria-expanded='false' aria-controls='part-2'>Ihre Rechte</button>
+              <div id='part-2' hidden>Auskunft, Berichtigung und Loeschung nach DSGVO.</div></section>
+              <script>document.querySelectorAll('[aria-controls]').forEach(button=>button.onclick=()=>{
+                document.getElementById(button.getAttribute('aria-controls')).hidden=false;
+                button.setAttribute('aria-expanded','true');
+              }); print.onclick=()=>location.href='/must-not-open';</script></main>"""
+            self.send_response(200)
         else:
             height = int(self.path.removeprefix("/height/").split("?")[0])
             body = (
@@ -95,6 +107,9 @@ def test_closed_page_after_initial_state_returns_reviewable_partial_capture(
     assert "FOOTER-MARKER" in Path(
         captured.artifact_directory, "dom-initial.html"
     ).read_text("utf-8")
+    assert "FOOTER-MARKER" in Path(
+        captured.artifact_directory, "normalized-text.txt"
+    ).read_text("utf-8")
 
 
 @pytest.mark.parametrize("height", [1000, 7999, 8001, 30000])
@@ -129,6 +144,32 @@ def test_consent_clicks_reject_and_legal_expansion_is_recorded(
     assert "Vollstaendige Testklausel" in Path(
         captured.artifact_directory, "normalized-text.txt"
     ).read_text("utf-8")
+
+
+def test_aria_legal_accordions_are_expanded_and_print_pdf_is_stored(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(f"{capture_server}/accordion", role="privacy")
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    interactions = json.loads((root / "interactions.json").read_text("utf-8"))[
+        "interactions"
+    ]
+    expansions = [item for item in interactions if item.get("type") == "legal_expansion"]
+    coverage = json.loads((root / "content-coverage.json").read_text("utf-8"))
+    print_metadata = json.loads((root / "expanded-legal-print.json").read_text("utf-8"))
+
+    assert "MMS E-Commerce GmbH" in normalized
+    assert "Auskunft, Berichtigung" in normalized
+    assert len(expansions) == 2
+    assert all(item["changed"] for item in expansions)
+    assert coverage["legal_expansion"]["complete"] is True
+    assert coverage["legal_expansion"]["remaining_collapsed_controls"] == 0
+    assert print_metadata["website_original"] is False
+    assert (root / "expanded-legal-print.pdf").stat().st_size > 1_000
+    assert captured.fetch_result.final_url.endswith("/accordion")
 
 
 def test_generic_reject_requires_dialog_and_visible_accept_alternative() -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import io
+import hashlib
 import tempfile
 import threading
 import time
@@ -26,8 +27,10 @@ from muclegal.fetch.playwright import _capture_html_evidence_image, _cookie_reje
 from muclegal.live import (
     LiveMonitorWorkflow,
     LiveWorkflowResult,
+    _bundle_browser_capture_artifacts,
     _capture_transparency,
     _legal_subpage_candidates,
+    _mark_god_mode_bundle,
     _select_legal_content_url,
     _select_legal_link,
     changed_excerpts,
@@ -41,11 +44,13 @@ FIXTURES = ROOT / "fixtures"
 
 class _LiveHandler(BaseHTTPRequestHandler):
     page = (FIXTURES / "baseline.html").read_bytes()
+    robots_status = 200
+    robots_body = b"User-agent: *\nAllow: /\n"
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/robots.txt":
-            body = b"User-agent: *\nAllow: /\n"
-            status = 200
+            body = type(self).robots_body
+            status = type(self).robots_status
             content_type = "text/plain; charset=utf-8"
         else:
             body = type(self).page
@@ -64,6 +69,8 @@ class _LiveHandler(BaseHTTPRequestHandler):
 class LiveServer:
     def __enter__(self):
         _LiveHandler.page = (FIXTURES / "baseline.html").read_bytes()
+        _LiveHandler.robots_status = 200
+        _LiveHandler.robots_body = b"User-agent: *\nAllow: /\n"
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _LiveHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -149,6 +156,114 @@ def poll(client: TestClient, run_id: str) -> dict:
 
 
 class LiveWorkflowTests(unittest.TestCase):
+    def test_authorized_god_mode_is_separate_marked_and_ignores_robots(self) -> None:
+        from PIL import Image
+
+        def fake_screenshot(url: str, destination: str | Path):
+            del url
+            path = Path(destination)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (640, 360), "white").save(path, "PNG")
+            return SimpleNamespace(
+                path=str(path),
+                sha256="1" * 64,
+                size_bytes=path.stat().st_size,
+                capture_state="page_content",
+                state_reason=None,
+                interactions=(),
+                artifact_directory=None,
+            )
+
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.robots_body = b"User-agent: *\nDisallow: /\n"
+            root = Path(output)
+            workflow = LiveMonitorWorkflow(
+                root,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+                screenshot_capturer=fake_screenshot,
+            )
+            result = workflow.run(
+                server.url,
+                capture_baseline=True,
+                browser_mode=True,
+                god_mode=True,
+            )
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            bundle_path = Path(case["artifacts"]["manifest"]).parent
+            manifest = json.loads(Path(case["artifacts"]["manifest"]).read_text(encoding="utf-8"))
+            normalized = Path(case["artifacts"]["normalized_text"]).read_text(encoding="utf-8")
+            authorization = json.loads(
+                Path(case["artifacts"]["god_mode_authorization"]).read_text(encoding="utf-8")
+            )
+            with Image.open(case["artifacts"]["screenshot"]) as image:
+                banner_pixel = image.convert("RGB").getpixel((1, 1))
+            archive = CaseArchive(root)
+            regular_cases = archive.list()
+            god_cases = archive.list_god_mode()
+            regular_latest_exists = workflow.latest_case_path.exists()
+            god_latest_exists = workflow.latest_god_mode_case_path.exists()
+
+        self.assertIn("god-mode-bundles", str(bundle_path))
+        self.assertTrue(bundle_path.name.startswith("god-"))
+        self.assertTrue(case["god_mode"])
+        self.assertEqual("nicht_juristisch_verwertbar", case["evidence_suitability"])
+        self.assertEqual("god_mode_ausdruecklich_ignoriert", case["capture_transparency"]["robots_txt"])
+        self.assertTrue(normalized.startswith("GOD MODE"))
+        self.assertIn("GOD MODE", manifest["notice"])
+        self.assertTrue(authorization["activated"])
+        self.assertLess(banner_pixel[1], 40)
+        self.assertEqual([], regular_cases)
+        self.assertEqual(1, len(god_cases))
+        self.assertFalse(regular_latest_exists)
+        self.assertTrue(god_latest_exists)
+
+    def test_unchecked_robots_marks_case_manifest_zip_and_ui_as_not_evidence_suitable(self) -> None:
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.robots_status = 503
+            root = Path(output)
+            workflow = LiveMonitorWorkflow(
+                root,
+                FIXTURES / "tenor.json",
+                fetcher=local_fetcher(),
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+            )
+            result = workflow.run(server.url, capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            bundle = Path(case["artifacts"]["manifest"]).parent
+            case_id = bundle.name
+            app = create_app(
+                workflow.latest_case_path,
+                root / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                detail = client.get(f"/api/cases/{case_id}").json()
+                page = client.get("/beweis-labor").text
+                package_response = client.get(f"/api/v1/cases/{case_id}/download")
+            with zipfile.ZipFile(io.BytesIO(package_response.content)) as package:
+                package_names = package.namelist()
+                notice = package.read("artifacts/NICHT_BEWEISGEEIGNET.txt").decode("utf-8")
+            manifest_valid = verify_manifest(case["artifacts"]["manifest"]).valid
+
+        self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("ungeprueft", case["capture_transparency"]["robots_txt"])
+        self.assertEqual("nicht_beweisgeeignet", case["evidence_suitability"])
+        self.assertEqual("nicht_beweisgeeignet", detail["evidence_suitability"])
+        self.assertIn("NICHT BEWEISGEEIGNET", result.message)
+        self.assertIn("NICHT_BEWEISGEEIGNET.txt", " ".join(package_names))
+        self.assertIn("NICHT BEWEISGEEIGNET", notice)
+        self.assertIn('id="evidence-warning"', page)
+        self.assertIn("evidence_suitability", page)
+        self.assertTrue(manifest_valid)
+
     def test_agb_hub_resolves_to_concrete_clause_page(self) -> None:
         hub = """<html><main><h1>Allgemeine Liefer- und Zahlungsbedingungen</h1>
           <a href='/terms/agb-online-shop'>Allgemeine Liefer- und Zahlungsbedingungen Online-Shop</a>
@@ -182,7 +297,9 @@ class LiveWorkflowTests(unittest.TestCase):
 
     def test_browserless_html_evidence_image_is_labeled_and_readable(self) -> None:
         with tempfile.TemporaryDirectory() as output:
-            destination = Path(output) / "evidence.png"
+            artifact_root = Path(output) / "captured-page"
+            artifact_root.mkdir()
+            destination = artifact_root / "screenshot-full-page.png"
             capture = _capture_html_evidence_image(
                 "<html><head><title>IKEA Test</title></head><body>"
                 "<h1>Allgemeine Geschäftsbedingungen</h1>"
@@ -192,18 +309,30 @@ class LiveWorkflowTests(unittest.TestCase):
                 protection=None,
                 fallback_reason="Page.set_content: browser has been closed",
                 browser_error="Target page, context or browser has been closed",
+                artifact_directory=artifact_root,
             )
 
             from PIL import Image
 
             with Image.open(destination) as image:
                 dimensions = image.size
+            raw_html_saved = (artifact_root / "raw.html").is_file()
+            normalized_content = (artifact_root / "normalized-text.txt").read_text(
+                encoding="utf-8"
+            )
+            screenshot_index_saved = (artifact_root / "screenshot-index.json").is_file()
+            preview_saved = (artifact_root / "screenshot-preview.webp").is_file()
 
         self.assertEqual("http_snapshot_visualized", capture.capture_state)
         self.assertIn("keine pixelgetreue Live-Browser-Aufnahme", capture.state_reason)
         self.assertGreater(capture.size_bytes, 5_000)
         self.assertEqual(1440, dimensions[0])
         self.assertGreaterEqual(dimensions[1], 900)
+        self.assertEqual(str(artifact_root.resolve()), capture.artifact_directory)
+        self.assertTrue(raw_html_saved)
+        self.assertIn("Gespeicherter öffentlicher Inhalt", normalized_content)
+        self.assertTrue(screenshot_index_saved)
+        self.assertTrue(preview_saved)
 
     def test_browser_termination_uses_labeled_http_snapshot_fallback(self) -> None:
         fetcher = HttpFetcher(
@@ -237,6 +366,46 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertEqual("<html><main>Gespeichert</main></html>", fallback.call_args.args[0])
         self.assertEqual("https://example.org/final", fallback.call_args.args[1])
 
+    def test_god_mode_uses_stored_browser_dom_when_regular_screenshot_is_missing(self) -> None:
+        fetcher = HttpFetcher(
+            FetchPolicy(respect_robots=True, require_public_network=False, max_attempts=1)
+        )
+        fetched = FetchResult(
+            requested_url="https://authorized.example",
+            final_url="https://authorized.example/final",
+            fetched_at="2026-08-21T00:00:00+00:00",
+            status_code=200,
+            headers=(),
+            redirect_chain=(),
+            body=b"<html><main>Schutzseite</main></html>",
+            decoded_html="<html><main>Schutzseite</main></html>",
+            fetch_mode="browser_review",
+        )
+        fallback_capture = SimpleNamespace(capture_state="http_snapshot_rendered")
+        with tempfile.TemporaryDirectory() as output, fetcher.god_mode_session(), patch(
+            "muclegal.fetch.playwright._capture_html_evidence_image",
+            return_value=fallback_capture,
+        ) as fallback:
+            target_root = Path(output) / "target"
+            target_root.mkdir()
+            fetcher._capture_controller = SimpleNamespace(
+                capture_target=lambda _url, role: SimpleNamespace(
+                    fetch_result=fetched,
+                    screenshot=None,
+                    failure_phase="initialzustand_sichern",
+                    artifact_directory=str(target_root),
+                )
+            )
+            captured = fetcher.capture_screenshot(
+                "https://authorized.example", Path(output) / "god-mode.png"
+            )
+
+        self.assertIs(captured, fallback_capture)
+        self.assertEqual("<html><main>Schutzseite</main></html>", fallback.call_args.args[0])
+        self.assertIn("God Mode", fallback.call_args.kwargs["fallback_reason"])
+        self.assertEqual(target_root, fallback.call_args.args[2].parent)
+        self.assertEqual(target_root, fallback.call_args.kwargs["artifact_directory"])
+
     def test_all_protected_targets_still_create_reviewable_evidence_package(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             root = Path(output)
@@ -250,10 +419,16 @@ class LiveWorkflowTests(unittest.TestCase):
                 state_reason="Gespeicherte Schutzseite ohne JavaScript gerendert.",
                 interactions=(),
             )
+            fetcher = local_fetcher()
+            fetcher._record_robots_check(
+                url="https://shop.test/robots.txt",
+                status="ungeprueft",
+                reason="robots.txt konnte nicht verlässlich geprüft werden (HTTP 503).",
+            )
             workflow = LiveMonitorWorkflow(
                 root,
                 FIXTURES / "tenor.json",
-                fetcher=local_fetcher(),
+                fetcher=fetcher,
                 tsa_client=FakeTsaClient(),
                 report_builder=fake_report,
             )
@@ -274,6 +449,9 @@ class LiveWorkflowTests(unittest.TestCase):
 
         artifacts = {item["label"]: item for item in detail["artifacts"]}
         self.assertEqual("completed_with_warnings", result.status)
+        self.assertEqual("nicht_beweisgeeignet", case["evidence_suitability"])
+        self.assertEqual("ungeprueft", case["capture_transparency"]["robots_txt"])
+        self.assertIn("NICHT BEWEISGEEIGNET", result.message)
         self.assertTrue(manifest_valid)
         self.assertTrue(artifacts["protection_report"]["available"])
         self.assertEqual("warning", artifacts["requested_page_screenshot"]["status"])
@@ -427,6 +605,131 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(artifacts["agb_screenshot"]["available"])
         self.assertTrue(artifacts["privacy_screenshot"]["available"])
 
+    def test_every_captured_page_bundles_html_text_and_screenshot(self) -> None:
+        from PIL import Image
+        from pypdf import PdfWriter
+
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            bundle = root / "bundle"
+            artifacts = bundle / "artifacts"
+            source_root = root / "source-agb"
+            source_root.mkdir(parents=True)
+            (source_root / "request.json").write_text(
+                json.dumps(
+                    {
+                        "requested_url": "https://shop.test/agb",
+                        "final_url": "https://shop.test/agb-online",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (source_root / "raw.html").write_text(
+                "<html><body>AGB Rohstand</body></html>", encoding="utf-8"
+            )
+            (source_root / "normalized-text.txt").write_text(
+                "AGB Rohstand", encoding="utf-8"
+            )
+            screenshot = source_root / "screenshot-full-page.png"
+            Image.new("RGB", (200, 300), "white").save(screenshot)
+            (source_root / "screenshot-preview.webp").write_bytes(screenshot.read_bytes())
+            (source_root / "screenshot-index.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "full_page",
+                        "capture_completeness": "vollstaendig_erfasst",
+                        "full_page_attempt": {"path": screenshot.name},
+                        "tiles": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            writer = PdfWriter()
+            writer.add_blank_page(width=595, height=842)
+            with (source_root / "expanded-legal-print.pdf").open("wb") as handle:
+                writer.write(handle)
+            capture = SimpleNamespace(
+                artifact_directory=str(source_root),
+                path=str(screenshot),
+                capture_completeness="vollstaendig_erfasst",
+            )
+            bundled = {}
+            completeness, galleries, _ = _bundle_browser_capture_artifacts(
+                bundle=bundle,
+                artifacts_dir=artifacts,
+                bundled_artifacts=bundled,
+                role_captures={"main": capture, "agb": capture},
+                legal_screenshot_statuses={},
+                protection_type=None,
+                requested_url="https://shop.test/",
+                captured_url="https://shop.test/agb-online",
+                browser_run_root=None,
+            )
+            _mark_god_mode_bundle(bundle)
+            index = json.loads(
+                Path(bundled["page_artifacts_index"]).read_text(encoding="utf-8")
+            )
+            from pypdf import PdfReader
+
+            god_pdf_text = "\n".join(
+                page.extract_text() or ""
+                for page in PdfReader(
+                    bundle / index["pages"]["agb"]["document_files"][0]["path"]
+                ).pages
+            )
+            for collection in (
+                "raw_html_files",
+                "normalized_text_files",
+                "screenshot_files",
+                "document_files",
+            ):
+                for item in index["pages"]["agb"][collection]:
+                    actual = hashlib.sha256((bundle / item["path"]).read_bytes()).hexdigest()
+                    self.assertEqual(actual, item["sha256"])
+
+        page = index["pages"]["agb"]
+        self.assertEqual("vollstaendig_erfasst", completeness)
+        self.assertTrue(index["all_required_artifacts_complete"])
+        self.assertTrue(page["required_artifacts_complete"])
+        self.assertTrue(page["raw_html_files"])
+        self.assertTrue(page["normalized_text_files"])
+        self.assertTrue(page["screenshot_files"])
+        self.assertTrue(page["document_files"])
+        self.assertIn("GOD MODE", god_pdf_text)
+        self.assertEqual("https://shop.test/agb-online", page["captured_url"])
+        self.assertTrue(galleries["agb"]["page_artifacts_complete"])
+
+    def test_real_browser_bundle_has_three_artifact_groups_for_main_and_legal_pages(self) -> None:
+        page = b"""<!doctype html><html><main><h1>Shop</h1><p>Oeffentlicher Inhalt.</p></main>
+          <footer><a href='/agb'>AGB</a><a href='/privacy'>Datenschutz</a></footer></html>"""
+        with tempfile.TemporaryDirectory() as output, LiveServer() as server:
+            _LiveHandler.page = page
+            fetcher = local_fetcher()
+            workflow = LiveMonitorWorkflow(
+                output,
+                FIXTURES / "tenor.json",
+                fetcher=fetcher,
+                warc_capturer=fake_warc,
+                tsa_client=FakeTsaClient(),
+                report_builder=fake_report,
+                screenshot_capturer=fetcher.capture_screenshot,
+            )
+            result = workflow.run(server.url, capture_baseline=True)
+            case = json.loads(Path(result.case_path).read_text(encoding="utf-8"))
+            page_index = json.loads(
+                Path(case["artifacts"]["page_artifacts_index"]).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual({"main", "agb", "privacy"}, set(page_index["pages"]))
+        for role in ("main", "agb", "privacy"):
+            captured = page_index["pages"][role]
+            self.assertTrue(captured["required_artifacts_complete"], role)
+            self.assertTrue(captured["raw_html_files"], role)
+            self.assertTrue(captured["normalized_text_files"], role)
+            self.assertTrue(captured["screenshot_files"], role)
+            if role in {"agb", "privacy"}:
+                self.assertTrue(captured["document_files"], role)
+
     def test_cookie_rejection_action_never_accepts_consent(self) -> None:
         self.assertEqual(
             _cookie_rejection_action("Alle ablehnen", "Wir verwenden Cookies"),
@@ -548,6 +851,136 @@ class LiveWorkflowTests(unittest.TestCase):
 
 
 class LiveUiTests(unittest.TestCase):
+    def test_evidence_lab_authorization_checkbox_starts_explicit_god_mode(self) -> None:
+        class GodModeWorkflow:
+            tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
+
+            def run(
+                self, url, progress, *, capture_baseline=False, browser_mode=False, god_mode=False
+            ):
+                self.received = (url, capture_baseline, browser_mode, god_mode)
+                progress("fetch", "God Mode protokolliert")
+                return LiveWorkflowResult("protected", "GOD MODE – NUR DEMONSTRATION")
+
+        with tempfile.TemporaryDirectory() as output:
+            workflow = GodModeWorkflow()
+            app = create_app(
+                Path(output) / "latest-case.json",
+                Path(output) / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                page = client.get("/beweis-labor")
+                started = client.post(
+                    "/api/v1/evidence-runs",
+                    json={
+                        "url": "https://authorized.example/",
+                        "verification_mode": False,
+                        "god_mode_authorized": True,
+                    },
+                ).json()
+                completed = poll(client, started["run_id"])
+
+        self.assertIn('id="god-mode-authorized" type="checkbox"', page.text)
+        self.assertIn("Autorisiert (God Mode)", page.text)
+        self.assertTrue(started["god_mode_authorized"])
+        self.assertTrue(started["verification_mode"])
+        self.assertEqual(
+            ("https://authorized.example/", True, True, True), workflow.received
+        )
+        self.assertIn("GOD MODE", completed["message"])
+
+    def test_evidence_lab_groups_primary_artifacts_and_exposes_text_per_page(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            case_id = "capture-pages"
+            bundle = root / "bundles" / case_id
+            roles = bundle / "artifacts" / "roles"
+            galleries = {}
+            for role, content in (
+                ("main", "Text der Hauptseite"),
+                ("agb", "Text der AGB-Seite"),
+                ("privacy", "Text der Datenschutz-Seite"),
+            ):
+                role_dir = roles / role
+                role_dir.mkdir(parents=True)
+                (role_dir / "screenshot-index.json").write_text("{}", encoding="utf-8")
+                (role_dir / "normalized-text.txt").write_text(content, encoding="utf-8")
+                (role_dir / "raw.html").write_text(
+                    f"<html><body>{content}</body></html>", encoding="utf-8"
+                )
+                galleries[role] = {
+                    "index": f"artifacts/roles/{role}/screenshot-index.json",
+                    "preview": f"artifacts/roles/{role}/screenshot-preview.webp",
+                    "raw_html": f"artifacts/roles/{role}/raw.html",
+                    "originals": [],
+                    "tiles": [],
+                }
+                if role in {"agb", "privacy"}:
+                    (role_dir / "expanded-legal-print.pdf").write_bytes(b"%PDF-1.4\n%%EOF")
+                    galleries[role]["documents"] = [
+                        f"artifacts/roles/{role}/expanded-legal-print.pdf"
+                    ]
+            record = {
+                "url": "https://shop.test/",
+                "erkannt_am": "2026-08-20T10:00:00Z",
+                "evidence": {},
+                "assessment": {"ergebnis": "nicht_bewertet", "confidence": 0.0},
+                "artifacts": {},
+                "capture_galleries": galleries,
+            }
+            (bundle / "case.json").write_text(json.dumps(record), encoding="utf-8")
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                page = client.get("/beweis-labor")
+                detail = client.get(f"/api/cases/{case_id}").json()
+                main = client.get(
+                    f"/api/v1/cases/{case_id}/capture/main/normalized-text"
+                )
+                privacy = client.get(
+                    f"/api/v1/cases/{case_id}/capture/privacy/normalized-text"
+                )
+                agb_html = client.get(
+                    f"/api/v1/cases/{case_id}/capture/agb/raw-html"
+                )
+                privacy_pdf = client.get(
+                    f"/api/v1/cases/{case_id}/capture/privacy/documents/0"
+                )
+
+        self.assertIn('createMenuPill("Screenshots"', page.text)
+        self.assertIn('createDirectPill("Datenschutz-Screenshot"', page.text)
+        self.assertIn('createDirectPill("AGB-Screenshot"', page.text)
+        self.assertIn('createMenuPill("Normalisierter Text"', page.text)
+        self.assertIn('createMenuPill("Technische Details"', page.text)
+        self.assertIn('createMenuPill("Druckfassungen"', page.text)
+        self.assertEqual("Hauptseite", detail["capture_galleries"]["main"]["title"])
+        self.assertTrue(
+            detail["capture_galleries"]["agb"]["normalized_text_url"].endswith(
+                "/capture/agb/normalized-text"
+            )
+        )
+        self.assertEqual("Text der Hauptseite", main.text)
+        self.assertEqual("Text der Datenschutz-Seite", privacy.text)
+        self.assertIn("Text der AGB-Seite", agb_html.text)
+        self.assertTrue(detail["capture_galleries"]["agb"]["raw_html_url"].endswith("/raw-html"))
+        self.assertEqual(200, privacy_pdf.status_code)
+        self.assertEqual("application/pdf", privacy_pdf.headers["content-type"])
+        self.assertIn("inline", privacy_pdf.headers["content-disposition"])
+        self.assertNotIn("attachment", privacy_pdf.headers["content-disposition"])
+        self.assertEqual("SAMEORIGIN", privacy_pdf.headers["x-frame-options"])
+        self.assertIn(
+            "frame-ancestors 'self'",
+            privacy_pdf.headers["content-security-policy"],
+        )
+        self.assertTrue(detail["capture_galleries"]["privacy"]["document_urls"])
+
     def test_automatic_verification_is_enabled_by_default_in_lab_and_can_be_disabled(self) -> None:
         class VerificationWorkflow:
             tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))

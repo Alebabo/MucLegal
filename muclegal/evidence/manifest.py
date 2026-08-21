@@ -35,6 +35,7 @@ def create_manifest(
     bundle_root: str | Path,
     *,
     previous_manifest_sha256: str | None = None,
+    notice: str | None = None,
 ) -> ManifestResult:
     bundle_root = Path(bundle_root).resolve()
     bundle_root.mkdir(parents=True, exist_ok=True)
@@ -66,6 +67,7 @@ def create_manifest(
         "previous_manifest_sha256": previous_manifest_sha256,
         "artifacts": entries,
         "chain_head_sha256": chain,
+        "notice": notice,
     }
     manifest_path = bundle_root / "manifest.json"
     digest_path = bundle_root / "manifest.sha256"

@@ -232,15 +232,40 @@ class CaptureRunController:
             process_samples.append(_process_sample())
 
             failure_phase = "expansion"
+            legal_expansion_summary: dict[str, object] | None = None
             if role in {"agb", "privacy", "datenschutz"}:
-                interactions.extend(_expand_legal_controls(page))
+                expansion_records = _expand_legal_controls(page)
+                interactions.extend(expansion_records)
+                legal_expansion_summary = _legal_expansion_summary(
+                    page, expansion_records
+                )
             _write_text(target_root / "dom-after-expansion.html", page.content())
             final_text = _visible_text(page)
             _write_text(target_root / "visible-text-final.txt", final_text)
-            evidence_text = (
+            final_evidence_text = (
                 _legal_container_text(page)
                 if role in {"agb", "privacy", "datenschutz"}
                 else final_text
+            )
+            expanded_blocks = [
+                {
+                    "target_text": str(record.get("target_text", "")),
+                    "aria_controls": record.get("aria_controls"),
+                    "text": str(record.get("expanded_text", "")),
+                    "changed": bool(record.get("changed")),
+                }
+                for record in interactions
+                if record.get("type") == "legal_expansion"
+                and str(record.get("expanded_text", "")).strip()
+            ]
+            if role in {"agb", "privacy", "datenschutz"}:
+                _write_json(
+                    target_root / "expanded-legal-blocks.json",
+                    {"blocks": expanded_blocks},
+                )
+            evidence_text = _merge_evidence_text(
+                final_evidence_text,
+                *(block["text"] for block in expanded_blocks),
             )
             normalized_text = "\n".join(
                 line.strip() for line in evidence_text.splitlines() if line.strip()
@@ -253,7 +278,10 @@ class CaptureRunController:
             _write_text(target_root / "normalized-text.txt", normalized_text)
             _write_json(
                 target_root / "clauses.json",
-                {"clauses": _simple_clauses(normalized_text), "source": "visible-text-final"},
+                {
+                    "clauses": _simple_clauses(normalized_text),
+                    "source": "visible-text-final_and_sequential_expansions",
+                },
             )
             _write_json(
                 target_root / "content-coverage.json",
@@ -263,6 +291,7 @@ class CaptureRunController:
                     "included_blocks": len(included_blocks),
                     "coverage_ratio": coverage_ratio,
                     "omitted_blocks": [],
+                    "legal_expansion": legal_expansion_summary,
                 },
             )
             phase_durations["expansion"] = time.perf_counter() - navigation_started - sum(
@@ -273,13 +302,30 @@ class CaptureRunController:
             failure_phase = "screenshot"
             _wait_for_visual_capture(page, timeout_seconds=self.timeout_seconds)
             screenshot = _capture_validated_screenshots(page, target_root, interactions)
-            if role in {"agb", "privacy", "datenschutz"} and coverage_ratio < 0.98:
+            if role in {"agb", "privacy", "datenschutz"}:
+                _capture_expanded_legal_print_pdf(
+                    page,
+                    target_root,
+                    legal_expansion_summary or {},
+                    expanded_blocks,
+                    normalized_text,
+                )
+            expansion_incomplete = bool(
+                legal_expansion_summary
+                and not legal_expansion_summary.get("complete", False)
+            )
+            if role in {"agb", "privacy", "datenschutz"} and (
+                coverage_ratio < 0.98 or expansion_incomplete
+            ):
+                reason = (
+                    f"Rechtstextabdeckung {coverage_ratio:.1%} liegt unter 98 %."
+                    if coverage_ratio < 0.98
+                    else "Nicht alle erkannten Rechtstext-Akkordeons konnten geöffnet werden."
+                )
                 screenshot = replace(
                     screenshot,
                     capture_state="page_content_truncated",
-                    state_reason=(
-                        f"Rechtstextabdeckung {coverage_ratio:.1%} liegt unter 98 %."
-                    ),
+                    state_reason=reason,
                     capture_completeness="teilweise_erfasst",
                 )
             phase_durations["screenshot"] = time.perf_counter() - navigation_started - sum(
@@ -312,6 +358,9 @@ class CaptureRunController:
 
         if initial is None:
             raise ScreenshotCaptureError("Kein Initialzustand konnte gesichert werden.")
+        normalized_path = target_root / "normalized-text.txt"
+        if not normalized_path.is_file():
+            _write_text(normalized_path, _normalized_html_text(initial["dom"]))
         protection = _detect_block_page(initial["dom"])
         if protection:
             completeness = "durch_seitenschutz_begrenzt"
@@ -513,6 +562,21 @@ def _simple_clauses(text: str) -> list[dict[str, object]]:
     ]
 
 
+def _merge_evidence_text(*values: str) -> str:
+    """Merge sequential visible states without duplicating identical text lines."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for raw_line in value.splitlines():
+            line = " ".join(raw_line.split())
+            key = line.casefold()
+            if not line or key in seen:
+                continue
+            seen.add(key)
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def _legal_container_text(page) -> str:  # noqa: ANN001
     return str(
         page.evaluate(
@@ -544,6 +608,21 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
             "[role='tab'][aria-selected='false'], button"
         )
         count = min(controls.count(), 100)
+        eligible_total = int(
+            container.evaluate(
+                """root => [...root.querySelectorAll(
+                  "details:not([open]) > summary, [aria-expanded='false'][aria-controls], " +
+                  "[role='tab'][aria-selected='false'], button"
+                )].filter(el => {
+                  const text = (el.innerText || el.getAttribute('aria-label') || '').trim();
+                  return (el.tagName === 'SUMMARY' && !!el.closest('details:not([open])')) ||
+                    (el.getAttribute('aria-expanded') === 'false' && !!el.getAttribute('aria-controls')) ||
+                    (el.getAttribute('role') === 'tab' && el.getAttribute('aria-selected') === 'false' &&
+                      !!el.getAttribute('aria-controls')) ||
+                    (el.tagName === 'BUTTON' && /\\bmehr\\s+anzeigen\\b/i.test(text));
+                }).slice(0, 100).length"""
+            )
+        )
     except PlaywrightError:
         return records
     for index in range(count):
@@ -564,9 +643,26 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                   text_length: (document.body?.innerText || '').length
                 })"""
             )
-            tag_name = handle.evaluate("el => el.tagName.toLowerCase()")
-            if tag_name == "button" and not re.search(
-                r"\bmehr\s+anzeigen\b", before["text"], re.IGNORECASE
+            structure = handle.evaluate(
+                """el => ({
+                  tag_name: el.tagName.toLowerCase(),
+                  details_summary: el.tagName === 'SUMMARY' && !!el.closest('details:not([open])'),
+                  aria_accordion: el.getAttribute('aria-expanded') === 'false' && !!el.getAttribute('aria-controls'),
+                  inactive_tab: el.getAttribute('role') === 'tab' &&
+                    el.getAttribute('aria-selected') === 'false' && !!el.getAttribute('aria-controls')
+                })"""
+            )
+            more_button = bool(
+                structure["tag_name"] == "button"
+                and re.search(r"\bmehr\s+anzeigen\b", before["text"], re.IGNORECASE)
+            )
+            if not any(
+                (
+                    structure["details_summary"],
+                    structure["aria_accordion"],
+                    structure["inactive_tab"],
+                    more_button,
+                )
             ):
                 continue
             handle.click(timeout=1_500)
@@ -576,7 +672,12 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                   aria_expanded: el.getAttribute('aria-expanded'),
                   details_open: el.closest('details')?.open ?? null,
                   url: document.URL,
-                  text_length: (document.body?.innerText || '').length
+                  text_length: (document.body?.innerText || '').length,
+                  expanded_text: (() => {
+                    const controlled = el.getAttribute('aria-controls');
+                    const target = controlled ? document.getElementById(controlled) : null;
+                    return (target?.innerText || el.closest('details')?.innerText || '').trim();
+                  })()
                 })"""
             )
             records.append(
@@ -584,8 +685,11 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                     "type": "legal_expansion",
                     "clicked_at": datetime.now(timezone.utc).isoformat(),
                     "selector_strategy": "rechtstextcontainer:zulässige_struktur",
+                    "structure": structure,
                     "target_text": before["text"][:500],
                     "aria_controls": before["aria_controls"],
+                    "eligible_total": eligible_total,
+                    "expanded_text": after["expanded_text"][:200_000],
                     "before": before,
                     "after": after,
                     "changed": before["aria_expanded"] != after["aria_expanded"]
@@ -597,6 +701,156 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
         except PlaywrightError:
             continue
     return records
+
+
+def _legal_expansion_summary(page, records: list[dict]) -> dict[str, object]:  # noqa: ANN001
+    from playwright.sync_api import Error as PlaywrightError
+
+    try:
+        container = page.locator("main, article, [role='main']").first
+        if container.count() == 0:
+            container = page.locator("body")
+        remaining = container.locator(
+            "details:not([open]) > summary, [aria-expanded='false'][aria-controls]"
+        ).count()
+    except PlaywrightError:
+        remaining = -1
+    attempted = len(records)
+    changed = sum(bool(record.get("changed")) for record in records)
+    eligible = max(
+        (int(record.get("eligible_total", 0)) for record in records),
+        default=0,
+    )
+    captured = sum(bool(str(record.get("expanded_text", "")).strip()) for record in records)
+    return {
+        "eligible_controls": eligible,
+        "attempted": attempted,
+        "changed": changed,
+        "captured_expanded_texts": captured,
+        "unchanged": attempted - changed,
+        "remaining_collapsed_controls": remaining,
+        "limit": 100,
+        "complete": attempted == eligible and changed == attempted and captured == attempted,
+    }
+
+
+def _capture_expanded_legal_print_pdf(
+    page,
+    root: Path,
+    expansion_summary: dict[str, object],
+    expanded_blocks: list[dict[str, object]],
+    normalized_text: str,
+) -> None:  # noqa: ANN001
+    """Store a derived PDF containing every sequentially expanded legal block."""
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    pdf_path = root / "expanded-legal-print.pdf"
+    metadata_path = root / "expanded-legal-print.json"
+    source_url = page.url
+    try:
+        font_name = "Helvetica"
+        for candidate in (
+            "C:/Windows/Fonts/arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ):
+            try:
+                pdfmetrics.registerFont(TTFont("MucLegalUnicode", candidate))
+                font_name = "MucLegalUnicode"
+                break
+            except (OSError, ValueError):
+                continue
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "MucLegalTitle",
+            parent=styles["Title"],
+            fontName=font_name,
+            alignment=TA_CENTER,
+            fontSize=15,
+            leading=19,
+        )
+        heading_style = ParagraphStyle(
+            "MucLegalHeading",
+            parent=styles["Heading2"],
+            fontName=font_name,
+            fontSize=12,
+            leading=15,
+            spaceBefore=8,
+        )
+        body_style = ParagraphStyle(
+            "MucLegalBody",
+            parent=styles["BodyText"],
+            fontName=font_name,
+            fontSize=9,
+            leading=12,
+            spaceAfter=5,
+        )
+        story = [
+            Paragraph("MucLegal – Druckfassung sequenziell expandierter Rechtstextblöcke", title_style),
+            Spacer(1, 4 * mm),
+            Paragraph(f"Quelle: {html_escape(source_url)}", body_style),
+            Paragraph(
+                "Technischer Hinweis: Diese PDF wurde lokal aus den nach jedem kontrollierten "
+                "Akkordeon-Klick sichtbaren Textständen erzeugt. Sie ist keine unveränderte "
+                "Original-PDF der Website.",
+                body_style,
+            ),
+            Spacer(1, 4 * mm),
+        ]
+        blocks = expanded_blocks or [
+            {"target_text": "Vollständiger sichtbarer Rechtstext", "text": normalized_text}
+        ]
+        for block in blocks:
+            story.append(
+                Paragraph(html_escape(str(block.get("target_text") or "Rechtstextblock")), heading_style)
+            )
+            text = str(block.get("text") or "")
+            for paragraph in re.split(r"\n{2,}|\n", text):
+                value = " ".join(paragraph.split())
+                if value:
+                    story.append(Paragraph(html_escape(value), body_style))
+        document = SimpleDocTemplate(
+            str(pdf_path),
+            pagesize=A4,
+            rightMargin=14 * mm,
+            leftMargin=14 * mm,
+            topMargin=16 * mm,
+            bottomMargin=16 * mm,
+            title="MucLegal – expandierte Rechtstext-Druckfassung",
+            author="MucLegal BeweisLab",
+        )
+        document.build(story)
+        _write_json(
+            metadata_path,
+            {
+                "kind": "locally_generated_sequential_expansion_print",
+                "source_url": source_url,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "sha256": _sha256_path(pdf_path),
+                "size_bytes": pdf_path.stat().st_size,
+                "website_original": False,
+                "expanded_block_count": len(expanded_blocks),
+                "expansion_summary": expansion_summary,
+            },
+        )
+    except (OSError, ValueError) as exc:
+        _write_json(
+            metadata_path,
+            {
+                "kind": "locally_generated_sequential_expansion_print",
+                "source_url": source_url,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "status": "failed",
+                "reason": f"{type(exc).__name__}: {exc}",
+                "website_original": False,
+                "expansion_summary": expansion_summary,
+            },
+        )
 
 
 def _capture_validated_screenshots(page, root: Path, interactions: list[dict]) -> ScreenshotCapture:  # noqa: ANN001
@@ -1209,6 +1463,7 @@ def _capture_html_evidence_image(
     protection: str | None,
     fallback_reason: str | None,
     browser_error: str,
+    artifact_directory: str | Path | None = None,
 ) -> ScreenshotCapture:
     """Create a labeled PNG from stored DOM text when Chromium itself terminates.
 
@@ -1408,6 +1663,43 @@ def _capture_html_evidence_image(
     technical_reason = fallback_reason or browser_error
     if technical_reason:
         reason += f" Technischer Auslöser: {technical_reason[:500]}"
+    preview_path: Path | None = None
+    index_path: Path | None = None
+    artifact_root = Path(artifact_directory).resolve() if artifact_directory else None
+    if artifact_root is not None:
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        raw_html_path = artifact_root / "raw.html"
+        if not raw_html_path.is_file():
+            _write_text(raw_html_path, html)
+        normalized_path = artifact_root / "normalized-text.txt"
+        if not normalized_path.is_file():
+            _write_text(normalized_path, _normalized_html_text(html))
+        preview_path = artifact_root / "screenshot-preview.webp"
+        with Image.open(destination) as source:
+            preview = source.convert("RGB")
+            preview.thumbnail((1200, 1600))
+            preview.save(preview_path, "WEBP", quality=82, method=6)
+        index_path = artifact_root / "screenshot-index.json"
+        with Image.open(destination) as source:
+            width, height = source.size
+        _write_json(
+            index_path,
+            {
+                "mode": "http_snapshot_visualized",
+                "full_page_attempt": {
+                    "path": destination.name,
+                    "valid": True,
+                    "error": None,
+                },
+                "document_height_css_px": height,
+                "height_measurements_css_px": [height],
+                "tiles": [],
+                "continuous_coverage": True,
+                "capture_completeness": "durch_seitenschutz_begrenzt" if protection else "teilweise_erfasst",
+                "pixel_width": width,
+                "pixel_height": height,
+            },
+        )
     return ScreenshotCapture(
         path=str(destination),
         sha256=hashlib.sha256(payload).hexdigest(),
@@ -1415,7 +1707,27 @@ def _capture_html_evidence_image(
         capture_state=state,
         state_reason=reason,
         interactions=(),
+        preview_path=str(preview_path) if preview_path else None,
+        index_path=str(index_path) if index_path else None,
+        artifact_directory=str(artifact_root) if artifact_root else None,
+        capture_completeness=(
+            "durch_seitenschutz_begrenzt" if protection else "teilweise_erfasst"
+        ),
     )
+
+
+def _normalized_html_text(html: str) -> str:
+    """Create a deterministic text fallback for a stored DOM without another request."""
+    try:
+        from lxml import html as lxml_html
+
+        document = lxml_html.fromstring(html)
+        for unwanted in document.xpath("//script|//style|//noscript|//template|//svg"):
+            unwanted.drop_tree()
+        value = document.text_content()
+    except (ValueError, TypeError):
+        value = re.sub(r"<[^>]+>", " ", html)
+    return "\n".join(line.strip() for line in value.splitlines() if line.strip())
 
 
 _COOKIE_CONTEXT_MARKERS = (

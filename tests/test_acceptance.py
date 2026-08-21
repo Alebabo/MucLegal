@@ -24,12 +24,13 @@ FIXTURES = ROOT / "fixtures"
 
 class _FixtureHandler(BaseHTTPRequestHandler):
     fixture_name = "baseline.html"
+    robots_status = 200
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/robots.txt":
             body = b"User-agent: *\nDisallow: /denied\nAllow: /\n"
             content_type = "text/plain; charset=utf-8"
-            status = 200
+            status = type(self).robots_status
         elif self.path == "/page":
             body = (FIXTURES / type(self).fixture_name).read_bytes()
             content_type = "text/html; charset=utf-8"
@@ -42,6 +43,10 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             body = b'<html><main><div class="g-recaptcha">Verify you are human</div></main></html>'
             content_type = "text/html; charset=utf-8"
             status = 200
+        elif self.path == "/forbidden":
+            body = b"<html><main>Access denied</main></html>"
+            content_type = "text/html; charset=utf-8"
+            status = 403
         elif self.path == "/slow":
             time.sleep(0.2)
             body = b"<html><main>Zu spaet</main></html>"
@@ -66,6 +71,7 @@ class _FixtureHandler(BaseHTTPRequestHandler):
 
 class FixtureServer:
     def __enter__(self):
+        _FixtureHandler.robots_status = 200
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -282,6 +288,16 @@ class PipelineAcceptanceTests(unittest.TestCase):
             connection.close()
         self.assertEqual([("failure", "protected_or_login_page", 1)], attempts)
 
+    def test_http_403_is_classified_as_access_protection_for_browser_review(self) -> None:
+        with FixtureServer() as server:
+            with self.assertRaises(FetchFailure) as caught:
+                self.fetcher.fetch(server.base_url + "/forbidden")
+
+        self.assertEqual("protected_or_login_page", caught.exception.code)
+        self.assertEqual(403, caught.exception.status_code)
+        self.assertTrue(caught.exception.manual_review)
+        self.assertIn("HTTP-Zugriffsschutz", str(caught.exception))
+
     def test_javascript_challenge_is_classified_as_protected(self) -> None:
         page = (
             "<html><script src='https://static.kwcdn.com/upload-static/assets/chl/js/x.js'>"
@@ -299,6 +315,15 @@ class PipelineAcceptanceTests(unittest.TestCase):
         """
         self.assertIsNone(_detect_block_page(page))
 
+    def test_adidas_http_200_security_page_is_still_protected(self) -> None:
+        page = """
+        <html><main><h1>What could have caused this?</h1>
+        <p>During high-traffic product releases we have extra security in place to prevent bots
+        entering our site. Something in your setup must have triggered our security system,
+        so we cannot allow you onto the site.</p></main></html>
+        """
+        self.assertIn("Bot-Schutzseite trotz HTTP 200", _detect_block_page(page))
+
     def test_privacy_policy_that_explains_captcha_is_not_a_block_page(self) -> None:
         page = """
         <html><main><h1>Datenschutzerklärung</h1>
@@ -313,6 +338,20 @@ class PipelineAcceptanceTests(unittest.TestCase):
                 check_url(server.base_url + "/denied", load_config(), self.repository, self.fetcher)
         self.assertEqual("robots_disallowed", caught.exception.code)
         self.assertTrue(caught.exception.manual_review)
+
+    def test_unavailable_robots_continues_with_unchecked_status(self) -> None:
+        with FixtureServer() as server:
+            _FixtureHandler.robots_status = 503
+            outcome = check_url(
+                server.base_url + "/page", load_config(), self.repository, self.fetcher
+            )
+
+        self.assertEqual("baseline_created", outcome.status)
+        self.assertEqual("ungeprueft", outcome.browser_metadata["robots_txt"])
+        self.assertEqual(
+            "nicht_beweisgeeignet", outcome.browser_metadata["evidence_suitability"]
+        )
+        self.assertIn("HTTP 503", outcome.browser_metadata["robots_reason"])
 
     def test_single_cli_command_runs_without_llm_or_ui(self) -> None:
         with FixtureServer() as server:
