@@ -7,7 +7,13 @@ from muclegal.evidence.manifest import (
 )
 from muclegal.evidence.report import build_pdf_report
 from muclegal.evidence.timestamp import OpenSslTsaClient, TimestampResult
-from muclegal.evidence.warc import WarcResult, capture_warc, validate_warc
+from muclegal.evidence.warc import (
+    WarcResult,
+    capture_warc,
+    capture_snapshot_warc,
+    response_payload_sha256,
+    validate_warc,
+)
 
 __all__ = [
     "ManifestResult",
@@ -17,8 +23,10 @@ __all__ = [
     "WarcResult",
     "build_pdf_report",
     "capture_warc",
+    "capture_snapshot_warc",
     "create_manifest",
     "sha256_file",
     "validate_warc",
+    "response_payload_sha256",
 ]
 

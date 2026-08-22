@@ -1,4 +1,18 @@
-from muclegal.storage.repository import SnapshotArtifacts, SnapshotRecord, SnapshotRepository
+from muclegal.storage.repository import (
+    ClauseRecord,
+    FindingRecord,
+    SnapshotArtifacts,
+    SnapshotRecord,
+    SnapshotRepository,
+    SnapshotScreenshot,
+)
 
-__all__ = ["SnapshotArtifacts", "SnapshotRecord", "SnapshotRepository"]
+__all__ = [
+    "ClauseRecord",
+    "FindingRecord",
+    "SnapshotArtifacts",
+    "SnapshotRecord",
+    "SnapshotRepository",
+    "SnapshotScreenshot",
+]
 

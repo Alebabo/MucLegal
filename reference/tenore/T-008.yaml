@@ -1,0 +1,134 @@
+id: T-008
+quelle: urteil
+gericht_az: "OLG Karlsruhe, 6 U 82/22"
+datum: "2023-02-08"
+datum_hinweis: >
+  In der Team-Sammlung steht als Urteilsdatum der 08.02.2023, der PDF-Dateiname der
+  Verbraucherzentrale nennt jedoch den 12.04.2022. Widerspruch — beim Gegenprüfen klären.
+fundstelle_url: "https://www.verbraucherzentrale.de/sites/default/files/2023-02/olg_karlsruhe_12.4.2022_az._6_u_82-22.pdf"
+rechtskraeftig: unbekannt
+parteien:
+  klaeger: "Verbraucherzentrale Baden-Württemberg e.V."
+  beklagte: "Anbieter von Finanzsanierungsleistungen"
+zitat_geprueft: teilweise
+zitat_quelle: >
+  Übernommen aus der Team-Datei „Unterlassungstenore Referenzsammlung.md”. Enthält eine
+  Auslassung ([...]) im Anwendungsbereich. Am PDF gegenprüfen.
+
+sachverhalt: >
+  Die Beklagte warb gegenüber Verbrauchern in einem Anschreiben mit einer in Euro
+  bezifferten „Finanzsanierung” und der Behauptung, diese sei ab sofort für den
+  Verbraucher „verfügbar”.
+fallgruppe: irrefuehrende_werbung
+verstoss_modus: irrefuehrend_gestaltet
+kanal:
+  - offline
+kanal_hinweis: >
+  Werbeschreiben, kein Webseitenbezug. Für den Umsetzungsmonitor nur bedingt geeignet
+  (vgl. Erfassungsbogen: „Ungeeignet: Werbebriefe”). Im Register bleibt der Fall, weil
+  er die Standardbauform des § 8 UWG-Tenors mit „wie geschehen”-Bezug zeigt.
+rechtsgrundlage:
+  - norm: "§ 8 Abs. 1, Abs. 3 Nr. 3 UWG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 5 UWG"
+    funktion: anspruchsbegruendend
+    anmerkung: "Beim Gegenprüfen verifizieren."
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+tenor_text: >
+  Der Beklagten wird untersagt, im geschäftlichen Verkehr gegenüber Verbrauchern in
+  Deutschland [...] mit einer in Euro bezifferten „Finanzsanierung” und der Behauptung
+  zu werben, diese sei ab sofort für den Verbraucher „verfügbar”, wie geschehen im
+  Schreiben der Beklagten [...] vom 12.04.2021 (Anlage K 2).
+
+  Der Beklagten wird für jeden Fall der schuldhaften Zuwiderhandlung [...] ein
+  Ordnungsgeld bis zu € 250.000,00 (ersatzweise Ordnungshaft bis zu 6 Wochen) oder
+  Ordnungshaft bis zu 6 Monaten, zu vollstrecken an deren Vorstand, angedroht.
+verletzungsform_anlage: "Anlage K 2 (Schreiben vom 12.04.2021)"
+
+tenor_bausteine:
+  - text: "Der Beklagten wird untersagt"
+    funktion: verpflichtungsformel
+    baustein_id: B-VF-02
+    anmerkung: >
+      Passivische Variante. Im Register überwiegt „Die Beklagte wird verurteilt,
+      es zu unterlassen" (B-VF-01).
+  - text: "im geschäftlichen Verkehr gegenüber Verbrauchern in Deutschland"
+    funktion: adressatenkreis
+    baustein_id: B-AK-03
+    anmerkung: "Mit räumlicher Begrenzung — relevant bei Anbietern im EU-Ausland."
+  - text: "mit einer in Euro bezifferten „Finanzsanierung” und der Behauptung zu werben,
+      diese sei ab sofort für den Verbraucher „verfügbar”"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-51
+  - text: "wie geschehen im Schreiben der Beklagten [...] vom 12.04.2021 (Anlage K 2)"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-05
+    anmerkung: >
+      „wie geschehen” ist die klassische Formel des § 8 UWG-Tenors. Sie bindet das
+      Verbot an die festgestellte Verletzungsform und beseitigt
+      Bestimmtheitsbedenken nach § 253 Abs. 2 Nr. 2 ZPO.
+  - text: "für jeden Fall der schuldhaften Zuwiderhandlung [...] ein Ordnungsgeld bis zu
+      € 250.000,00 (ersatzweise Ordnungshaft bis zu 6 Wochen) oder Ordnungshaft bis zu
+      6 Monaten, zu vollstrecken an deren Vorstand, angedroht"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-06
+    anmerkung: >
+      ABWEICHENDE BAUFORM: Die Androhung steht als eigener Tenorabsatz NACH dem
+      Verbot, nicht eingeschoben. Beides ist zulässig; das System sollte beide
+      Anordnungen kennen und nicht die eine als Fehler der anderen melden.
+
+kerngleich_umfasst:
+  - beschreibung: "Dasselbe Anschreiben mit anderem Betrag"
+    begruendung: >
+      Der Tenor nennt keinen konkreten Betrag, sondern „eine in Euro bezifferte
+      Finanzsanierung". Der Betrag ist also gerade nicht tragend.
+    sicherheit: hoch
+  - beschreibung: "Dieselbe Aussage mit „steht Ihnen ab sofort zur Verfügung” statt
+      „verfügbar”"
+    begruendung: >
+      Der „wie geschehen”-Bezug bindet an die konkrete Verletzungsform. Ob eine
+      sprachliche Variante noch kerngleich ist, entscheidet das
+      Ordnungsmittelverfahren.
+    sicherheit: mittel
+
+nicht_umfasst:
+  - beschreibung: "Werbung mit einer Finanzsanierung ohne Verfügbarkeitsbehauptung"
+    begruendung: "Der Tenor verlangt die Kombination beider Elemente."
+    sicherheit: hoch
+  - beschreibung: "Dieselbe Aussage auf der Website statt im Anschreiben"
+    begruendung: >
+      Der „wie geschehen”-Bezug nennt ein Schreiben. Ein Medienwechsel dürfte einen
+      neuen Sachverhalt darstellen.
+    sicherheit: mittel
+  - beschreibung: "Dieselbe Werbung gegenüber Unternehmern"
+    begruendung: "Auf Verbraucher begrenzt."
+    sicherheit: hoch
+
+nachtraeglich_bewertet:
+  zu_eng: unklar
+  hinweis: >
+    Der „wie geschehen”-Bezug auf ein einzelnes Schreiben ist die enge, aber sichere
+    Bauform. Bei einem Medienwechsel (Website, E-Mail, Social Media) greift der Tenor
+    voraussichtlich nicht. Ob das eine Verengung ist, hängt davon ab, ob der Anbieter
+    zum Zeitpunkt der Klage nur postalisch geworben hat — das lässt sich ohne den
+    Volltext nicht beurteilen.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+pruefbare_merkmale:
+  - merkmal: "Verfügbarkeitsbehauptung in Werbematerial"
+    pruefung: "manuell — Anschreiben nicht öffentlich abrufbar; Zugang nur über
+      Verbraucherbeschwerden"
+    automatisierbar: false
+  - merkmal: "Vergleichbare Aussage auf der Website des Anbieters"
+    pruefung: "Volltextsuche nach /Finanzsanierung/ in Verbindung mit
+      /ab sofort|verfügbar|steht.{0,20}zur Verfügung/"
+    automatisierbar: true
+    anmerkung: "Läge außerhalb des Tenors — dient der Erkennung eines NEUEN Sachverhalts."
+
+sicherheit: mittel
+uneinigkeit: null
+geprueft_von: "Claude (Übernahme aus Team-Sammlung + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

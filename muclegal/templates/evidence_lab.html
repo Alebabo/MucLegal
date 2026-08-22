@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MucLegal · BeweisLab</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --ink:oklch(0.21 0.03 264); --muted:oklch(0.55 0.02 258);
+      --line:oklch(0.90 0.004 265); --soft:oklch(0.972 0.003 265);
+      --green:oklch(0.67 0.13 231); --green-dark:oklch(0.57 0.14 231);
+      --amber:oklch(0.58 0.14 62); --red:oklch(0.50 0.19 27);
+      --sidebar:#fff; --sidebar-accent:oklch(0.965 0.004 265);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#fff; color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    button,input { font:inherit; }
+    button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible { outline:3px solid color-mix(in srgb,var(--green) 40%,transparent); outline-offset:2px; }
+    .aura-shell { min-height:100vh; display:flex; width:100%; background:#fff; }
+    .aura-sidebar { position:sticky; top:0; z-index:40; width:248px; height:100vh; flex:0 0 248px; display:flex; flex-direction:column; border-right:1px solid var(--line); background:var(--sidebar); transition:width .2s ease,flex-basis .2s ease; }
+    .aura-sidebar.collapsed { width:72px; flex-basis:72px; }
+    .aura-brand { height:64px; display:flex; align-items:center; gap:12px; padding:0 16px; color:var(--ink); text-decoration:none; }
+    .aura-mark { width:32px; height:32px; display:grid; flex:0 0 auto; place-items:center; border-radius:50%; background:var(--green); color:#fff; font-size:14px; font-weight:650; }
+    .aura-brand-name { overflow:hidden; font-family:"Bodoni Moda",Georgia,serif; font-size:18px; letter-spacing:-.01em; white-space:nowrap; }
+    .aura-nav { display:flex; flex:1; flex-direction:column; gap:4px; padding:8px 12px; }
+    .aura-nav a,.aura-collapse { min-height:40px; display:flex; align-items:center; gap:12px; border:0; border-radius:999px; background:transparent; color:var(--muted); padding:0 12px; font-size:14px; text-decoration:none; white-space:nowrap; cursor:pointer; transition:background .15s ease,color .15s ease; }
+    .aura-nav a:hover,.aura-collapse:hover,.aura-nav a[aria-current=page] { background:var(--sidebar-accent); color:var(--ink); }
+    .aura-nav a[aria-current=page] { font-weight:600; }
+    .aura-icon { width:18px; height:18px; flex:0 0 auto; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.75; }
+    .aura-label { overflow:hidden; text-overflow:ellipsis; }
+    .aura-sidebar.collapsed .aura-brand-name,.aura-sidebar.collapsed .aura-label { display:none; }
+    .aura-sidebar-foot { border-top:1px solid var(--line); padding:12px; }
+    .aura-collapse { width:100%; }
+    .lab-page { min-width:0; flex:1; }
+    header { border-bottom:1px solid var(--line); background:#fff; }
+    .head { width:min(960px,calc(100% - 32px)); min-height:72px; display:flex; align-items:center; gap:14px; margin:auto; }
+    .logo { width:164px; max-height:43px; object-fit:contain; object-position:left center; }
+    .brand-rule { width:1px; height:28px; background:var(--line); }
+    .brand-name { font-weight:750; letter-spacing:-.01em; }
+    .verification-control { display:flex; align-items:center; gap:6px; margin-left:auto; }
+    .verification-switch { display:flex; align-items:center; gap:7px; color:#6c7471; font-size:11px; font-weight:720; cursor:pointer; user-select:none; }
+    .verification-switch input { position:absolute; width:1px; height:1px; opacity:0; }
+    .switch-track { position:relative; width:32px; height:18px; border:1px solid var(--line); border-radius:999px; background:var(--soft); transition:.16s ease; pointer-events:none; }
+    .switch-track::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #26332e40; transition:.16s ease; }
+    .verification-switch input:checked + .switch-track { border-color:var(--green); background:var(--green); }
+    .verification-switch input:checked + .switch-track::after { transform:translateX(14px); }
+    .verification-switch input:focus-visible + .switch-track { outline:3px solid color-mix(in srgb,var(--green) 40%,transparent); outline-offset:2px; }
+    .verification-switch input:disabled + .switch-track { opacity:.5; }
+    .back { margin-left:12px; color:var(--muted); font-size:12px; text-decoration:none; }
+    main { width:min(960px,calc(100% - 32px)); margin:clamp(34px,6vh,62px) auto 70px; }
+    .hero { max-width:780px; }
+    .kicker { color:var(--green); font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    h2,p { margin:0; }
+    .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; margin-top:10px; }
+    .url-input { width:100%; height:50px; border:1px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); padding:0 15px; box-shadow:0 1px 2px rgb(15 23 42 / .04); }
+    .start { height:50px; display:inline-flex; align-items:center; justify-content:center; gap:9px; border:0; border-radius:11px; background:var(--green); color:#fff; padding:0 20px; font-weight:760; cursor:pointer; }
+    .start:hover { background:var(--green-dark); }
+    .god-mode-check { min-height:50px; display:flex; align-items:center; gap:8px; border:2px solid #8b0000; border-radius:11px; background:#fff4f2; color:#720000; padding:0 12px; font-size:11px; font-weight:800; cursor:pointer; }
+    .god-mode-check input { width:17px; height:17px; accent-color:#8b0000; }
+    .start:disabled,.url-input:disabled { opacity:.55; cursor:not-allowed; }
+    .spinner { width:17px; height:17px; border:2px solid #ffffff66; border-top-color:#fff; border-radius:50%; animation:spin .75s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .micro { display:flex; align-items:center; gap:6px; margin-top:9px; color:var(--muted); font-size:11px; }
+    .verification-note { margin-top:10px; border-left:3px solid var(--green); padding:6px 9px; background:var(--soft); color:var(--muted); font-size:11px; }
+    .info { width:19px; height:19px; display:inline-grid; place-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--green); padding:0; font:750 11px/1 Georgia,serif; cursor:pointer; }
+    .trace { margin-top:20px; border:1px solid var(--line); border-radius:12px; background:var(--soft); overflow:hidden; box-shadow:0 1px 2px rgb(15 23 42 / .03); }
+    .trace summary { display:flex; align-items:center; gap:9px; min-height:48px; padding:0 15px; color:var(--ink); cursor:pointer; list-style:none; font-weight:680; }
+    .trace summary::-webkit-details-marker { display:none; }
+    .chevron { color:var(--muted); transition:transform .18s ease; }
+    .trace[open] .chevron { transform:rotate(90deg); }
+    .run-state { max-width:58%; margin-left:auto; overflow:hidden; color:var(--muted); font-size:11px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .run-state.ok { color:var(--green); }
+    .run-state.warn { color:var(--amber); }
+    .events { max-height:340px; overflow:auto; border-top:1px solid var(--line); padding:12px 16px 15px; scroll-behavior:smooth; }
+    .event { position:relative; display:grid; grid-template-columns:18px minmax(0,1fr); gap:9px; padding:5px 0 13px; }
+    .event:not(:last-child)::before { content:""; position:absolute; left:4px; top:15px; bottom:-2px; width:1px; background:color-mix(in srgb,var(--green) 24%,var(--line)); }
+    .event-dot { position:relative; z-index:1; width:9px; height:9px; margin-top:5px; border:2px solid color-mix(in srgb,var(--green) 62%,white); border-radius:50%; background:var(--soft); }
+    .event.done .event-dot { border-color:var(--green); background:var(--green); }
+    .event.active .event-dot { border-color:var(--green); background:color-mix(in srgb,var(--green) 20%,white); box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 15%,transparent); animation:pulse 1.5s ease-in-out infinite; }
+    .event.failed .event-dot,.event.warning .event-dot { border-color:#b97724; background:#f8dfbd; }
+    @keyframes pulse { 50% { box-shadow:0 0 0 7px color-mix(in srgb,var(--green) 0%,transparent); } }
+    .event-top { display:flex; align-items:baseline; gap:8px; }
+    .event b { color:var(--ink); font-size:11px; font-weight:700; }
+    .event time { color:var(--muted); font-size:10px; }
+    .event p { margin-top:2px; color:var(--muted); font-size:12px; }
+    .protection { margin-top:18px; border:2px solid #d99331; border-radius:12px; background:#fff5e4; padding:17px 18px; color:#673b08; }
+    .protection strong { display:block; font-size:16px; letter-spacing:.025em; }
+    .protection p { margin-top:5px; font-size:13px; }
+    .result { margin-top:34px; }
+    .result-summary { display:grid; gap:8px; border:1px solid var(--line); border-radius:14px; background:#fff; padding:17px 18px; }
+    .outcome-pill { justify-self:start; border-radius:999px; padding:7px 12px; font-size:13px; font-weight:820; }
+    .outcome-pill.success { background:#dff3e9; color:#0f5d43; }
+    .outcome-pill.warning { background:#fff0d8; color:#75440a; }
+    .outcome-pill.danger { background:#fbe4e1; color:#8a2f28; }
+    .result-summary p { color:var(--muted); font-size:13px; }
+    .result-summary p strong { color:var(--ink); }
+    .download { justify-self:start; margin-top:3px; border:1px solid #b9cec4; border-radius:8px; background:#fff; color:var(--green-dark); padding:7px 10px; font-size:11px; font-weight:740; text-decoration:none; }
+    .download:hover { background:#f0f6f3; }
+    .pills { display:flex; flex-wrap:wrap; gap:7px; overflow:visible; padding:12px 1px 9px; }
+    .pill-wrap { position:relative; display:flex; align-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:999px; background:#fff; }
+    .pill-wrap.active { border-color:color-mix(in srgb,var(--green) 60%,white); background:color-mix(in srgb,var(--green) 10%,white); }
+    .pill-wrap.warning { border-color:#d6a15e; background:#fff6e9; color:#744713; }
+    .pill-wrap.unavailable { background:#f5f6f5; color:#98a39e; border-style:dashed; }
+    .pill { min-height:34px; border:0; border-radius:999px; background:transparent; color:inherit; padding:0 6px 0 12px; font-size:11px; font-weight:720; cursor:pointer; white-space:nowrap; }
+    .pill:disabled { cursor:not-allowed; }
+    .pill-wrap .info { width:17px; height:17px; margin-right:8px; border-color:transparent; background:transparent; font-size:10px; }
+    .pill-menu { position:absolute; z-index:30; top:calc(100% + 7px); left:0; min-width:220px; max-width:min(330px,calc(100vw - 34px)); border:1px solid var(--line); border-radius:11px; background:#fff; padding:6px; box-shadow:0 14px 36px rgb(15 23 42 / .16); }
+    .pill-wrap:last-child .pill-menu { right:0; left:auto; }
+    .pill-menu button { width:100%; display:block; border:0; border-radius:7px; background:transparent; color:var(--ink); padding:9px 10px; text-align:left; font-size:11px; font-weight:680; cursor:pointer; }
+    .pill-menu button:hover,.pill-menu button:focus-visible { background:var(--sidebar-accent); }
+    .pill-menu button:disabled { color:#98a39e; cursor:not-allowed; }
+    .pill-menu-separator { height:1px; margin:5px 6px; background:var(--line); }
+    .viewer { min-height:430px; margin-top:5px; border:1px solid var(--line); border-radius:13px; background:#fff; overflow:hidden; }
+    .viewer-head { min-height:45px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid var(--line); }
+    .viewer-head strong { font-size:12px; }
+    .viewer-head a { margin-left:auto; color:var(--green); font-size:11px; font-weight:750; text-decoration:none; }
+    .gallery-controls { display:flex; align-items:center; gap:7px; margin-left:auto; }
+    .gallery-controls button { border:1px solid #cad5d0; background:#fff; border-radius:7px; padding:4px 8px; cursor:pointer; }
+    .capture-status { color:var(--muted); font-size:11px; font-weight:760; }
+    .viewer-body { min-height:384px; max-height:70vh; overflow:auto; background:var(--soft); }
+    .empty { min-height:384px; display:grid; place-items:center; padding:30px; color:var(--muted); text-align:center; }
+    pre { margin:0; padding:17px; white-space:pre-wrap; word-break:break-word; font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .viewer-body img,.viewer-body iframe { width:100%; min-height:560px; border:0; object-fit:contain; }
+    .legal-list { padding:22px; }
+    .legal-list section + section { margin-top:24px; }
+    .legal-list h3 { margin:0 0 8px; font-size:12px; }
+    .legal-link { display:block; margin:7px 0; padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--green-dark); text-decoration:none; }
+    .legal-link small { display:block; margin-top:2px; color:var(--muted); word-break:break-all; }
+    .popover { position:fixed; z-index:50; width:min(280px,calc(100vw - 24px)); border:1px solid var(--line); border-radius:10px; background:#fff; padding:11px 12px; color:var(--ink); box-shadow:0 14px 38px rgb(15 23 42 / .16); font-size:12px; }
+    [hidden] { display:none !important; }
+    @media (max-width:850px) { .aura-sidebar { width:72px; flex-basis:72px; } .aura-brand-name,.aura-label { display:none; } }
+    @media (max-width:650px) { .aura-sidebar { position:fixed; inset:auto 0 0; z-index:45; width:100%; height:64px; flex-basis:auto; border-top:1px solid var(--line); border-right:0; } .aura-brand,.aura-sidebar-foot { display:none; } .aura-nav { flex-direction:row; justify-content:space-around; padding:8px; } .aura-nav a { width:44px; justify-content:center; padding:0; } .lab-page { padding-bottom:64px; } .head { min-height:62px; } .logo { width:125px; } .brand-rule,.back,.verification-label { display:none; } main { margin-top:30px; } .url-form { grid-template-columns:1fr; } .start { width:100%; } .run-state { max-width:45%; } .viewer { min-height:360px; } .viewer-body,.empty { min-height:315px; } }
+  </style>
+</head>
+<body>
+<div class="aura-shell">
+  <aside id="aura-sidebar" class="aura-sidebar" aria-label="Hauptnavigation">
+    <a class="aura-brand" href="/"><span class="aura-mark">M</span><span class="aura-brand-name">MucLegal</span></a>
+    <nav class="aura-nav">
+      <a href="/" title="Home"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-7h6v7"></path></svg><span class="aura-label">Home</span></a>
+      <a href="/archiv" title="Archiv"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M5 6v15h14V6"></path><path d="M8 3h8l2 3H6l2-3Z"></path><path d="M9 11h6"></path></svg><span class="aura-label">Archiv</span></a>
+      <a href="/hinweise" title="Hinweise"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg><span class="aura-label">Hinweise</span></a>
+      <a href="/neu" title="Neu hinzufügen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg><span class="aura-label">Neu hinzufügen</span></a>
+      <a href="/beweis-labor" aria-current="page" title="BeweisLab"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"></path><path d="M8 15h8"></path></svg><span class="aura-label">BeweisLab</span></a>
+    </nav>
+    <div class="aura-sidebar-foot"><button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><span class="aura-label">Einklappen</span></button></div>
+  </aside>
+  <div class="lab-page">
+  <header><div class="head"><img class="logo" src="/static/muclegal-logo-light.png" alt="MucLegal"><span class="brand-rule"></span><span class="brand-name">BeweisLab</span><div class="verification-control"><label class="verification-switch" for="verification-mode"><input id="verification-mode" type="checkbox" checked><span class="switch-track" aria-hidden="true"></span><span class="verification-label">Automatische Überprüfung</span></label><button class="info" type="button" data-info="Standardmäßig beginnt das BeweisLab mit dem direkten öffentlichen Abruf. Erst wenn dabei ein tatsächlicher Seitenschutz oder eine reine JavaScript-Hülle erkannt wird, schaltet es automatisch in den Überprüfungsmodus und lädt die Seite einmalig in einem echten Browser. Vor Screenshots darf es ausschließlich sichtbare, eindeutig datensparsame Cookie-Optionen wie „Alle ablehnen“ oder „Nur notwendige“ wählen. CAPTCHAs, Logins und andere Seitenelemente werden nicht bedient; keine Tarntechniken werden verwendet. Schalte diese Automatik aus, wenn nach einem Schutzbefund kein Browser-Abruf erfolgen soll." aria-label="Mehr Informationen zur automatischen Überprüfung">i</button></div><a class="back" href="/">Fallmonitor</a></div></header>
+  <main>
+    <section class="hero">
+      <div class="kicker">URL prüfen</div>
+      <form id="run-form" class="url-form">
+        <input id="url" class="url-input" type="text" inputmode="url" required maxlength="2048" placeholder="https://www.beispiel.de" aria-label="Öffentliche URL">
+        <label class="god-mode-check" for="god-mode-authorized"><input id="god-mode-authorized" type="checkbox">Autorisiert (God Mode)</label>
+        <button id="run-button" class="start" type="submit"><span id="spinner" class="spinner" hidden></span><span id="start-label">Erfassung starten</span></button>
+      </form>
+      <div class="micro">Keine Logins, Paywalls oder CAPTCHAs <button class="info" type="button" data-info="URL bedeutet Uniform Resource Locator, also die Internetadresse. Im regulären Modus werden robots.txt und technische Schutzmaßnahmen respektiert. Die Autorisierungs-Checkbox aktiviert den getrennten God Mode, protokolliert die bestätigte Berechtigung und kennzeichnet sämtliche Ergebnisse als reine Demonstration und nicht juristisch verwertbar." aria-label="Mehr Informationen zu den Abrufgrenzen">i</button></div>
+      <div id="verification-note" class="verification-note" hidden>Automatische Überprüfung aus: Bei Seitenschutz wird kein Browser-Abruf gestartet. Öffentliche Rechtstext-Unterseiten werden weiterhin direkt geprüft.</div>
+    </section>
+
+    <details id="trace-panel" class="trace" hidden>
+      <summary><span class="chevron">›</span><span>Prüfverlauf</span><button class="info" type="button" data-info="Hier werden die einzelnen Arbeitsschritte und ihre Ergebnisse fortlaufend dokumentiert." aria-label="Mehr Informationen zum Prüfverlauf">i</button><span id="run-state" class="run-state">wird vorbereitet</span></summary>
+      <div id="events" class="events" role="log" aria-live="polite" aria-relevant="additions"></div>
+    </details>
+
+    <aside id="protection-warning" class="protection" role="alert" hidden>
+      <strong>SEITENSCHUTZ ERKANNT</strong>
+      <p id="protection-message">Die Seite kann nicht automatisiert erfasst werden. Öffentliche AGB- und Datenschutz-Unterseiten wurden ersatzweise geprüft.</p>
+    </aside>
+
+    <section id="result" class="result" hidden>
+      <div id="evidence-warning" hidden></div>
+      <div class="result-summary" aria-live="polite">
+        <span id="result-status" class="outcome-pill warning">Ergebnis wird eingeordnet</span>
+        <p><strong>Was wurde festgestellt?</strong> <span id="result-found"></span></p>
+        <p><strong>Was bedeutet das?</strong> <span id="result-meaning"></span></p>
+        <p><strong>Was sollte ein Mensch jetzt tun?</strong> <span id="result-action"></span></p>
+        <a id="package-download" class="download" href="#">Beweispaket herunterladen</a>
+      </div>
+      <nav id="pills" class="pills" aria-label="Beweiselemente"></nav>
+      <section class="viewer">
+        <div class="viewer-head"><strong id="viewer-title">Vorschau</strong><button id="viewer-info" class="info" type="button" aria-label="Mehr Informationen zum ausgewählten Element" hidden>i</button><div id="gallery-controls" class="gallery-controls" hidden><button id="tile-prev" type="button" aria-label="Vorherige Kachel">‹</button><span id="tile-counter">Kachel 1/1</span><button id="tile-next" type="button" aria-label="Nächste Kachel">›</button><a id="tile-original" href="#" target="_blank" rel="noopener">Original laden</a></div><a id="viewer-open" href="#" target="_blank" rel="noopener" hidden>Öffnen / laden</a></div>
+        <div class="viewer-body"><div id="empty" class="empty">Beweiselement auswählen.</div><pre id="text-view" hidden></pre><div id="legal-view" class="legal-list" hidden></div><img id="image-view" alt="Gespeicherter Seiten-Screenshot" hidden><iframe id="pdf-view" title="PDF-Beweisbericht" hidden></iframe></div>
+      </section>
+    </section>
+  </main>
+  </div>
+</div>
+  <div id="popover" class="popover" role="dialog" hidden></div>
+
+<script>
+(() => {
+  const auraSidebar=document.getElementById("aura-sidebar"),auraCollapse=document.getElementById("aura-collapse");
+  auraCollapse?.addEventListener("click",()=>{const collapsed=auraSidebar.classList.toggle("collapsed");auraCollapse.setAttribute("aria-label",collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen")});
+  const terminal=new Set(["completed","completed_with_warnings","failed","protected","baseline_created","unchanged"]);
+  const toolLabels={queued:"Vorbereitung",fetch:"Seite abrufen",browser:"Browser-Erfassung",normalize:"Inhalt aufbereiten",legal_pages:"Rechtstexte suchen",screenshot:"Ansicht festhalten",compare:"Stand einordnen",anthropic:"KI-Analyse",warc:"Archiv erstellen",manifest:"Prüfwerte bilden",timestamp:"Zeitpunkt belegen"};
+  const help={raw_html:"HTML bedeutet Hypertext Markup Language. Das ist der unveränderte technische Quelltext der tatsächlich erfassten Seite.",response_headers:"HTTP bedeutet Hypertext Transfer Protocol. Diese Kopfdaten enthalten technische Angaben des Webservers, etwa Inhaltstyp und Abrufzeitpunkt.",normalized_text:"Bereinigter Seiteninhalt ohne typische flüchtige Bestandteile. Er dient später dem stabilen Vergleich.",god_mode_editorial_summary:"Nur im God Mode erzeugte, paraphrasierte OpenAI-Analysedarstellung. Sie ist keine wortgetreue Archivkopie und nicht juristisch verwertbar; maßgeblich bleiben die lokalen Primärartefakte.",god_mode_ai_usage:"Protokolliert Modell, Textbegrenzung, Cachetreffer, Tokenverbrauch und geschätzte Kosten. API-Schlüssel und übertragener Text werden darin nicht gespeichert.",legal_pages:"AGB steht für Allgemeine Geschäftsbedingungen. Hier stehen die gefundenen Rechtstext-Links sowie getrennt die für das Bild tatsächlich gewählte Klauselseite.",capture_transparency:"Dokumentiert überprüfbar, wie die Seite erfasst wurde: Browserkennung, Automatisierungserkennung, Proxy, frischer Browserzustand, robots.txt sowie angefragte und tatsächlich erfasste URL.",previous_normalized_text:"Der normalisierte Inhalt des vorherigen Abrufs.",diff:"Diff ist die Kurzform für Difference, also Unterschied. Gezeigt wird der konkrete Textunterschied zwischen zwei Seitenständen.",requested_page_screenshot:"Screenshot des sichtbaren Zustands unter der ursprünglich eingegebenen URL. Bei Seitenschutz kann dies eine Challenge- oder Anmeldeseite sein; sie wird nicht als erfolgreich erfasste Website ausgegeben.",screenshot:"Ganzseiten-Aufnahme der tatsächlich erfassten URL. Wenn Chromium auf der Hosting-Laufzeit abbricht, wird stattdessen ein deutlich beschriftetes, browserloses Beweisbild aus dem gespeicherten HTML gezeigt; das ist keine pixelgetreue Live-Aufnahme. PNG bedeutet Portable Network Graphics.",agb_screenshot:"Bild des eigentlichen AGB-Klauseltexts. Ist der zuerst gefundene AGB-Link nur eine Übersicht, wird innerhalb derselben Website eine konkrete Klauselseite ausgewählt. Navigation und Fußzeile werden in der browserlosen Ansicht ausgeblendet. Gefundene und tatsächlich abgebildete URL sowie der SHA-256-Prüfwert stehen im Beweispaket.",privacy_screenshot:"Aufnahme des ersten öffentlichen Links zur Datenschutzerklärung. Bei einem Chromium-Abbruch kann dies ein deutlich beschriftetes HTML-Beweisbild statt einer pixelgetreuen Live-Aufnahme sein. URL, Art der Aufnahme und SHA-256-Prüfwert stehen im Beweispaket.",warc:"WARC bedeutet Web ARChive. Das Archivformat speichert den abgerufenen Seiteninhalt zusammen mit technischen Abrufinformationen gemeinsam in einer Beweisdatei.",cdx:"CDX bezeichnet die Indexdatei eines Webarchivs. Sie hilft dabei, einzelne Abrufe innerhalb einer WARC-Datei gezielt wiederzufinden.",warc_status:"Dokumentiert, ob die WARC-Aufnahme vollständig war oder aus welchem Grund sie nicht erzeugt werden konnte.",manifest:"Das Manifest ist die Inhaltsliste des Beweispakets. SHA-256 bedeutet Secure Hash Algorithm mit 256 Bit. Der daraus gebildete Hash ist ein digitaler Fingerabdruck: Schon eine kleine Dateiänderung erzeugt einen anderen Prüfwert.",manifest_digest:"Der Manifest-Hash ist der digitale SHA-256-Fingerabdruck der gesamten Inhaltsliste. Er ermöglicht die spätere Integritätsprüfung des Beweispakets.",timestamp_query:"RFC 3161 ist ein technischer Standard für vertrauenswürdige Zeitstempel; RFC bedeutet Request for Comments. Diese Datei enthält die Anfrage an den Zeitstempeldienst.",timestamp_response:"Antwort der TSA auf die Zeitstempelanfrage. TSA bedeutet Time Stamping Authority, also Zeitstempelstelle. Sie ordnet den Manifest-Hash einem überprüfbaren Zeitpunkt zu.",wayback_status:"Status einer optionalen zusätzlichen Archivierung bei der Wayback Machine, einem öffentlichen Webarchiv.",report:"Lesbarer PDF-Bericht über Aufnahme, Integrität und offene menschliche Prüfung. PDF bedeutet Portable Document Format."};
+  help.screenshot_interactions="Dokumentiert für jeden Screenshot, ob ein Cookie-Banner über eine eindeutig datensparsame Option geschlossen wurde. Leere Listen bedeuten, dass kein solcher Klick ausgeführt wurde.";
+  help.capture_index="Pfadsicherer Index aller Originale, Ableitungen, Bildkacheln, Hashes und Vollständigkeitsangaben.";
+  help.capture_metrics="Gemessene Laufzeit-, Speicher-, Request- und Größenwerte; nicht messbare Werte sind begründet.";
+  help.run_result="Maschinenlesbarer Endstatus mit erfasster URL, Schutzbefund, Abbruchphase und erhaltenen Zwischenartefakten.";
+  help.screenshot="Validierte Ganzseitenaufnahme oder lückenlose Originalkachelserie; die WebP-Datei dient nur als Vorschau.";
+  help.protection_report="Dokumentiert die erkannte Schutzart, die blockierte Hauptseite, alle direkt geprüften Rechtstext-Unterseiten und deren Fehler. Der Bericht ist kein Beleg für Inhalte hinter dem Seitenschutz.";
+  const hiddenArtifacts=new Set(["model_input","model_output","clause_model_input","clause_model_output"]);
+  const primaryArtifacts=new Set(["requested_page_screenshot","screenshot","agb_screenshot","privacy_screenshot","normalized_text"]);
+  const technicalOrder=["god_mode_editorial_summary","god_mode_ai_usage","report","legal_pages","protection_report","previous_normalized_text","diff","page_artifacts_index","capture_index","capture_metrics","run_result","screenshot_interactions","capture_transparency","raw_html","response_headers","warc","cdx","warc_status","manifest","manifest_digest","timestamp_query","timestamp_response","wayback_status"];
+  const roleOrder=["main","requested","agb","privacy"];
+  const form=document.getElementById("run-form"),input=document.getElementById("url"),start=document.getElementById("run-button"),spinner=document.getElementById("spinner"),startLabel=document.getElementById("start-label"),trace=document.getElementById("trace-panel"),events=document.getElementById("events"),result=document.getElementById("result"),pills=document.getElementById("pills"),protection=document.getElementById("protection-warning"),verificationMode=document.getElementById("verification-mode"),verificationNote=document.getElementById("verification-note"),godMode=document.getElementById("god-mode-authorized");
+  let currentInfo="";
+  async function api(url,options){const response=await fetch(url,options);if(!response.ok){let message=`HTTP ${response.status}`;try{message=(await response.json()).detail||message}catch(_){}throw new Error(message)}return response.json()}
+  function eventState(run,item,index){if(item.state==="failed")return "failed";if(String(item.state).includes("warning"))return "warning";if(index===(run.audit_log||[]).length-1&&!terminal.has(run.status))return "active";const stepState=(run.steps||{})[item.step];return stepState==="failed"?"failed":(stepState==="warning"?"warning":(stepState==="active"?"active":"done"))}
+  function renderRun(run){const state=document.getElementById("run-state"),message=run.message||run.status;state.textContent=terminal.has(run.status)?message:`Aktiv · ${toolLabels[run.current_step]||"Prüfung läuft"}`;state.title=message;state.className="run-state "+(run.status==="completed"?"ok":(run.status.includes("warning")||run.status==="failed"?"warn":""));events.replaceChildren();(run.audit_log||[]).forEach((item,index)=>{const row=document.createElement("div");row.className=`event ${eventState(run,item,index)}`;const dot=document.createElement("span");dot.className="event-dot";dot.setAttribute("aria-hidden","true");const content=document.createElement("div"),top=document.createElement("div");top.className="event-top";const tool=document.createElement("b");tool.textContent=toolLabels[item.step]||item.step;const time=document.createElement("time");const date=new Date(item.timestamp);time.textContent=Number.isNaN(date.valueOf())?"":date.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});const text=document.createElement("p");text.textContent=item.message;top.append(tool,time);content.append(top,text);row.append(dot,content);events.append(row)});events.scrollTop=events.scrollHeight}
+  async function streamEvidenceRun(payload){const response=await fetch("/api/v1/evidence-runs/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message=`HTTP ${response.status}`;try{message=(await response.json()).detail||message}catch(_){}throw new Error(message)}if(!response.body)throw new Error("Der Prüfverlauf konnte nicht geöffnet werden.");const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",completed=null;while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines){if(!line.trim())continue;const message=JSON.parse(line);if(message.type==="error")throw new Error(message.detail||"Prüflauf fehlgeschlagen.");if(message.run){renderRun(message.run);if(message.type==="complete")completed=message.run}}if(done)break}if(buffer.trim()){const message=JSON.parse(buffer);if(message.type==="error")throw new Error(message.detail||"Prüflauf fehlgeschlagen.");if(message.run){renderRun(message.run);completed=message.run}}return completed}
+  verificationMode.addEventListener("change",()=>{verificationNote.hidden=verificationMode.checked});
+  godMode.addEventListener("change",()=>{if(godMode.checked){verificationMode.checked=true;verificationNote.hidden=true}});
+  form.addEventListener("submit",async event=>{event.preventDefault();start.disabled=true;input.disabled=true;verificationMode.disabled=true;godMode.disabled=true;spinner.hidden=false;startLabel.textContent=godMode.checked?"God-Mode-Demo wird erstellt":"Beweise werden erstellt";result.hidden=true;protection.hidden=true;events.replaceChildren();trace.hidden=false;trace.open=true;const state=document.getElementById("run-state");state.textContent="Verbindung wird aufgebaut …";state.className="run-state";try{const run=await streamEvidenceRun({url:input.value,verification_mode:verificationMode.checked,god_mode_authorized:godMode.checked});if(!run)throw new Error("Der Prüfverlauf wurde unerwartet beendet.");if(run.case_detail)renderArtifacts(run.case_detail);else if(run.result_available)await loadNewest(run.url,run.god_mode_authorized)}catch(error){state.textContent=error.message;state.title=error.message;state.className="run-state warn"}finally{start.disabled=false;input.disabled=false;verificationMode.disabled=false;godMode.disabled=false;spinner.hidden=true;startLabel.textContent="Erfassung starten"}});
+  async function loadNewest(expectedUrl,godModeRun=false){const response=await api("/api/cases"),list=godModeRun?(response.god_mode_cases||[]):response.cases;const item=list.find(entry=>entry.requested_url===expectedUrl)||list.find(entry=>entry.url===expectedUrl)||list[0];if(!item)return;const data=await api(`/api/cases/${encodeURIComponent(item.case_id)}`);input.value=data.requested_url||data.url;renderArtifacts(data)}
+  let galleries={};
+  function artifactMap(data){document.getElementById("evidence-warning").dataset.evidence_suitability=data.evidence_suitability||"";document.getElementById("package-download").textContent=data.god_mode?"God-Mode-Demopaket herunterladen":"Beweispaket herunterladen";return new Map(data.artifacts.map(item=>[item.label,item]))}
+  function setActive(wrap){document.querySelectorAll(".pill-wrap.active").forEach(node=>node.classList.remove("active"));wrap.classList.add("active")}
+  function closePillMenus(except){document.querySelectorAll(".pill-menu").forEach(menu=>{if(menu!==except)menu.hidden=true});document.querySelectorAll(".pill[aria-expanded]").forEach(button=>{if(!except||button.nextElementSibling!==except)button.setAttribute("aria-expanded","false")})}
+  function createDirectPill(title,available,onClick,infoText,status="available"){const wrap=document.createElement("span");wrap.className="pill-wrap"+(available?"":" unavailable")+(status==="warning"?" warning":"");const button=document.createElement("button");button.type="button";button.className="pill";button.disabled=!available;button.textContent=title;const info=document.createElement("button");info.type="button";info.className="info";info.textContent="i";info.dataset.info=infoText;info.setAttribute("aria-label",`Mehr Informationen zu ${title}`);if(available)button.addEventListener("click",onClick);wrap.append(button,info);pills.append(wrap);return wrap}
+  function createMenuPill(title,items,infoText){const available=items.some(item=>item.available!==false);const wrap=document.createElement("span");wrap.className="pill-wrap"+(available?"":" unavailable");const button=document.createElement("button");button.type="button";button.className="pill";button.disabled=!available;button.textContent=`${title} ▾`;button.setAttribute("aria-haspopup","menu");button.setAttribute("aria-expanded","false");const menu=document.createElement("div");menu.className="pill-menu";menu.setAttribute("role","menu");menu.hidden=true;items.forEach(item=>{const child=document.createElement("button");child.type="button";child.setAttribute("role","menuitem");child.textContent=item.title;child.disabled=item.available===false;child.addEventListener("click",()=>{menu.hidden=true;button.setAttribute("aria-expanded","false");item.select(wrap)});menu.append(child)});const info=document.createElement("button");info.type="button";info.className="info";info.textContent="i";info.dataset.info=infoText;info.setAttribute("aria-label",`Mehr Informationen zu ${title}`);button.addEventListener("click",()=>{const open=menu.hidden;closePillMenus(menu);menu.hidden=!open;button.setAttribute("aria-expanded",String(open))});wrap.append(button,menu,info);pills.append(wrap);return wrap}
+  function screenshotChoice(caseId,role,items){const labels={main:"screenshot",requested:"requested_page_screenshot",agb:"agb_screenshot",privacy:"privacy_screenshot"},gallery=galleries[role],item=items.get(labels[role]);if(gallery)return {title:gallery.title||role,available:true,select:wrap=>previewGallery(role,wrap,gallery.title||role)};if(item?.available)return {title:item.title,available:true,select:wrap=>preview(caseId,item,wrap)};return null}
+  function renderArtifacts(data){trace.open=false;result.hidden=false;galleries=data.capture_galleries||{};const outcome=data.technical_result||{label:"Nur eingeschränkt verwendbar",tone:"warning",what_was_found:"Die technische Aufnahme wurde abgeschlossen.",meaning:"Die vorhandenen Dateien müssen menschlich geprüft werden.",next_action:"Beweispaket herunterladen und Grenzen prüfen."},status=document.getElementById("result-status");status.textContent=outcome.label;status.className=`outcome-pill ${outcome.tone||"warning"}`;document.getElementById("result-found").textContent=outcome.what_was_found;document.getElementById("result-meaning").textContent=outcome.meaning;document.getElementById("result-action").textContent=outcome.next_action;document.getElementById("package-download").href=data.download_url||`/api/v1/cases/${encodeURIComponent(data.case_id)}/download`;pills.replaceChildren();const items=artifactMap(data),screenshots=roleOrder.map(role=>screenshotChoice(data.case_id,role,items)).filter(Boolean);const screenshotWrap=createMenuPill("Screenshots",screenshots,"Alle gesicherten Seitenansichten, getrennt nach Hauptseite und gefundenen Unterseiten.");const privacy=screenshotChoice(data.case_id,"privacy",items),privacyWrap=createDirectPill("Datenschutz-Screenshot",Boolean(privacy),()=>privacy.select(privacyWrap),help.privacy_screenshot,items.get("privacy_screenshot")?.status);const agb=screenshotChoice(data.case_id,"agb",items),agbWrap=createDirectPill("AGB-Screenshot",Boolean(agb),()=>agb.select(agbWrap),help.agb_screenshot,items.get("agb_screenshot")?.status);const texts=roleOrder.map(role=>{const gallery=galleries[role];if(!gallery?.normalized_text_url)return null;return {title:gallery.title||role,available:true,select:wrap=>previewRoleText(gallery,wrap)}}).filter(Boolean);if(!texts.length&&items.get("normalized_text")?.available){const item=items.get("normalized_text");texts.push({title:"Hauptseite",available:true,select:wrap=>preview(data.case_id,item,wrap)})}createMenuPill("Normalisierter Text",texts,"Bereinigter Text jeder erfassten Seite, getrennt nach Hauptseite, AGB und Datenschutz.");const documents=roleOrder.flatMap(role=>{const gallery=galleries[role];return (gallery?.document_urls||[]).map((url,index)=>({title:`${gallery.title||role} · Druckfassung ${index+1}`,available:true,select:wrap=>previewRoleDocument(url,gallery.title||role,wrap)}))});/* Druckfassungen liegen bewusst im Untermenü: createMenuPill("Druckfassungen" */const technical=[...documents,...data.artifacts.filter(item=>item.available&&!hiddenArtifacts.has(item.label)&&!primaryArtifacts.has(item.label)).sort((a,b)=>{const ai=technicalOrder.indexOf(a.label),bi=technicalOrder.indexOf(b.label);return (ai<0?999:ai)-(bi<0?999:bi)}).map(item=>({title:item.title,available:true,select:wrap=>preview(data.case_id,item,wrap)}))];createMenuPill("Technische Details",technical,"Technische Prüf- und Archivdateien für Sachverständige oder eine spätere Integritätskontrolle.");if(screenshots.length)screenshots[0].select(screenshotWrap)}
+  function resetViewer(){document.getElementById("empty").hidden=true;document.getElementById("text-view").hidden=true;document.getElementById("legal-view").hidden=true;document.getElementById("image-view").hidden=true;document.getElementById("pdf-view").hidden=true;document.getElementById("gallery-controls").hidden=true}
+  async function preview(caseId,item,wrap){closePillMenus();setActive(wrap);resetViewer();document.getElementById("viewer-title").textContent=item.title;const open=document.getElementById("viewer-open"),info=document.getElementById("viewer-info"),fileUrl=item.url||`/artifact/${encodeURIComponent(caseId)}/${encodeURIComponent(item.label)}`;open.href=fileUrl;open.hidden=false;currentInfo=help[item.label]||item.title;info.dataset.info=currentInfo;info.hidden=false;if(item.kind==="image"){const roles={screenshot:"main",requested_page_screenshot:"requested",agb_screenshot:"agb",privacy_screenshot:"privacy"},gallery=galleries[roles[item.label]];if(gallery){showGallery(gallery);return}const image=document.getElementById("image-view");image.src=fileUrl;image.hidden=false;return}if(item.kind==="pdf"){const pdf=document.getElementById("pdf-view");pdf.src=fileUrl;pdf.hidden=false;return}if(item.kind==="text"&&item.preview_available){const content=item.preview_content!==undefined?item.preview_content:(await api(`/api/cases/${encodeURIComponent(caseId)}/preview/${encodeURIComponent(item.label)}`)).content;if(item.label==="legal_pages"){renderLegal(JSON.parse(content));return}const pre=document.getElementById("text-view");pre.textContent=content;pre.hidden=false;return}const empty=document.getElementById("empty");empty.textContent="Für dieses Dateiformat steht eine sichere Download-Datei bereit.";empty.hidden=false}
+  function previewGallery(role,wrap,title){closePillMenus();setActive(wrap);resetViewer();const gallery=galleries[role],viewerTitle=document.getElementById("viewer-title"),info=document.getElementById("viewer-info"),open=document.getElementById("viewer-open");viewerTitle.textContent=`Screenshot · ${title}`;info.dataset.info="Gesicherte Ansicht dieser Seite. Bei langen Seiten kann sie aus mehreren lückenlosen Kacheln bestehen.";info.hidden=false;open.hidden=true;showGallery(gallery)}
+  async function previewRoleText(gallery,wrap){closePillMenus();setActive(wrap);resetViewer();const title=gallery.title||"Seite",open=document.getElementById("viewer-open"),info=document.getElementById("viewer-info");document.getElementById("viewer-title").textContent=`Normalisierter Text · ${title}`;open.href=gallery.normalized_text_url;open.hidden=false;info.dataset.info="Bereinigter, vergleichbarer Text dieser konkreten Seite.";info.hidden=false;const response=await fetch(gallery.normalized_text_url);if(!response.ok)throw new Error(`Text konnte nicht geladen werden (HTTP ${response.status}).`);const pre=document.getElementById("text-view");pre.textContent=await response.text();pre.hidden=false}
+  function previewRoleDocument(url,title,wrap){closePillMenus();setActive(wrap);resetViewer();const open=document.getElementById("viewer-open"),info=document.getElementById("viewer-info"),pdf=document.getElementById("pdf-view");document.getElementById("viewer-title").textContent=`Druckfassung · ${title}`;open.href=url;open.hidden=false;info.dataset.info="Browsergenerierte PDF-Druckfassung des nachweislich expandierten DOM; keine unveränderte Originaldatei der Website.";info.hidden=false;pdf.src=url;pdf.hidden=false}
+  function showGallery(gallery){const images=gallery.tile_urls.length?gallery.tile_urls:(gallery.original_urls.length?gallery.original_urls:[gallery.preview_url]);let index=0;const image=document.getElementById("image-view"),controls=document.getElementById("gallery-controls"),counter=document.getElementById("tile-counter"),original=document.getElementById("tile-original"),prev=document.getElementById("tile-prev"),next=document.getElementById("tile-next");function show(){image.src=images[index];image.hidden=false;counter.textContent=`Kachel ${index+1}/${images.length}`;original.href=images[index];prev.disabled=index===0;next.disabled=index===images.length-1}prev.onclick=()=>{if(index>0){index--;show()}};next.onclick=()=>{if(index<images.length-1){index++;show()}};controls.hidden=false;show()}
+  function renderLegal(data){const root=document.getElementById("legal-view");root.replaceChildren();[["AGB",data.agb||[]],["Datenschutzerklärung",data.datenschutz||[]]].forEach(([title,items])=>{const section=document.createElement("section"),heading=document.createElement("h3");heading.textContent=title;section.append(heading);if(!items.length){const text=document.createElement("p");text.textContent="Kein entsprechender Link im gespeicherten HTML gefunden.";section.append(text)}items.forEach(item=>{const link=document.createElement("a");link.className="legal-link";link.href=item.url;link.target="_blank";link.rel="noopener";link.textContent=item.label;const url=document.createElement("small");url.textContent=item.url;link.append(url);section.append(link)});root.append(section)});root.hidden=false}
+  const popover=document.getElementById("popover");function openInfo(button){popover.textContent=button.dataset.info||"Keine weitere Erklärung verfügbar.";popover.hidden=false;const rect=button.getBoundingClientRect();const left=Math.min(window.innerWidth-popover.offsetWidth-12,Math.max(12,rect.left));let top=rect.bottom+8;if(top+popover.offsetHeight>window.innerHeight-12)top=rect.top-popover.offsetHeight-8;popover.style.left=`${left}px`;popover.style.top=`${Math.max(12,top)}px`}
+  document.addEventListener("click",event=>{const button=event.target.closest(".info");if(button){event.preventDefault();event.stopPropagation();openInfo(button);return}if(!event.target.closest(".pill-wrap"))closePillMenus();if(!event.target.closest(".popover"))popover.hidden=true});document.addEventListener("keydown",event=>{if(event.key==="Escape"){popover.hidden=true;closePillMenus()}});
+  (async()=>{try{const caseId=new URLSearchParams(window.location.search).get("case_id");let data;if(caseId){data=await api(`/api/cases/${encodeURIComponent(caseId)}`)}else{const response=await api("/api/cases"),list=response.cases.length?response.cases:(response.god_mode_cases||[]);if(!list.length)return;data=await api(`/api/cases/${encodeURIComponent(list[0].case_id)}`)}input.value=data.requested_url||data.url;godMode.checked=Boolean(data.god_mode);renderArtifacts(data)}catch(_){}})();
+})();
+</script>
+</body>
+</html>

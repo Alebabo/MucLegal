@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import tempfile
 import threading
 import unittest
@@ -13,9 +14,11 @@ from muclegal.evidence import (
     OpenSslTsaClient,
     build_pdf_report,
     capture_warc,
+    capture_snapshot_warc,
     create_manifest,
     verify_manifest,
 )
+from muclegal.evidence.wayback import WaybackClient
 
 
 class _StaticHandler(BaseHTTPRequestHandler):
@@ -37,6 +40,28 @@ class _StaticHandler(BaseHTTPRequestHandler):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_primary_warc_uses_exact_stored_snapshot_bytes(self) -> None:
+        body = b"<!doctype html><main>Exakter primaerer Snapshot</main>"
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            raw = root / "raw.html"
+            headers = root / "headers.json"
+            raw.write_bytes(body)
+            headers.write_text(
+                json.dumps([["Content-Type", "text/html; charset=utf-8"]]),
+                encoding="utf-8",
+            )
+            result = capture_snapshot_warc(
+                "https://example.org/page",
+                root / "warc",
+                raw_html_path=raw,
+                response_headers_path=headers,
+                final_url="https://example.org/page",
+                fetched_at="2026-08-19T12:00:00+00:00",
+                status_code=200,
+            )
+        self.assertEqual(hashlib.sha256(body).hexdigest(), result.response_payload_sha256)
+
     def test_wget_warc_is_validated_by_warcio(self) -> None:
         server = ThreadingHTTPServer(("0.0.0.0", 0), _StaticHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -46,6 +71,12 @@ class EvidenceTests(unittest.TestCase):
                 result = capture_warc(f"http://127.0.0.1:{server.server_port}/page", output)
                 self.assertTrue(Path(result.warc_path).is_file())
                 self.assertTrue(Path(result.cdx_path).is_file())
+                self.assertEqual(
+                    hashlib.sha256(
+                        b"<!doctype html><html><body><main>Beweisinhalt</main></body></html>"
+                    ).hexdigest(),
+                    result.response_payload_sha256,
+                )
         finally:
             server.shutdown()
             server.server_close()
@@ -106,6 +137,16 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("MucLegal Prüfbericht", text)
         self.assertIn("Menschliche Freigabe ausstehend", text)
         self.assertIn("keine abschließende Rechtsentscheidung", text)
+        self.assertIn("gerichtliche Ordnungsmittel", text)
+
+    def test_wayback_without_credentials_is_immediately_nonblocking(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            result = WaybackClient().save("https://example.org", output)
+            status = json.loads(
+                (Path(output) / "wayback-status.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual("not_configured", result.status)
+        self.assertEqual("not_configured", status["status"])
 
 
 if __name__ == "__main__":

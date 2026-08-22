@@ -1,0 +1,982 @@
+# BeweisLab: Fehlerbilder und Lösungen
+
+Stand: 21.08.2026
+Betriebsart: ausschließlich lokal unter `http://127.0.0.1:8000/beweis-labor`
+
+## Diagnose-Reihenfolge
+
+1. `run-result.json`: Endstatus, angefragte und tatsächlich erfasste URL, Abbruchphase.
+2. `capture-transparency.yaml`: User-Agent, `navigator.webdriver`, robots.txt, Context und Requests.
+3. `protection-report.json`: sichtbarer Schutzbefund und geprüfte Rechtstextpfade.
+4. Rollenverzeichnis: `dom-initial.html`, sichtbare Texte, Consent- und Expansionszustände.
+5. `screenshot-index.json`: erwartete und erreichte Höhe, Vollbildversuch, Kachelabdeckung.
+6. `resource-metrics.json` und `capture-metrics.json`: Phasen, Speicher und Größen.
+7. WARC/CDX und Manifestprüfung; externe Zusatzdienste zuletzt bewerten.
+
+## Browser schließt nach `domcontentloaded`
+
+### Symptom
+
+Playwright meldet `Target page, context or browser has been closed`, obwohl die Navigation zuvor
+erfolgreich war. Früher ging der gesamte Zielzustand dadurch verloren.
+
+### Ursache
+
+Die optionale Settle-, Consent- oder Screenshotphase lief vor der dauerhaften Sicherung des
+bereits verfügbaren DOM-Zustands. Der exakte externe Auslöser eines Prozessabbruchs kann
+seitenspezifisch bleiben.
+
+### Lösung
+
+Der Run-Controller sichert unmittelbar nach `domcontentloaded` in einem zusammenhängenden
+Initialzustand URL, Status, Redirectkette, Titel, DOM, sichtbaren Text, Dimensionen, User-Agent
+und `navigator.webdriver`. Erst danach folgen Consent, Expansion und Bilder. Ein späterer
+Browserabbruch liefert `teilweise_erfasst`, die exakte Abbruchphase und die erhaltenen Dateien;
+es wird kein zweiter Browser gestartet.
+
+### Verifikation und Grenze
+
+`tests/test_playwright_capture.py` schließt die Page unmittelbar nach der Initialsicherung.
+`dom-initial.html` bleibt vorhanden und der Lauf wird nicht als vollständig ausgegeben. Ein
+Abbruch vor der Initialsicherung bleibt `technisch_fehlgeschlagen`.
+
+## Hohe Seite endet bei 8.000 Pixeln
+
+### Symptom
+
+Sehr hohe Haupt- oder Rechtstextseiten enthielten früher nur den oberen Bereich.
+
+### Ursache
+
+Die frühere Screenshotfunktion setzte eine feste 8.000-Pixel-Grenze.
+
+### Lösung
+
+Zuerst wird ein echtes Playwright-Vollbild versucht und mit Pillow validiert. Bei Fehler oder
+ungültigem Bild folgt eine Serie aus exakt 2.000 CSS-Pixel hohen Kacheln mit 100 Pixeln
+Überlappung. `screenshot-index.json` dokumentiert jede Kachel, Hash, Maße und die lückenlose
+Abdeckung. Nach höchstens 100 Kacheln wird transparent `teilweise_erfasst` gemeldet.
+
+### Verifikation und Grenze
+
+Synthetische Tests decken 1.000, 7.999, 8.001 und 30.000 Pixel ab. Der Kachelfallback erreicht
+den Footer der 30.000-Pixel-Seite. Unendlich nachladende Seiten bleiben auf drei Höhenmessungen
+und 100 Kacheln begrenzt.
+
+## Weißes oder fast leeres Bild
+
+### Symptom
+
+Eine technisch erzeugte PNG-Datei zeigte keinen verwertbaren Seitenzustand.
+
+### Ursache
+
+Eine vorhandene Datei allein war bisher das Erfolgskriterium.
+
+### Lösung
+
+Pillow misst Maße, Dateigröße, unkomprimierte Größe, Luminanzstreuung und nahezu weiße Pixel.
+Mindestens 99,5 Prozent nahezu weiße Pixel bei einer Standardabweichung unter 3 machen das Bild
+ungültig und lösen den Kachelfallback aus. Ungültige Kacheln verhindern einen vollständigen Status.
+
+### Verifikation und Grenze
+
+Der deterministische Fallbacktest erzeugt zunächst ein weißes Vollbild und anschließend gültige
+Kacheln. Die Messung ist ein technisches Signal und keine inhaltliche Bildanalyse.
+
+## Cookie-Auswahl ist mehrdeutig
+
+### Symptom
+
+Ein Cookie-Banner bleibt sichtbar oder ein generisches „Ablehnen“ könnte zu einem fremden
+Produkt- oder Formularbutton gehören.
+
+### Ursache
+
+Reine Textsuche ohne Dialog-, Alternativ- und Framekontext ist nicht eindeutig.
+
+### Lösung
+
+`muclegal/fetch/consent.py` untersucht sichtbare Controls im Hauptdokument, in Frames und offenen
+Shadow Roots. Die enge Positivliste erlaubt nur datensparsame Optionen. Generisches „Ablehnen“
+setzt eine Dialogrolle, sichtbaren Consent-Kontext und eine gleichzeitig sichtbare
+Zustimmungsalternative voraus. Pro Dokument ist höchstens ein Klick möglich; Vorherbild,
+Buttontext, Frame, Selektorstrategie, Zeitpunkt und Ergebnis werden gespeichert.
+
+### Verifikation und Grenze
+
+Regressionstests belegen, dass „Alle akzeptieren“ nie gewählt wird. Geschlossene Shadow Roots,
+unklare Banner und unzulässige Frames bleiben `consent_ungeklaert`.
+
+## Inaktiver CAPTCHA-Code erzeugt Fehlalarm
+
+### Symptom
+
+Eine normale Shopify-Seite wurde allein wegen eines ausgelieferten CAPTCHA-Bootstrap-Skripts
+als geschützt eingestuft.
+
+### Ursache
+
+Die alte Erkennung suchte im vollständigen HTML einschließlich Script-, Template- und
+Datenschutztexten nach einzelnen CAPTCHA-Wörtern.
+
+### Lösung
+
+Script-, Style-, Template- und Noscript-Inhalte werden vor der Schutzklassifikation entfernt.
+Ein CAPTCHA-Befund setzt eine sichtbare Komponente oder eine eindeutige Aufforderung zur
+Menschenprüfung voraus. Schutzmaßnahmen werden lediglich dokumentiert, niemals bedient.
+
+## Rechtstextbild zeigt nur eine Übersicht
+
+### Symptom
+
+Das AGB-Bild enthält Links zu Dokumenten, aber keinen eigentlichen Klauseltext.
+
+### Ursache
+
+Discovery-URL und inhaltsreichste Klauselseite waren nicht getrennt.
+
+### Lösung
+
+Die Pipeline speichert `discovered_url` und `captured_url` separat, bewertet sichtbare Zeichen,
+Überschriften, Klauseln und Auswahlscore und prüft ausschließlich klar rechtstextbezogene
+Same-Origin-Unterseiten. PDF-Rechtstexte werden unverändert gespeichert und mit `pypdf`
+seitenweise abgeleitet. Initial-, Consent- und Expansionszustände bleiben erhalten.
+
+### Verifikation und Grenze
+
+Allgemeine Site-Navigation wird nicht gecrawlt. Eine Rechtstextübersicht ohne eindeutige
+öffentliche Klauselseite bleibt eine dokumentierte Teilgrenze.
+
+## Paketierung mit älteren Screenshot-Doubles fehlgeschlagen
+
+### Symptom
+
+Nach Einführung von Rollenverzeichnissen scheiterten sieben vorhandene Tests mit fehlenden
+Attributen oder nicht initialisierten Statusvariablen.
+
+### Ursache
+
+Die neue Paketlogik setzte Metadaten voraus, die minimale Test-Doubles der kompatiblen
+`ScreenshotCapture`-API absichtlich nicht liefern.
+
+### Lösung
+
+Optionale neue Metadaten werden über konservative Standardwerte gelesen; Schutz- und
+Anfragefelder werden vor allen Pfaden initialisiert. Alte Screenshotobjekte bleiben paketierbar.
+
+### Verifikation und Grenze
+
+Die gezielte UI-/Workflow-Suite besteht wieder. Neue Rollenmetadaten sind nur bei Captures des
+lokalen Run-Controllers vollständig verfügbar.
+
+## Große HTTP-Antwort, aber zu dünner gerenderter Rechtstext
+
+### Symptom
+
+Die Nachher-Abnahme von MediaMarkt am 20.08.2026 klassifizierte den Lauf zunächst als vollständig.
+Der direkte Datenschutzabruf enthielt zwar eine sehr große HTML-Antwort, der tatsächlich
+gerenderte semantische Hauptcontainer enthielt aber nur 957 Zeichen und drei Klauseln. Die
+AGB-Auswahl blieb außerdem eine Übersicht ohne auflösbare konkrete Klauselseite.
+
+### Ursache
+
+Der Auswahlscore bewertete den gesamten direkten HTML-Text einschließlich umfangreicher
+technischer Inhalte. Die Vollständigkeitsentscheidung berücksichtigte danach zwar die
+Blockabdeckung des gewählten Containers, aber noch keine Mindestplausibilität des tatsächlich
+gerenderten Rechtstexts und keinen ungelösten Übersichtsstatus.
+
+### Lösung
+
+Eine `übersicht_ohne_auflösbare_klauselseite` erzwingt jetzt `teilweise_erfasst`. Dasselbe gilt,
+wenn ein gerenderter Datenschutztext weniger als 1.500 Zeichen oder fünf Klauseln und ein
+gerenderter AGB-Text weniger als 1.000 Zeichen oder fünf Klauseln enthält. Diese Schwellen sind
+technische Plausibilitätsgates, keine juristische Inhaltsbewertung.
+
+### Verifikation und verbleibende Grenze
+
+Ein synthetischer Regressionstest prüft Übersicht, kurze Datenschutzseite und die korrekte
+Rollenzuordnung öffentlicher Ersatzquellen. Der reale MediaMarkt-Lauf wurde wegen des festgelegten
+Requestbudgets nicht wiederholt; eine spätere manuelle Abnahme muss den neuen Teilstatus bestätigen
+oder eine inhaltsreichere Same-Origin-Klauselseite belegen.
+
+## HTTP-200-Antwort enthält weiterhin eine Bot-Schutzseite
+
+### Symptom
+
+Der reale Adidas-Lauf vom 21.08.2026 erhielt direkt HTTP 403. Der transparente
+Browser-Prüfversuch antwortete anschließend mit HTTP 200, zeigte aber ausschließlich den Text
+„triggered our security system“ / „cannot allow you onto the site“. Der Lauf wurde zunächst als
+browsergestützt erfasster Seitenzustand beschrieben, obwohl nur die Schutzseite vorlag.
+
+### Ursache
+
+Der direkte HTTP-Pfad klassifizierte 403 nur als allgemeinen HTTP-Fehler. Nach dem Browserabruf
+wurde die vorhandene Schutzseitenerkennung nicht erneut auf den gerenderten DOM-Stand angewendet.
+Der HTTP-200-Status allein reichte deshalb irrtümlich für die weitere Normalisierung.
+
+### Diagnose
+
+`case.json`, der normalisierte Text und der PDF-Bericht enthielten ausschließlich den
+Adidas-Sicherheitshinweis. `capture_completeness` war bereits
+`durch_seitenschutz_begrenzt`; der gespeicherte Schutztext lieferte den entscheidenden Nachweis,
+dass kein dahinterliegender Shop-Inhalt erfasst worden war.
+
+### Lösung
+
+HTTP 401/403/407/429 wird als Zugriffsschutz an den bereits erlaubten, nicht getarnten
+Browser-Prüfschritt übergeben. Nach diesem Abruf wird der gerenderte DOM-Stand erneut auf
+eindeutige Schutzmerkmale geprüft. Die Adidas-Formulierung führt jetzt zu einem Schutzbefund;
+es wird kein dahinterliegender Inhalt behauptet. Ein ungeprüfter robots.txt-Status wird auch in
+diesem Schutzbefund, Manifest, PDF, ZIP und UI als `nicht_beweisgeeignet` fortgeführt. Fehlt der
+Schutzseiten-Screenshot, benennt auch die Abschlussmeldung ausdrücklich „ohne Screenshot“.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests decken HTTP 403, den HTTP-200-Bot-Schutztext und das ungeprüfte Schutzbefund-
+Paket ab. Die Erkennung bleibt bewusst konservativ und benötigt eindeutige, sichtbare
+Schutzformulierungen; unbekannte Anbietertexte können weiterhin eine manuelle Prüfung erfordern.
+
+## Rollenbezogene HTML-/Text-/Bild-Artefakte waren unvollständig
+
+### Symptom
+
+Ein Beweispaket konnte einen Haupt- oder Rechtstext-Screenshot enthalten, ohne für dieselbe
+tatsächlich besuchte URL im Rollenverzeichnis zugleich Roh-HTML und normalisierten Text
+nachzuweisen. Wurde eine Rechtstextübersicht auf eine konkrete Klauselseite aufgelöst, war
+außerdem nur die Zielseite vollständig gebündelt.
+
+### Ursache und Diagnose
+
+Browser-Fallbackbilder hatten kein eigenes `artifact_directory`; die Bündelung orientierte sich
+deshalb nur am Bildpfad. Die gefundene Übersichts-URL und die ausgewählte Klausel-URL wurden zwar
+getrennt dokumentiert, aber nicht als zwei Browserrollen archiviert. Zur Diagnose
+`capture-index.json`, `legal-pages.json` und `artifacts/roles/*` gemeinsam prüfen. Fehlt in einer
+besuchten Rolle eines von `raw.html`, `normalized-text.txt` oder einer PNG/WebP-Aufnahme, ist die
+Seitenerfassung unvollständig.
+
+### Lösung
+
+Browserabbruch-Fallbacks schreiben jetzt Roh-HTML, deterministischen Normaltext, Screenshot,
+Vorschau und Screenshot-Index in ein gemeinsames Rollenverzeichnis. Rechtstextübersicht und
+konkrete Klauselseite werden bei unterschiedlichen URLs getrennt erfasst.
+`page-artifacts-index.json` inventarisiert pro Rolle alle HTML-, Normaltext- und Bilddateien mit
+SHA-256 und setzt `required_artifacts_complete`; eine Lücke stuft den Gesamtlauf auf
+`teilweise_erfasst` herab.
+
+### Verifikation und verbleibende Grenze
+
+Unit- und UI-Tests prüfen den vollständigen Drei-Artefakt-Satz, den sicheren rollenbezogenen
+HTML-Endpunkt sowie den Browserabbruch-Fallback. Erfasst werden ausschließlich die im BeweisLab
+fachlich vorgesehenen und tatsächlich besuchten Seiten: Hauptseite, angefragte Schutzseite,
+ausgewählte AGB-/Datenschutzseite und gegebenenfalls deren Übersicht. Es findet kein unbegrenzter
+Crawl aller internen Links einer Website statt.
+
+## MediaMarkt-Datenschutztext enthielt nur Akkordeonüberschriften
+
+### Symptom
+
+Der normalisierte Text der MediaMarkt-Shop-Datenschutzhinweise enthielt nur Einleitung und zehn
+Abschnittsüberschriften. Inhaltliche Passagen zu Verantwortlichem, Logfiles, Empfängern,
+Drittländern und Betroffenenrechten fehlten trotz eines scheinbaren Abdeckungswerts von 100 %.
+
+### Ursache und Diagnose
+
+Die Akkordeon-Header sind `button`-Elemente mit `aria-expanded=false` und `aria-controls`. Die
+bisherige Filterlogik verwarf jedoch nach dem strukturellen CSS-Treffer alle Buttons, deren Text
+nicht „Mehr anzeigen“ lautete. Zusätzlich schließt MediaMarkt beim Öffnen eines Abschnitts den
+zuvor geöffneten Abschnitt wieder. Ein einzelner finaler DOM-/Screenshot-Zustand kann deshalb
+nicht alle Klauseln gleichzeitig enthalten. Diagnose: `interactions.json` zeigte null
+`legal_expansion`-Einträge; der vermeintliche Abdeckungswert verglich nur die bereits sichtbaren
+Überschriften mit sich selbst.
+
+### Lösung
+
+ARIA-Akkordeonbuttons mit `aria-controls` sind jetzt unabhängig von ihrer Beschriftung innerhalb
+des Rechtstextcontainers zulässig. Jeder Abschnitt wird sequenziell geöffnet; Ziel-ID, Vor-/
+Nachzustand und der unmittelbar sichtbare kontrollierte Text werden gesichert. Tabs ohne
+`aria-controls`, insbesondere Links zu einer anderen Datenschutzfassung, bleiben unangetastet.
+Der normalisierte Text wird aus allen gesicherten Sichtzuständen dedupliziert zusammengeführt.
+Zusätzlich entsteht `expanded-legal-print.pdf` als lokal erzeugte Druckfassung sämtlicher
+expandierter Blöcke sowie eine Metadatendatei, die sie ausdrücklich als abgeleitet und nicht als
+Website-Original kennzeichnet. Die UI bietet diese PDF unter „Druckfassungen“ an.
+
+### Verifikation und verbleibende Grenze
+
+Beim realen Lauf am 21.08.2026 wurden 10 von 10 Akkordeons mit 10 sichtbaren Blocktexten erfasst;
+der Normaltext wuchs von etwa 1.500 auf 45.372 Zeichen. Normaltext und PDF enthielten den
+Verantwortlichen, Logfile-/IP-Informationen und die Betroffenenrechte. `robots.txt` war geprüft
+und erlaubte den Abruf. Weil MediaMarkt immer nur einen Abschnitt gleichzeitig offen hält,
+zeigt der Live-Screenshot weiterhin einen einzelnen Akkordeonzustand; die vollständige
+Gesamtdarstellung liegt in Normaltext, Blockprotokoll und abgeleiteter PDF vor.
+
+## PDF-Druckfassung wurde im Beweisblock nur heruntergeladen
+
+### Symptom
+
+Die unter „Druckfassungen“ ausgewählte Rechtstext-PDF wurde zunächst sofort heruntergeladen.
+Nach Umstellung auf Inline-Auslieferung blieb der eingebettete PDF-Bereich weiterhin leer und
+zeigte „127.0.0.1 hat die Verbindung abgelehnt“, obwohl Datei, SHA-256 und Manifest korrekt waren.
+
+### Ursache und Diagnose
+
+Der Dokument-Endpunkt verwendete `FileResponse` mit Dateinamen, aber ohne abweichenden
+Content-Disposition-Typ. Starlette setzt dann standardmäßig `attachment`; ein Browser behandelt
+auch eine Iframe-Anfrage deshalb als Download. Der Playwright-E2E-Lauf zeigte beim Klick auf
+„Datenschutz-Seite · Druckfassung 1“ ein Download-Ereignis statt einer eingebetteten Anzeige.
+Im zweiten E2E-Lauf blockierten anschließend die globalen Header `X-Frame-Options: DENY` und
+`frame-ancestors 'none'` die jetzt inline gelieferte, gleichoriginige PDF.
+
+### Lösung
+
+Der pfadsichere Dokument-Endpunkt liefert Rechtstext-PDFs jetzt ausdrücklich als
+`application/pdf` mit `Content-Disposition: inline`. Der Link „Öffnen / laden“ bleibt erhalten;
+Browser können die Datei darüber weiterhin in einem eigenen PDF-Viewer öffnen oder speichern.
+Nur für den streng gematchten lokalen Dokument-Endpunkt erlauben die Frame-Header die Einbettung
+aus derselben Origin (`SAMEORIGIN` und `frame-ancestors 'self'`). Für alle HTML-Seiten und übrigen
+Endpunkte bleiben `DENY` und `frame-ancestors 'none'` unverändert aktiv.
+
+### Verifikation und verbleibende Grenze
+
+Der API-Regressionstest prüft Status 200, MIME-Typ, `inline` sowie die eng begrenzten Frame-Header
+und schließt `attachment` aus.
+Der lokale Browser-E2E-Test prüft zusätzlich, dass die Auswahl kein Download-Ereignis mehr
+auslöst und die PDF-Antwort im eingebetteten Viewer geladen wird. Ob ein Browser PDFs intern
+darstellt oder an eine konfigurierte externe Anwendung übergibt, bleibt eine lokale
+Browser-Einstellung; die HTTP-Antwort fordert keinen Download mehr an.
+
+## God-Mode-KI-Textbudget überschritt die konfigurierte Grenze
+
+### Symptom
+
+Der Regressionstest erwartete bei `MUCLEGAL_OPENAI_MAX_INPUT_CHARS=24000` höchstens 24.000
+übertragene Zeichen, das Aufrufprotokoll wies aber 24.056 Zeichen aus.
+
+### Ursache und Diagnose
+
+Die stratifizierte Kürzung behält Anfang, Mitte und Ende des sichtbaren Texts. Zwischen diesen
+drei Ausschnitten stehen zwei identische Kürzungsmarker. Die Budgetrechnung zog irrtümlich nur
+einen Marker ab. Der Test prüft die tatsächlich an die Responses API übergebene Textlänge und
+machte die Abweichung deshalb vor einem Live-Aufruf sichtbar.
+
+### Lösung
+
+Vom konfigurierten Zeichenlimit wird nun die Länge beider Marker abgezogen, bevor das verbleibende
+Budget auf Anfang, Mitte und Ende verteilt wird. Das Limit bezieht sich ausschließlich auf den
+gerenderten Quelltext; die kurzen Rollen-, URL- und Zeitmetadaten sind separat.
+
+### Verifikation und verbleibende Grenze
+
+Der Unit-Test erzwingt exakt 24.000 Quelltextzeichen, höchstens 900 Ausgabetokens, `store=False`,
+keine Tools und `reasoning.effort=none`. Tokenzahlen können wegen der Modelltokenisierung nicht
+vorab exakt aus Zeichen berechnet werden; tatsächliche Input-/Outputtokens und eine Kostenschätzung
+werden deshalb nach jedem Aufruf in `god-mode-ai-usage.json` protokolliert.
+
+## Optionale OpenAI-Zusammenfassung darf die Beweisspur nicht ersetzen
+
+### Symptom und Risiko
+
+Eine redaktionell verdichtete Produktbeschreibung kann dynamische Empfehlungen reduzieren und
+Angaben paraphrasieren. Würde sie als Normaltext oder Primärbeweis gespeichert, gingen Wortlaut
+und Trennung zwischen technischer Erfassung und externer Analyse verloren.
+
+### Lösung
+
+Die Funktion läuft ausschließlich nach aktivierter God-Mode-Autorisierung und ausschließlich in
+`muclegal/llm/`. Übertragen wird je tatsächlich erfasster Seite nur ein begrenzter Ausschnitt des
+gerenderten Normaltexts; Roh-HTML, Header, WARC, Screenshots und Cookies verlassen die lokale
+Beweisspur nicht. Die schema-validierte Ausgabe liegt getrennt unter `analysis/editorial/` und als
+deutlich markierte `god-mode-editorial-summary.md` vor. Volltext-SHA-256, Modell, Promptversion,
+Cachetreffer, Tokenverbrauch und geschätzte Kosten stehen in `god-mode-ai-usage.json`; der
+API-Schlüssel und der übertragene Text werden dort nicht gespeichert. Ohne Schlüssel wird der
+Aufruf sichtbar übersprungen. Modellfehler verwerfen nur die Zusammenfassung und niemals die
+lokalen Primärartefakte.
+
+### Kostenkontrolle
+
+Standard ist `gpt-5.6-luna` mit 24.000 Eingabezeichen und 900 Ausgabetokens pro tatsächlich
+erfasster Seite. Identischer Volltext plus identische Modellkonfiguration ergeben einen lokalen
+Cachetreffer ohne neuen API-Aufruf. Abweichende Modelle können über `MUCLEGAL_OPENAI_MODEL`, die
+Limits über `MUCLEGAL_OPENAI_MAX_INPUT_CHARS` und `MUCLEGAL_OPENAI_MAX_OUTPUT_TOKENS` gesetzt
+werden. Die Kategorie ist `stichprobenartig`: Auch bei geändertem Inhalt erfolgt je URL und
+Seitenrolle standardmäßig höchstens ein kostenpflichtiger Aufruf innerhalb von sieben Tagen.
+Das Intervall ist über `MUCLEGAL_OPENAI_SAMPLE_INTERVAL_DAYS` konfigurierbar. Lokale
+Primärartefakte werden bei jedem gestarteten Lauf weiterhin erzeugt. Der Schlüssel wird nur aus
+`OPENAI_API_KEY` gelesen und gehört nicht ins Repository.
+
+## Adidas-Lauf zeigt nach Codeänderung keinen Browser-Screenshot
+
+### Symptom
+
+Bei `https://www.adidas.com/` erschien nach dem direkten HTTP-Schutz weder der neue
+Browser-Fallback im Prüfverlauf noch eine Screenshot-Vorschau, obwohl die automatische
+Überprüfung im BeweisLab aktiviert war.
+
+### Ursache und Diagnose
+
+Der lokale Uvicorn-Prozess lief ohne `--reload` und war vor den Änderungen am Robots- und
+Browser-Fallback gestartet worden. Damit lieferte die HTML-Oberfläche zwar den aktuellen
+Dateistand aus, der bereits importierte Python-Workflow im Serverprozess blieb jedoch alt.
+Gezielte Regressionstests für `robots.txt`-Status `ungeprueft` und den standardmäßig aktivierten
+Browsermodus waren grün; erst der Neustart brachte den Live-Endpunkt auf denselben Stand.
+
+### Lösung
+
+Den bestehenden Uvicorn-Prozess sauber beenden und mit
+`python -m uvicorn app:app --host 127.0.0.1 --port 8000` neu starten. Danach setzt ein Adidas-Lauf
+nach dem direkten HTTP-403 den transparenten Playwright-Abruf ein. Liefert Adidas weiterhin nur
+eine Bot-Schutzseite, wird deren sichtbarer Zustand als „Angefragte Seite“ gespeichert und klar
+als nicht beweisgeeigneter Schutzbefund ausgewiesen.
+
+### Verifikation und verbleibende Grenze
+
+Der reale Lauf wechselte in den Schritt „echter Browser mit JavaScript“, erzeugte ein 114.528
+Byte großes Schutzseitenbild und stellte es im UI unter „Screenshot · Angefragte Seite“ ohne
+Konsolenfehler dar. `robots.txt` blieb wegen HTTP 403 `ungeprueft`; der Lauf endete deshalb mit
+`nicht_beweisgeeignet`. Playwright wird verwendet, überwindet aber keinen Bot-Schutz, kein CAPTCHA,
+keinen Login und keine Paywall. Der dahinterliegende Adidas-Shopinhalt muss bei fortbestehendem
+Schutz manuell gesichert werden.
+
+## Leerer Browserzustand führte nach zweiter Normalisierung zu keinem Fallpaket
+
+### Symptom
+
+Ein transparenter Browserlauf konnte bereits Screenshot, DOM, Browsermetadaten und
+Request-Metriken gespeichert haben, während sichtbarer und normalisierter Text leer blieben.
+Bei Temu zeigte Chromium beispielsweise „No connection“. Die zweite Normalisierung warf erneut
+`NormalizationError`; der Lauf endete früher mit der technischen Meldung und ohne sichtbaren
+Ergebnisdatensatz.
+
+### Ursache und Diagnose
+
+`muclegal/live.py` fing nur den ersten Normalisierungsfehler des direkten HTTP-Abrufs ab. Der
+zweite Aufruf von `check_url(..., fetched=rendered)` lag außerhalb eines terminalen
+Fehlerpaketpfads. Dadurch blieben die bereits in der Browserrolle vorhandenen Dateien zwar
+teilweise auf der Platte, wurden aber weder inventarisiert noch manifestiert oder im UI angeboten.
+
+### Lösung
+
+Jeder direkte BeweisLab-Lauf wird jetzt über eine zentrale vierstufige technische
+Ergebnisbewertung abgeschlossen. Scheitert die Normalisierung auch nach dem Browser-Fallback,
+entsteht ein lokales Fehler-/Schutzbefund-Paket. Es übernimmt vorhandenen Screenshot, Roh-HTML,
+initiales DOM, Browsermetadaten, Interaktionsprotokoll und Request-Metriken in eine Rollenstruktur,
+ergänzt `run-result.json`, `protection_report.json`, Erfassungstransparenz, Ergebnisbewertung und
+Manifest und kennzeichnet den Lauf sichtbar als
+„Nicht als Beleg verwendbar – nur Hinweis“. Die Originalexception steht ausschließlich in den
+technischen Paketdateien. Ungültige und private URLs erhalten entsprechend den terminalen Status
+„URL nicht erfassbar“ mit Zeitpunkt, Grund und Handlungsempfehlung.
+
+### Verifikation und verbleibende Grenze
+
+Der Regressionstest erzwingt zwei aufeinanderfolgende `NormalizationError`-Ausnahmen bei einem
+gespeicherten `site_connectivity_error`-Screenshot. Er prüft terminalen Laufstatus,
+`technisch_fehlgeschlagen`, Screenshot-Galerie, Fehlercode im Paket und dass
+`NormalizationError` nicht in der Hauptmeldung erscheint. Ein weiterer Test belegt den
+Ergebnisdatensatz für eine private URL. Der Fehlerzustand weist nur das Zugriffsproblem nach; ein
+Mensch muss den dahinterliegenden Seiteninhalt weiterhin zusätzlich manuell sichern.
+
+## Nicht verlinkte Shopify-AGB fehlten trotz erreichbarer Rechtstextseite
+
+### Symptom
+
+Bei einem erfolgreichen Lauf auf einer Shopify-Startseite wurde keine AGB-Seite
+angezeigt, obwohl der öffentliche Standardpfad
+`/policies/terms-of-service` erreichbar beziehungsweise als Fallziel bekannt
+war.
+
+### Ursache und Diagnose
+
+Die normale Rechtstextsuche wertete ausschließlich Links im gespeicherten HTML
+aus. Die Liste bekannter AGB- und Datenschutzpfade wurde nur im
+Schutzseiten-Fallback verwendet. Eine erfolgreich geladene Startseite ohne
+ausgelieferten Footer-Link verhinderte deshalb den Fallback. `legal_pages.json`
+enthielt keine AGB-Kandidaten, obwohl das HTML Shopify-Merkmale enthielt.
+
+### Lösung
+
+Bei erkannter Shopify-Seite ergänzt die reguläre Rechtstextsuche jetzt genau
+die beiden öffentlichen Standardpfade `/policies/terms-of-service` und
+`/policies/privacy-policy`, wenn die jeweilige Kategorie keinen HTML-Link
+lieferte. Zusätzlich kann ein menschlich freigegebenes Fallprofil bis zu 20
+verbindliche Prüf-URLs vorgeben. Diese Ziele werden vor Sitemap- und
+Linkkandidaten geprüft; fehlende Pflichtziele erscheinen ausdrücklich in
+`missing_required_target_urls`.
+
+### Verifikation und verbleibende Grenze
+
+Ein synthetischer Shopify-Shop ohne Footer-Link liefert beide Standardpfade in
+`legal-pages.json`. Ein Fallprofil mit einer nicht verlinkten
+`/policies/terms-of-service`-URL erfasst die Seite und findet die gemeldete
+Klausel. Mehrere dokumentierte Button-Bezeichnungen werden an die transparente
+DOM-Prüfung weitergegeben. Alte SQLite-Fälle bleiben ohne Migration lesbar.
+
+Der reale Ankerkraut-Lauf vom 21.08.2026 fand den zuvor fehlenden AGB-Kandidaten
+als `known_shopify_public_path`. Der anschließende Abruf wurde jedoch korrekt
+abgelehnt, weil `robots.txt` den Pfad für den Projekt-User-Agent untersagte. Die
+Seite fehlt damit nicht mehr unbemerkt: Kandidat, URL, Auswahlmethode und
+Robots-Ablehnung stehen in `legal_pages.json` und in den Warnungen; ein
+AGB-Screenshot wird nicht vorgetäuscht.
+
+Es werden keine beliebigen Pfade erraten. Nicht verlinkte Seiten anderer
+Plattformen benötigen eine Fallprofil-URL, eine öffentliche Sitemap oder einen
+eigenen eng begrenzten und belegten Plattformpfad. Login, Paywall, CAPTCHA und
+verändernde Formularaktionen bleiben ausgeschlossen.
+
+## Dynamisch schrumpfende Rechtstextseite ließ Kachelaufnahme abbrechen
+
+### Symptom
+
+Beim realen Ankerkraut-Datenschutzlauf scheiterte die Screenshotphase mit
+`Page.screenshot: Clipped area is either empty or outside the resulting image`.
+Der zuvor gemessene sehr hohe DOM war während der Kachelserie geschrumpft.
+
+### Ursache und Diagnose
+
+Die Kachelschleife verwendete während der gesamten Aufnahme ausschließlich die
+anfänglich gemessene Dokumenthöhe. War die Seite nach Lazy-Loading oder
+Layoutänderungen kürzer, lag eine spätere `clip`-Position außerhalb des nun
+aktuellen Dokuments. Die Playwright-Ausnahme wurde innerhalb der Kachelschleife
+nicht abgefangen und verwarf deshalb auch bereits gültige Kacheln.
+
+### Lösung
+
+Vor jeder Kachel werden aktuelle Höhe und Breite neu gemessen. Liegt die nächste
+Kachel außerhalb des geschrumpften Dokuments oder lehnt Playwright einen Clip
+ab, endet die Serie kontrolliert als `teilweise_erfasst`. Bereits valide
+Kacheln, Index und Vorschau bleiben erhalten; `tile_errors` dokumentiert die
+Grenze. Nur wenn weder Vollbild noch eine einzige Kachel vorhanden ist, gilt die
+Screenshotaufnahme als fehlgeschlagen.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest simuliert eine Seite, die von 5.000 auf 1.000 CSS-Pixel
+schrumpft. Er bestätigt eine erhaltene Kachel, `teilweise_erfasst`, eine
+protokollierte Kachelgrenze und keinen unbehandelten Clip-Fehler. Eine dynamisch
+schrumpfende Seite bleibt möglicherweise unvollständig; sie wird nicht als
+lückenloser Vollbildbeweis bezeichnet.
+
+## God Mode konnte intern die juristische Analysespur erreichen
+
+### Symptom
+
+Ein direkter Python-Aufruf von `LiveMonitorWorkflow.run(god_mode=True)` ohne
+`capture_baseline=True` konnte nach einer bereits vorhandenen God-Mode-Baseline
+in die Kerngleichheits- und Modellanalyse verzweigen. Der UI-Pfad setzte zwar
+stets `capture_baseline=True`, die Workflow-Grenze selbst erzwang diese Trennung
+aber nicht. In diesem seltenen Pfad wurde außerdem der reguläre statt des
+separaten God-Mode-Latest-Pfads zurückgegeben.
+
+### Ursache und Diagnose
+
+`RunCoordinator` koppelte God Mode korrekt an die technische BeweisLab-Erfassung.
+`LiveMonitorWorkflow.run` akzeptierte die Parameter jedoch unabhängig voneinander.
+Dadurch beruhte die fachlich zwingende Trennung nur auf dem Verhalten eines
+einzigen Aufrufers; Tests deckten ausschließlich den regulären UI-Aufruf ab.
+
+### Lösung
+
+Die Workflow-Grenze lehnt `god_mode=True` jetzt ab, wenn nicht zugleich
+`capture_baseline=True` gesetzt ist. Damit kann kein interner Aufrufer
+God-Mode-Artefakte einer juristischen Kerngleichheitsprüfung zuführen. Der
+nachgelagerte Rückgabepfad verwendet zusätzlich den bereits berechneten,
+modusabhängigen Latest-Pfad.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest bestätigt, dass der unzulässige Parameterverbund vor jedem
+Abruf mit `ValueError` endet und weder ein reguläres noch ein God-Mode-Paket
+erzeugt. Die bestehenden God-Mode-Tests bestätigen weiterhin die getrennte
+Speicherung, sichtbare Kennzeichnung und übersprungene Anthropic-Stufe. Neue
+interne Einstiegspunkte müssen weiterhin `LiveMonitorWorkflow.run` verwenden
+und dürfen keine privaten Workflow-Methoden direkt aufrufen.
+
+## Artefaktpfad konnte auf ein anderes lokales Beweispaket zeigen
+
+### Symptom
+
+Ein beschädigtes oder nachträglich manipuliertes `case.json` konnte für ein
+Artefakt auf eine Datei in einem anderen Bundle unterhalb derselben lokalen
+Ablage verweisen. Der Vorschau-Endpunkt und die ZIP-Erzeugung akzeptierten den
+Pfad, solange er nur innerhalb des gesamten Store-Verzeichnisses lag. Dadurch
+hätte insbesondere ein God-Mode-Artefakt in ein reguläres Downloadpaket kopiert
+werden können.
+
+### Ursache und Diagnose
+
+Die Pfadprüfung in `CaseArchive` verwendete `store_root` als Vertrauensgrenze.
+Diese Grenze verhindert zwar einen Zugriff außerhalb von `.muclegal-ui`, trennt
+aber reguläre Bundles und `god-mode-bundles` nicht voneinander. Die übrigen
+Galeriepfade wurden bereits strenger gegen das jeweilige Paket geprüft.
+
+### Lösung
+
+Jeder freigegebene Artefaktpfad muss jetzt innerhalb des Verzeichnisses des
+konkreten `case.json` liegen. Vorschau, Detailansicht und ZIP-Erzeugung verwenden
+dieselbe Bundle-Grenze. Symlink- und `..`-Auflösungen werden weiterhin über den
+aufgelösten absoluten Pfad geprüft.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest lässt ein reguläres `case.json` auf eine God-Mode-HTML-Datei
+zeigen. Der Artefakt-Endpunkt antwortet mit 404; das reguläre ZIP enthält weder
+den Alias unter `artefakte/` noch den fremden Dateiinhalt. Die lokale Ablage muss
+weiterhin gegen direkte Betriebssystem-Manipulation geschützt werden; absichtlich
+veränderte Paketdateien werden nicht automatisch repariert.
+
+## Gültiges Vollbild meldete widersprüchlich keine lückenlose Abdeckung
+
+### Symptom
+
+Die synthetische 30.000-Pixel-Diagnose erzeugte ein validiertes Full-Page-PNG
+mit 30.021 Pixeln Höhe und Status `vollstaendig_erfasst`. Gleichzeitig enthielt
+`screenshot-index.json` den Wert `continuous_coverage: false`.
+
+### Ursache und Diagnose
+
+Das Feld `continuous_coverage` wurde ausschließlich aus der Liste der
+Fallback-Kacheln berechnet. Bei einem erfolgreichen Vollbild ist diese Liste
+absichtlich leer; die Kachelprüfung lieferte deshalb `false`, obwohl das
+validierte Vollbild die dokumentierte Seitenhöhe vollständig abdeckte.
+
+### Lösung
+
+Ein erfolgreich validiertes Vollbild setzt `continuous_coverage` jetzt direkt
+auf `true`. Nur im Kachelmodus wird die überlappungsfreie Abdeckung weiterhin
+aus `y_start`, `y_end` und Dokumenthöhe berechnet.
+
+### Verifikation und verbleibende Grenze
+
+Die Playwright-Regressionstests prüfen das Feld für 1.000, 7.999, 8.001 und
+30.000 CSS-Pixel; alle elf Capture-Tests bestehen. Eine erneute synthetische
+Diagnose erfasste 30.021 von 30.021 Pixeln und meldete konsistent
+`continuous_coverage: true`. Die Aussage bezieht sich auf die dokumentierte
+Seitenhöhe zum Aufnahmezeitpunkt; spätere dynamische Inhaltsänderungen bleiben
+durch Höhenmessungen und Aufnahmezeitpunkt begrenzt.
+
+## Externe Zusatzdienste
+
+freeTSA und Wayback sind optionale Zusatzdienste. Ein Ausfall wird mit Status und Grund
+dokumentiert. Gespeicherte Antwortbytes, DOM, Bilder, WARC und lokales Manifest bleiben die
+Primärbeweise. Ein separater GNU-Wget-WARC-Test kann versionsabhängige Digestfehler in Metadaten-
+oder Resource-Records zeigen; der produktive Snapshot-WARC-Pfad muss davon unabhängig bestehen.
+
+## Lokale Verifikation
+
+```powershell
+python -m compileall -q muclegal app.py
+python -m pytest -q
+powershell -ExecutionPolicy Bypass -File scripts/doctor-local-beweislab.ps1
+python -m muclegal diagnose-capture --output output/capture-diagnose
+powershell -ExecutionPolicy Bypass -File scripts/start-local-beweislab.ps1
+```
+
+Danach `/beweis-labor` öffnen und URL-Feld, Automatikschalter, Prüfverlauf,
+Vollständigkeitsstatus, Kachelgalerie, Originaldownload, Info-Popover und ZIP prüfen.
+
+## Temu- und Adidas-Rechtstextpfade fehlten bei Start auf der Domainwurzel
+
+### Symptom
+
+Ein BeweisLab-Lauf mit `https://www.temu.com/` prüfte neun allgemeine
+Rechtstextpfade, aber nicht die bekannte deutsche AGB-URL
+`https://www.temu.com/de/terms-of-use.html`. Entsprechend konnte auch
+`https://www.temu.com/de/privacy-policy.html` fehlen. Für Adidas konnte
+`https://www.adidas.de/terms_and_conditions` übersehen werden, wenn der Link
+nicht im gespeicherten HTML stand.
+
+### Ursache und Diagnose
+
+`_legal_subpage_candidates` leitete eine Sprachkennung nur aus dem ersten
+Segment der eingegebenen URL ab. Bei der Domainwurzel `/` gab es kein Segment
+`de`; deshalb entstanden nur nicht lokalisierte Standardpfade. Der gespeicherte
+Temu-`protection_report.json` bestätigte, dass die beiden `/de/`-Ziele im
+betroffenen Lauf nicht geprüft wurden. Die bereitgestellte Temu-`robots.txt`
+enthält für den Projekt-User-Agent kein Verbot dieser Rechtstextpfade; sie war
+nicht die Ursache.
+
+### Lösung
+
+Eine kleine zentrale Zuordnung priorisiert jetzt für passende Hosts immer die
+belegten öffentlichen Ziele:
+
+- `temu.com`: `/de/terms-of-use.html` und `/de/privacy-policy.html`,
+- `adidas.de`: `/terms_and_conditions`.
+
+Die Zuordnung gilt sowohl für die normale Rechtstextsuche als auch für den
+Schutzseiten-Fallback. Bekannte Website-Pfade stehen jeweils vor allgemeinen
+Pfadkandidaten und werden in `legal_pages.json` mit
+`source: known_site_public_path` ausgewiesen.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests prüfen Domainwurzel, lokalisierte Temu-URL, Kandidatenreihenfolge
+und die Ausgabe in `legal_pages.json`. Die Änderung stellt nur sicher, dass die
+richtige URL versucht und dokumentiert wird. Liefert Temu oder Adidas dort eine
+JavaScript-Challenge, einen leeren Browserzustand, Login oder sonstigen
+Seitenschutz, bleibt der Lauf weiterhin ehrlich begrenzt; es wird keine
+Schutzmaßnahme umgangen.
+
+## Rechtstext-Fallback fehlte bei allgemeinen Erfassungsfehlern und im God Mode
+
+### Symptom
+
+Die öffentlichen AGB- und Datenschutzpfade wurden nur dann als Ausweichziele
+geprüft, wenn der Hauptseitenfehler zuvor ausdrücklich als Seitenschutz erkannt
+worden war. Endete die Browser-Erfassung dagegen mit leerem Text, einem
+Verbindungsfehler oder einer sonstigen technischen Ausnahme, erzeugte der
+Workflow unmittelbar ein Fehlerpaket. Das galt auch für einen fehlgeschlagenen
+God-Mode-Lauf.
+
+### Ursache und Diagnose
+
+Der Rechtstext-Fallback war in `_run_impl` ausschließlich an den Fehlercode
+`protected_or_login_page` gekoppelt. Der allgemeine Abschluss in `run` kannte
+nur das terminale Fehlerpaket. Der Temu-Lauf mit leerem Browserzustand bestätigte
+diesen Pfad: Das Paket enthielt den Hauptseitenfehler, aber keine Liste der
+anschließend geprüften AGB- und Datenschutzziele.
+
+### Lösung
+
+Vor dem allgemeinen Fehlerabschluss startet für jede gültige HTTP(S)-Zielseite
+jetzt derselbe begrenzte Rechtstext-Fallback. Er prüft die bekannten und
+allgemeinen öffentlichen AGB- und Datenschutzpfade; Kindläufe dürfen den
+Fallback nicht erneut starten. Ein bereits vorhandener Browser-Screenshot des
+Fehlerzustands bleibt erhalten. Schutz-, Normalisierungs- und sonstige
+Technikfehler werden im Paket getrennt bezeichnet. Auch God Mode nutzt diesen
+Weg, behält aber seine getrennte Speicherung und den Hinweis
+`GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`.
+
+Der Fallback startet bewusst nicht bei ungültigen URLs, eingebetteten
+Zugangsdaten, privaten Zielen oder einer ausdrücklichen Ablehnung durch
+`robots.txt`. Dadurch werden die bestehenden Zugriffsgrenzen nicht ausgeweitet.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests bestätigen den Fallback nach leerem Direkt- und Browserinhalt,
+die erhaltene Fehleraufnahme, die Temu-Reihenfolge mit
+`/de/terms-of-use.html` und `/de/privacy-policy.html` sowie die Weitergabe des
+God-Mode-Status. Sind auch diese Unterseiten blockiert oder technisch leer,
+enthält das Hinweispaket die vollständig geprüfte Pfadliste und die einzelnen
+Fehler. Das ist ein Nachweis des Erfassungsversuchs, kein Beweis für den Inhalt
+oder das Fehlen einer Klausel.
+
+## Temu-Rechtstext erscheint erst nach der gespeicherten Texterfassung
+
+### Symptom
+
+Der reguläre Live-Lauf vom 21.08.2026 auf `https://www.temu.com/` erkannte auf
+der Hauptseite eine JavaScript-Challenge und prüfte anschließend wie vorgesehen
+zuerst:
+
+- `https://www.temu.com/de/terms-of-use.html`,
+- `https://www.temu.com/de/privacy-policy.html`.
+
+Für beide deutschen Rechtstexte entstanden vollständige, lesbare
+Full-Page-Screenshots mit 15.864 beziehungsweise 19.690 CSS-Pixeln Höhe.
+`visible-text-final.txt`, `normalized-text.txt` und `clauses.json` blieben jedoch
+leer. Das Paket meldete deshalb für AGB und Datenschutz jeweils `0 Zeichen` und
+`0 Klauseln`. Erst der spätere allgemeine Pfad
+`https://www.temu.com/privacy-policy.html` lieferte 30.450 normalisierte Zeichen.
+
+### Ursache und Diagnose
+
+Die Ursache ist durch die gespeicherten Phasenartefakte und die Reihenfolge in
+`BrowserCaptureRun._capture_new_context` belegt: Direkt nach
+`domcontentloaded` wurden ein rund 3 KB großer Challenge-DOM sowie der zu diesem
+Zeitpunkt leere sichtbare Text gespeichert und normalisiert. Erst danach rief
+der Workflow `_wait_for_visual_capture` auf. Während dieses Wartens erschien
+der eigentliche Rechtstext; die anschließende Screenshotaufnahme erfasste ihn
+vollständig. DOM und Text wurden nach dem visuellen Warten aber nicht erneut
+gesichert oder normalisiert. Daher widersprechen sich in diesem Fall nicht die
+Webseite und das Bild, sondern die Erfassungszeitpunkte von Text und Screenshot.
+
+Der Lauf zeigte zusätzlich eine zweite, anhand der SHA-256-Werte belegte
+Zuordnungsgrenze: Nachdem der allgemeine englische Datenschutzpfad als primäres
+Fallback-Ziel erfolgreich war, klassifizierte `_page_role_captures` diese
+Hauptaufnahme ebenfalls als Rolle `privacy`. Dadurch zeigt die Galerie im UI
+unter „Datenschutz-Screenshot“ die englische allgemeine Datenschutzseite. Der
+deutsche Datenschutz-Screenshot bleibt zwar unverändert als
+`artifacts/privacy_screenshot.png` im Paket, wird aber in der Rollengalerie vom
+Fallback-Hauptbild verdrängt.
+
+### Lösung
+
+Die produktive Korrektur ist noch offen. Nach `_wait_for_visual_capture` muss
+für Rechtstextrollen ein zweiter, ausdrücklich als stabilisierter Zustand
+gesichert werden. Enthält dieser Zustand erstmals relevanten sichtbaren Text,
+müssen DOM, sichtbarer Text, Normalisierung, Klauseln und Abdeckungsmetrik daraus
+neu erzeugt werden. Der anfängliche Challenge-DOM bleibt als separates
+Phasenartefakt erhalten; er darf nicht überschrieben oder nachträglich als
+regulärer Rechtstext bezeichnet werden. Schutzbefund, Übergang und verwendeter
+Textstand müssen in Transparenzdatei und Manifest nachvollziehbar bleiben.
+
+Zusätzlich darf eine erfolgreiche Fallback-Hauptseite keine bereits belegte
+Rechtstextrolle überschreiben. Die Fallback-Aufnahme benötigt eine eigene Rolle,
+beispielsweise `captured_fallback`; `agb` und `privacy` müssen weiterhin auf die
+gezielt ausgewählten deutschen Rechtstextziele zeigen. Auch diese Korrektur ist
+noch nicht umgesetzt.
+
+### Verifikation und verbleibende Grenze
+
+Der Live-Lauf bestätigte die richtige Kandidatenreihenfolge, getrennte AGB- und
+Datenschutzbilder, gültiges Manifest, verifizierten RFC-3161-Zeitstempel und ein
+11.314.651 Byte großes ZIP-Paket. Er bestätigt ausdrücklich noch keine
+erfolgreiche deutsche Text- oder Klauselerfassung. Vor Freigabe einer Korrektur
+ist ein Regressionstest mit verzögert erscheinendem Rechtstext erforderlich:
+Initialzustand leer oder Challenge, stabilisierter Zustand inhaltsreich,
+Screenshot und normalisierter Text aus demselben späten Zustand. Bis dahin sind
+die Temu-Bilder als visueller Hinweis vorhanden; Hashvergleich und
+Klauselmonitoring dürfen für die beiden deutschen Rechtstexte nicht als
+erfolgreich dargestellt werden. Ein weiterer Regressionstest muss sicherstellen,
+dass ein als Datenschutzseite klassifiziertes Fallback-Ziel die bereits
+gesicherte deutsche Datenschutzrolle weder in `capture_galleries` noch im UI
+überschreibt.
+
+## Temu-Fallback-Paket wird im UI durch einen älteren Root-Fall ersetzt
+
+### Symptom
+
+Ein am 21.08.2026 gestarteter Lauf für `https://www.temu.com/` erzeugte das neue
+Paket `20260821T155017397646Z-4bae2d59`. Darin ist die angeforderte URL als
+`requested_url` erhalten und die tatsächlich erfasste öffentliche AGB-Seite als
+`captured_url: https://www.temu.com/de/terms-of-use.html` ausgewiesen. Nach dem
+Abschluss zeigte die Oberfläche trotzdem den älteren Fall
+`20260821T090820744158Z-182f5021` für die Temu-Startseite. Dadurch wirkten die
+AGB- und Datenschutz-Schaltflächen fälschlich deaktiviert, obwohl im neuen Paket
+Rechtstextbilder vorhanden waren.
+
+### Ursache und Diagnose
+
+Die Ursache ist im UI-Ladeweg belegt. `loadNewest(expectedUrl)` sucht in der
+Fallliste zuerst nach `entry.url === expectedUrl`. Die Fallzusammenfassung aus
+`CaseArchive._summary` enthält jedoch kein `requested_url`. Bei einem
+erfolgreichen Rechtstext-Fallback ist `url` die tatsächlich erfasste Unterseite
+und damit nicht mehr die angeforderte Startseite. Liegt ein älterer Fall vor,
+dessen `url` noch exakt der Startseite entspricht, wird deshalb dieser ältere
+Fall ausgewählt. Die Dateizeitstempel, Fallkennungen sowie `requested_url` und
+`captured_url` des neuen Pakets schließen eine fehlende neue Erfassung als
+Ursache aus.
+
+### Lösung
+
+Die Fallzusammenfassung gibt nun `requested_url` und `captured_url` getrennt
+aus. `loadNewest` sucht zuerst nach `requested_url`, danach aus
+Abwärtskompatibilitätsgründen nach `url` und erst zuletzt nach dem neuesten Fall
+insgesamt. Da die Fallliste absteigend nach Erfassungszeit sortiert ist, wird so
+der neueste Lauf zur ursprünglich eingegebenen URL geöffnet. Das Eingabefeld
+zeigt ebenfalls weiterhin `requested_url`; `url` und `captured_url` bleiben für
+die Transparenz der tatsächlich gesicherten Seite erhalten.
+
+Für eine eindeutige lokale Vorführung kann zusätzlich ein bestimmter
+gespeicherter Fall über `/beweis-labor?case_id=<Fallkennung>` geöffnet werden.
+Die Kennung wird weiterhin durch den bestehenden pfadsicheren API-Endpunkt
+validiert; die Ansicht verändert oder kopiert keine Beweisdaten.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest legt einen älteren Fall mit der Root-URL und einen neuen
+Fallback-Fall mit derselben `requested_url`, aber abweichender `captured_url`
+an. Er bestätigt die Sortierung, beide URL-Felder in der API und die Priorität
+von `requested_url` im UI-Ladeweg. Der Browser-Smoke-Test mit dem vorhandenen
+Temu-Paket öffnete danach den Fall `20260821T155017397646Z-4bae2d59`, zeigte die
+Temu-Nutzungsbedingungen und ließ die AGB- sowie Datenschutz-Schaltflächen
+aktiv. Adidas war bei der Vorführung nicht von diesem Anzeigefehler betroffen,
+weil dessen blockierte Root-Seite zugleich die `captured_url` blieb.
+
+Ein unmittelbar danach gestarteter neuer Temu-Lauf
+`20260821T160217037848Z-2948c897` wurde dagegen von Temu auf der Hauptseite und
+allen elf geprüften Rechtstextpfaden mit derselben JavaScript-Challenge
+begrenzt. Die Oberfläche zeigte dafür nach der Korrektur richtigerweise den
+neuen Schutzbefund mit deaktivierten Rechtstext-Schaltflächen. Der frühere,
+erfolgreich bebilderte Lauf bleibt über seine Fallkennung getrennt aufrufbar.
+Damit werden ein archivierter erfolgreicher Stand und ein aktueller
+Schutzbefund nicht miteinander vermischt.
+
+## Adidas-Rechtstexte liefern im lokalen Lauf dieselbe HTTP-403-Schutzseite
+
+### Symptom
+
+Der Lauf vom 21.08.2026 für `https://www.adidas.de/` versuchte nach dem
+geschützten Hauptabruf ausdrücklich die bekannte deutsche AGB-Adresse
+`https://www.adidas.de/terms_and_conditions`. Hauptseite und AGB-Ziel antworteten
+mit HTTP 403. Das erzeugte Bild zeigt deshalb nur die Adidas-Hinweisseite zur
+automatischen Bot-Kontrolle und ist korrekt als browserlose HTML-Visualisierung,
+nicht als Live-Browser-Screenshot oder Klauselbeweis, beschriftet.
+
+Die automatische Datenschutzsuche versuchte dabei noch
+`https://www.adidas.de/privacy-policy.html`. Die öffentlich belegte deutsche
+Adresse lautet dagegen `https://www.adidas.de/privacy_policy`.
+
+### Ursache und Diagnose
+
+Für die AGB liegt kein fehlender Zielpfad vor: `legal_pages.json` weist den
+bekannten Pfad `/terms_and_conditions` und den fehlgeschlagenen Abruf mit HTTP
+403 aus. Auch der transparente Browsermodus mit Projekt-User-Agent,
+`navigator.webdriver=true`, ohne Stealth, Proxy oder gespeichertes Profil erhielt
+die Adidas-Schutzseite. Die AGB-Erfassung scheiterte daher an der externen
+Zugriffskontrolle.
+
+Beim Datenschutz besteht zusätzlich eine lokale Pfadlücke: In der zentralen
+Website-Zuordnung ist bisher nur der Adidas-AGB-Pfad hinterlegt. Deshalb fiel die
+Suche auf den allgemeinen, für Adidas falschen Kandidaten
+`/privacy-policy.html` zurück.
+
+### Lösung
+
+Die produktive Pfadkorrektur ist noch offen: Für `adidas.de` muss
+`/privacy_policy` als bekannter öffentlicher Datenschutzpfad ergänzt und vor
+allgemeinen Kandidaten geprüft werden. Dies verbessert Pfadwahl und
+Dokumentation, hebt aber die beobachtete HTTP-403-Sperre nicht auf.
+
+Die Zugriffskontrolle wird nicht umgangen. Bleibt auch der korrekte öffentliche
+Pfad im transparenten Abruf gesperrt, endet der Lauf weiterhin mit einem klar
+bezeichneten Schutzbefund. Für einen Inhaltsbeweis ist dann eine zulässige
+manuelle Erfassung oder eine ausdrückliche Bereitstellung beziehungsweise
+Freigabe durch Adidas erforderlich.
+
+### Verifikation und verbleibende Grenze
+
+Der Lauf `20260821T155127210246Z-4c51d898` belegt den HTTP-403-Status für
+Hauptseite und bekannten AGB-Pfad sowie die korrekte Kennzeichnung des
+Ersatzbildes. Nach Ergänzung des Datenschutzpfads sind Kandidatenreihenfolge,
+`legal_pages.json` und ein Schutzbefund mit exakt `/privacy_policy` per
+Regressionstest zu prüfen. Ein erfolgreicher Suchmaschinenabruf des öffentlichen
+Textes belegt die Adresse, ist aber kein Ersatz für eine eigene Beweiserfassung
+durch das BeweisLab.
+
+## Aura-Frontend: BeweisLab-Start wird als fremde Browser-Origin abgewiesen
+
+### Symptom
+
+Das über den lokalen Aura-Frontendserver unter `http://127.0.0.1:4173/beweis-labor`
+geöffnete BeweisLab lud vollständig. Beim Start einer Erfassung antwortete der
+Stream-Endpunkt jedoch mit HTTP 403 und der sichtbaren Meldung
+`Fremde Browser-Origin ist nicht zulässig.`
+
+### Ursache und Diagnose
+
+Der Vite-Proxy leitete `/api` korrekt an `http://127.0.0.1:8000` weiter und setzte
+mit `changeOrigin` den Ziel-Host. Der vom Browser gesendete `Origin`-Header blieb
+aber `http://127.0.0.1:4173`. Die unveränderte Same-Origin-Prüfung in
+`muclegal/ui.py` verglich diesen Header mit dem bereits auf Port 8000 umgeschriebenen
+Host und wies die Anfrage deshalb korrekt ab. Ein leerer Test-POST an
+`/api/v1/tenor-drafts` reproduzierte vor der Korrektur HTTP 403.
+
+### Lösung
+
+Nur der lokale `/api`-Proxy setzt den weitergeleiteten Origin-Header nun explizit
+auf `http://127.0.0.1:8000`. Die Backend-Sicherheitsprüfung wird nicht gelockert;
+direkte Anfragen mit einer fremden Origin bleiben unzulässig. BeweisLab, Artefakte
+und statische Dateien werden weiterhin ausschließlich an den lokalen
+FastAPI-Prozess weitergeleitet.
+
+### Verifikation und verbleibende Grenze
+
+Der identische leere Test-POST liefert über Port 4173 nach der Korrektur HTTP 422
+für die erwarteten fehlenden Pflichtfelder statt HTTP 403. Damit erreicht die
+Anfrage den regulären Request-Validator, ohne einen Erfassungslauf zu starten.
+Der Browser-Smoke-Test prüft zusätzlich den sichtbaren Startpfad und das Fehlen
+einer 403-Origin-Meldung. Die Proxy-Korrektur gilt nur für die lokale
+Entwicklungsadresse auf Port 4173; wird der Frontend-Port geändert, muss das lokale
+Proxy-Ziel konsistent angepasst oder Frontend und Backend unter derselben Origin
+ausgeliefert werden.

@@ -11,7 +11,7 @@ from lxml import etree, html
 from trafilatura import extract
 
 
-NORMALIZER_VERSION = "1"
+NORMALIZER_VERSION = "2"
 _SIMPLE_SELECTOR = re.compile(
     r"^(?P<tag>[A-Za-z][\w-]*)?(?:#(?P<id>[\w-]+))?(?:\.(?P<class>[\w-]+))?$"
 )
@@ -131,13 +131,39 @@ def _xpath_literal(value: str) -> str:
     raise NormalizationError("Anführungszeichen sind in einfachen Selektoren nicht zulässig.")
 
 
-def _canonicalize_text(value: str) -> str:
-    value = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n"))
-    value = value.replace("\u00a0", " ")
+def normalize_plain_text(value: str) -> str:
+    """Canonicalize extracted text without removing substantive content."""
+    value = unicodedata.normalize("NFKC", value.replace("\r\n", "\n").replace("\r", "\n"))
+    value = value.translate(
+        str.maketrans(
+            {
+                "\u00a0": " ",
+                "\u00ad": None,
+                "\u200b": None,
+                "\u200c": None,
+                "\u200d": None,
+                "\ufeff": None,
+                "\u2018": "'",
+                "\u2019": "'",
+                "\u201c": '"',
+                "\u201d": '"',
+                "\u2010": "-",
+                "\u2011": "-",
+                "\u2012": "-",
+                "\u2013": "-",
+                "\u2014": "-",
+                "\u2212": "-",
+            }
+        )
+    )
     lines = [re.sub(r"[\t\f\v ]+", " ", line).strip() for line in value.split("\n")]
     output: list[str] = []
     for line in lines:
         if line or (output and output[-1]):
             output.append(line)
     return "\n".join(output).strip() + "\n"
+
+
+def _canonicalize_text(value: str) -> str:
+    return normalize_plain_text(value)
 

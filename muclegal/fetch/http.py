@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import gzip
+import ipaddress
+import logging
 import re
+import socket
 import time
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from email.message import Message
+from pathlib import Path
 from urllib import error, parse, request, robotparser
 
 
@@ -14,6 +19,7 @@ DEFAULT_USER_AGENT = (
     "(+https://github.com/Alebabo/MucLegal; public-page compliance monitor)"
 )
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -23,6 +29,7 @@ class FetchPolicy:
     max_attempts: int = 3
     retry_backoff_seconds: float = 0.25
     respect_robots: bool = True
+    require_public_network: bool = False
 
 
 @dataclass(frozen=True)
@@ -36,6 +43,7 @@ class FetchResult:
     body: bytes
     decoded_html: str
     fetch_mode: str = "http"
+    browser_metadata: dict[str, object] | None = None
 
 
 class FetchFailure(RuntimeError):
@@ -74,10 +82,103 @@ class HttpFetcher:
 
     def __init__(self, policy: FetchPolicy | None = None) -> None:
         self.policy = policy or FetchPolicy()
+        self._capture_controller = None
+        self._capture_session_depth = 0
+        self.last_capture_run_root: str | None = None
+        self.last_browser_capture = None
+        self._robots_checks: list[dict[str, str]] = []
+        self._god_mode = False
+
+    @contextmanager
+    def god_mode_session(self):
+        previous = self._god_mode
+        self._god_mode = True
+        try:
+            yield
+        finally:
+            self._god_mode = previous
+
+    def _respect_robots(self) -> bool:
+        return self.policy.respect_robots and not self._god_mode
+
+    def _begin_robots_monitor(self) -> None:
+        self._robots_checks = []
+
+    def _record_robots_check(self, *, url: str, status: str, reason: str) -> None:
+        self._robots_checks.append({"url": url, "status": status, "reason": reason})
+
+    def _robots_metadata(self) -> dict[str, object]:
+        unchecked = next(
+            (item for item in self._robots_checks if item["status"] == "ungeprueft"),
+            None,
+        )
+        disallowed = next(
+            (
+                item
+                for item in self._robots_checks
+                if item["status"] == "geprueft_abruf_untersagt"
+            ),
+            None,
+        )
+        status = "god_mode_ausdruecklich_ignoriert" if self._god_mode else (
+            "ungeprueft" if unchecked else (
+                "geprueft_abruf_untersagt" if disallowed else (
+                    "geprueft_abruf_erlaubt" if self._respect_robots()
+                    else "laut_policy_nicht_geprueft"
+                )
+            )
+        )
+        return {
+            "robots_txt": status,
+            "robots_reason": (
+                unchecked["reason"] if unchecked else
+                disallowed["reason"] if disallowed else
+                "robots.txt wurde geprüft; der Abruf ist für den Projekt-User-Agent erlaubt."
+            ),
+            "robots_checks": [dict(item) for item in self._robots_checks],
+            "evidence_suitability": (
+                "nicht_juristisch_verwertbar" if self._god_mode else
+                "nicht_beweisgeeignet" if status == "ungeprueft" else "regulaer"
+            ),
+        }
+
+    def robots_metadata(self) -> dict[str, object]:
+        """Return the recorded robots result for the current top-level capture attempt."""
+        return self._robots_metadata()
+
+    @contextmanager
+    def capture_session(self, output_root: str | Path):
+        """Share one Chromium process across one evidence run; nested fallbacks reuse it."""
+        if self._capture_controller is not None:
+            self._capture_session_depth += 1
+            try:
+                yield self._capture_controller
+            finally:
+                self._capture_session_depth -= 1
+            return
+        from muclegal.fetch.playwright import CaptureRunController
+
+        guard = self._browser_request_guard()
+        with CaptureRunController(
+            output_root,
+            user_agent=self.policy.user_agent,
+            timeout_seconds=max(20.0, self.policy.timeout_seconds),
+            request_guard=guard,
+        ) as controller:
+            self._capture_controller = controller
+            self._capture_session_depth = 1
+            self.last_capture_run_root = str(controller.run_root)
+            try:
+                yield controller
+            finally:
+                self._capture_session_depth = 0
+                self._capture_controller = None
 
     def fetch(self, url: str) -> FetchResult:
+        self.last_browser_capture = None
         self._validate_url(url)
-        if self.policy.respect_robots:
+        self._begin_robots_monitor()
+        if self._respect_robots():
             self._require_robots_permission(url)
 
         last_failure: FetchFailure | None = None
@@ -92,56 +193,282 @@ class HttpFetcher:
         assert last_failure is not None
         raise last_failure
 
-    @staticmethod
-    def _validate_url(url: str) -> None:
+    def fetch_in_browser(self, url: str) -> FetchResult:
+        """Use a real browser only when explicitly enabled by the caller."""
+        self._validate_url(url)
+        self._begin_robots_monitor()
+        if self._respect_robots():
+            self._require_robots_permission(url)
+        if self._capture_controller is not None:
+            self.last_browser_capture = self._capture_controller.capture_target(
+                url, role="main"
+            )
+            result = self.last_browser_capture.fetch_result
+        else:
+            self.last_browser_capture = None
+            from muclegal.fetch.playwright import fetch_rendered_public_page
+
+            result = fetch_rendered_public_page(
+                url,
+                user_agent=self.policy.user_agent,
+                timeout_seconds=max(20.0, self.policy.timeout_seconds),
+                request_guard=self._browser_request_guard(),
+            )
+        metadata = dict(result.browser_metadata or {})
+        metadata.update(self._robots_metadata())
+        result = replace(result, browser_metadata=metadata)
+        block_reason = _detect_block_page(result.decoded_html)
+        if block_reason and not self._god_mode:
+            raise FetchFailure(
+                "protected_or_login_page",
+                f"Abruf abgebrochen: {block_reason}",
+                status_code=result.status_code,
+                headers=result.headers,
+                body=result.body,
+                manual_review=True,
+            )
+        return result
+
+    def capture_screenshot(self, url: str, destination: str | Path):
+        """Capture one public page with the same URL and robots policy as regular fetching."""
+        self._validate_url(url)
+        self._begin_robots_monitor()
+        if self._respect_robots():
+            self._require_robots_permission(url)
+        from muclegal.fetch.playwright import (
+            ScreenshotCaptureError,
+            _capture_html_evidence_image,
+            capture_html_screenshot,
+            capture_page_screenshot,
+        )
+
+        if self._capture_controller is not None:
+            name = Path(destination).stem.casefold()
+            role = "agb" if "agb" in name else (
+                "privacy" if "privacy" in name or "datenschutz" in name else "main"
+            )
+            target = self._capture_controller.capture_target(url, role=role)
+            if target.screenshot is None:
+                artifact_root = Path(target.artifact_directory)
+                protection = _detect_block_page(target.fetch_result.decoded_html)
+                return _capture_html_evidence_image(
+                    target.fetch_result.decoded_html,
+                    target.fetch_result.final_url,
+                    artifact_root / "screenshot-full-page.png",
+                    protection=(
+                        "Autorisierter God-Mode-Zielzustand mit aktivem Seitenschutz."
+                        if self._god_mode and protection else protection
+                    ),
+                    fallback_reason=(
+                        f"{'God Mode: ' if self._god_mode else ''}Der Browserzustand wurde "
+                        "gesichert, aber die reguläre Screenshotphase "
+                        f"{target.failure_phase or 'unbekannt'} blieb ohne Bild."
+                    ),
+                    browser_error=target.failure_phase or "Screenshotphase ohne Bild",
+                    artifact_directory=artifact_root,
+                )
+            return target.screenshot
+
+        initial = parse.urlsplit(url)
+        initial_origin = (initial.scheme, initial.netloc)
+        validated_origins: set[tuple[str, str]] = {initial_origin}
+        robots_origins: set[tuple[str, str]] = {initial_origin}
+
+        def validate_subresource(target_url: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise FetchFailure("invalid_url", "Nicht öffentliche Unterressource blockiert.")
+            if parsed.username or parsed.password:
+                raise FetchFailure("credentials_in_url", "Unterressource mit Zugangsdaten blockiert.")
+            hostname = parsed.hostname.lower().rstrip(".")
+            if hostname == "localhost" or hostname.endswith(".localhost"):
+                raise FetchFailure("non_public_target", "Lokale Unterressource blockiert.")
+            try:
+                literal_ip = ipaddress.ip_address(hostname)
+            except ValueError:
+                return
+            if not literal_ip.is_global:
+                raise FetchFailure("non_public_target", "Private Unterressource blockiert.")
+
+        def guard_request(target_url: str, resource_type: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            origin = (parsed.scheme, parsed.netloc)
+            if resource_type == "document":
+                if origin not in validated_origins:
+                    self._validate_url(target_url)
+                    validated_origins.add(origin)
+                if self._respect_robots() and origin not in robots_origins:
+                    self._require_robots_permission(target_url)
+                    robots_origins.add(origin)
+            else:
+                validate_subresource(target_url)
+
+        try:
+            return capture_page_screenshot(
+                url,
+                destination,
+                timeout_seconds=max(20.0, self.policy.timeout_seconds),
+                user_agent=self.policy.user_agent,
+                request_guard=guard_request,
+            )
+        except ScreenshotCaptureError as exc:
+            browser_terminated = any(
+                marker in str(exc).casefold()
+                for marker in (
+                    "target page, context or browser has been closed",
+                    "browser has been closed",
+                    "browser closed",
+                )
+            )
+            if not browser_terminated:
+                raise
+            LOGGER.warning(
+                "Live-Browsernavigation beendet; HTML-Screenshot-Fallback wird verwendet",
+                extra={"target_url": url, "error": str(exc)},
+            )
+            try:
+                fetched = self.fetch(url)
+                html = fetched.decoded_html
+                base_url = fetched.final_url
+            except FetchFailure as fetch_exc:
+                if not fetch_exc.body:
+                    raise exc from fetch_exc
+                html = fetch_exc.body.decode("utf-8", errors="replace")
+                base_url = url
+            return capture_html_screenshot(
+                html,
+                base_url,
+                destination,
+                timeout_seconds=max(20.0, self.policy.timeout_seconds),
+                user_agent=self.policy.user_agent,
+                request_guard=guard_request,
+                fallback_reason=str(exc),
+            )
+
+    def _browser_request_guard(self):
+        validated_origins: set[tuple[str, str]] = set()
+        robots_origins: set[tuple[str, str]] = set()
+
+        def guard_request(target_url: str, resource_type: str) -> None:
+            parsed = parse.urlsplit(target_url)
+            origin = (parsed.scheme, parsed.netloc)
+            if resource_type == "document":
+                if origin not in validated_origins:
+                    self._validate_url(target_url)
+                    validated_origins.add(origin)
+                if self._respect_robots() and origin not in robots_origins:
+                    self._require_robots_permission(target_url)
+                    robots_origins.add(origin)
+                return
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise FetchFailure("invalid_url", "Nicht öffentliche Unterressource blockiert.")
+            if parsed.username or parsed.password:
+                raise FetchFailure("credentials_in_url", "Unterressource mit Zugangsdaten blockiert.")
+            hostname = parsed.hostname.lower().rstrip(".")
+            if hostname == "localhost" or hostname.endswith(".localhost"):
+                raise FetchFailure("non_public_target", "Lokale Unterressource blockiert.")
+            try:
+                literal_ip = ipaddress.ip_address(hostname)
+            except ValueError:
+                return
+            if not literal_ip.is_global:
+                raise FetchFailure("non_public_target", "Private Unterressource blockiert.")
+
+        return guard_request
+
+    def _validate_url(self, url: str) -> None:
         parsed = parse.urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise FetchFailure("invalid_url", "Nur öffentliche HTTP(S)-URLs sind zulässig.")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise FetchFailure("invalid_url", "Die URL enthält keinen gültigen Port.") from exc
         if parsed.username or parsed.password:
             raise FetchFailure(
                 "credentials_in_url",
                 "URLs mit Zugangsdaten werden nicht abgerufen.",
                 manual_review=True,
             )
+        if self.policy.require_public_network:
+            try:
+                addresses = {
+                    item[4][0]
+                    for item in socket.getaddrinfo(
+                        parsed.hostname,
+                        port or (443 if parsed.scheme == "https" else 80),
+                    )
+                }
+            except socket.gaierror as exc:
+                raise FetchFailure("dns_error", f"Hostname konnte nicht aufgelöst werden: {exc}") from exc
+            if not addresses:
+                raise FetchFailure("dns_error", "Hostname lieferte keine Netzwerkadresse.")
+            for address in addresses:
+                ip = ipaddress.ip_address(address)
+                if not ip.is_global:
+                    raise FetchFailure(
+                        "non_public_target",
+                        "Nur öffentlich erreichbare Internetadressen sind zulässig.",
+                        manual_review=True,
+                    )
 
     def _require_robots_permission(self, url: str) -> None:
+        self._validate_url(url)
         parsed = parse.urlsplit(url)
         robots_url = parse.urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
         req = request.Request(robots_url, headers={"User-Agent": self.policy.user_agent})
+        redirects = _RedirectRecorder(self._validate_url)
+        opener = request.build_opener(redirects)
         try:
-            with request.urlopen(req, timeout=self.policy.timeout_seconds) as response:
+            with opener.open(req, timeout=self.policy.timeout_seconds) as response:
                 raw = response.read(1_000_000)
                 encoding = response.headers.get_content_charset() or "utf-8"
                 rules = raw.decode(encoding, errors="replace")
         except error.HTTPError as exc:
             if exc.code == 404:
+                self._record_robots_check(
+                    url=robots_url,
+                    status="geprueft_abruf_erlaubt",
+                    reason="robots.txt ist nicht vorhanden (HTTP 404); keine Abrufregel festgestellt.",
+                )
                 return
-            raise FetchFailure(
-                "robots_unavailable",
-                f"robots.txt konnte nicht verlässlich geprüft werden (HTTP {exc.code}).",
-                status_code=exc.code,
-                manual_review=True,
-            ) from exc
+            self._record_robots_check(
+                url=robots_url,
+                status="ungeprueft",
+                reason=f"robots.txt konnte nicht verlässlich geprüft werden (HTTP {exc.code}).",
+            )
+            return
         except (error.URLError, TimeoutError, OSError) as exc:
-            raise FetchFailure(
-                "robots_unavailable",
-                f"robots.txt konnte nicht verlässlich geprüft werden: {exc}",
-                manual_review=True,
-            ) from exc
+            self._record_robots_check(
+                url=robots_url,
+                status="ungeprueft",
+                reason=f"robots.txt konnte nicht verlässlich geprüft werden: {exc}",
+            )
+            return
 
         parser = robotparser.RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(rules.splitlines())
         if not parser.can_fetch(self.policy.user_agent, url):
+            self._record_robots_check(
+                url=robots_url,
+                status="geprueft_abruf_untersagt",
+                reason="robots.txt untersagt den Abruf für diesen User-Agent.",
+            )
             raise FetchFailure(
                 "robots_disallowed",
                 "robots.txt untersagt den Abruf für diesen User-Agent.",
                 manual_review=True,
             )
+        self._record_robots_check(
+            url=robots_url,
+            status="geprueft_abruf_erlaubt",
+            reason="robots.txt erlaubt den Abruf für den Projekt-User-Agent.",
+        )
 
     def _fetch_once(self, url: str) -> FetchResult:
         redirects = _RedirectRecorder(
-            self._require_robots_permission if self.policy.respect_robots else lambda _url: None
+            self._require_robots_permission if self._respect_robots() else lambda _url: None
         )
         opener = request.build_opener(redirects)
         req = request.Request(
@@ -164,6 +491,21 @@ class HttpFetcher:
         except error.HTTPError as exc:
             body = exc.read()
             headers = tuple(exc.headers.items()) if exc.headers else ()
+            if exc.code in {401, 403, 407, 429}:
+                decoded_error = self._decode_body(body, exc.headers or Message())
+                detected = _detect_block_page(decoded_error)
+                protection = detected or (
+                    f"Art des Seitenschutzes: HTTP-Zugriffsschutz (Status {exc.code}). "
+                    "Ein transparenter Browser-Prüfversuch kann zulässig sein; Zugangshürden werden nicht überwunden."
+                )
+                raise FetchFailure(
+                    "protected_or_login_page",
+                    f"Abruf abgebrochen: {protection}",
+                    status_code=exc.code,
+                    headers=headers,
+                    body=body,
+                    manual_review=True,
+                ) from exc
             raise FetchFailure(
                 "http_error",
                 f"HTTP-Abruf fehlgeschlagen (Status {exc.code}).",
@@ -176,7 +518,7 @@ class HttpFetcher:
             raise FetchFailure("network_error", f"HTTP-Abruf fehlgeschlagen: {exc}") from exc
 
         block_reason = _detect_block_page(decoded)
-        if block_reason:
+        if block_reason and not self._god_mode:
             raise FetchFailure(
                 "protected_or_login_page",
                 f"Abruf abgebrochen: {block_reason}",
@@ -194,6 +536,7 @@ class HttpFetcher:
             redirect_chain=tuple(redirects.chain),
             body=body,
             decoded_html=decoded,
+            browser_metadata=self._robots_metadata(),
         )
 
     @staticmethod
@@ -207,13 +550,45 @@ class HttpFetcher:
 
 def _detect_block_page(html: str) -> str | None:
     sample = html[:500_000].lower()
-    captcha_markers = ("g-recaptcha", "hcaptcha", "captcha-container", "cf-chl-")
-    if any(marker in sample for marker in captcha_markers) or re.search(
-        r"\b(?:verify you are human|captcha)\b", sample
-    ):
-        return "CAPTCHA oder Bot-Challenge erkannt; manuelle Prüfung erforderlich."
+    # Shopify and other storefronts often ship dormant CAPTCHA bootstrap code on
+    # every page. Only markup outside scripts/styles and explicit human-check
+    # wording are evidence of a challenge that actually replaced the content.
+    visible_markup = re.sub(
+        r"<(script|style|template|noscript)\b[^>]*>.*?</\1\s*>",
+        " ",
+        sample,
+        flags=re.DOTALL,
+    )
+    visible_text = re.sub(r"<[^>]+>", " ", visible_markup)
+    has_captcha_component = bool(
+        re.search(
+            r"<[^>]+\b(?:class|id|src)\s*=\s*['\"][^'\"]*"
+            r"(?:g-recaptcha|h-captcha|hcaptcha|captcha-container|cf-chl-)",
+            visible_markup,
+        )
+        or "<h-captcha" in visible_markup
+    )
+    has_human_check = bool(
+        re.search(
+            r"\b(?:verify (?:that )?you are human|confirm (?:that )?you are human|"
+            r"complete (?:the )?captcha|captcha (?:required|challenge))\b",
+            visible_text,
+        )
+    )
+    if has_captcha_component or has_human_check:
+        return "Art des Seitenschutzes: CAPTCHA oder Bot-Challenge. Manuelle Prüfung erforderlich."
     if re.search(r"<input\b[^>]*\btype\s*=\s*['\"]?password\b", sample):
-        return "Login-Seite erkannt; manuelle Prüfung erforderlich."
+        return "Art des Seitenschutzes: Login-Sperre mit Passwortfeld. Manuelle Prüfung erforderlich."
     if "just a moment" in sample and "cloudflare" in sample:
-        return "technische Blockseite erkannt; manuelle Prüfung erforderlich."
+        return "Art des Seitenschutzes: Cloudflare-Blockseite. Manuelle Prüfung erforderlich."
+    if "/chl/js/" in sample and "challenge" in sample:
+        return "Art des Seitenschutzes: JavaScript-Challenge. Direkte Rechtstext-Unterseiten werden geprüft."
+    if (
+        "triggered our security system" in visible_text
+        and ("cannot allow you" in visible_text or "prevent bots" in visible_text)
+    ):
+        return (
+            "Art des Seitenschutzes: Bot-Schutzseite trotz HTTP 200. "
+            "Der dahinterliegende Seiteninhalt wurde nicht erfasst."
+        )
     return None

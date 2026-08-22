@@ -19,7 +19,7 @@ class EvaluationTests(unittest.TestCase):
             saved = json.loads(Path(report.json_path).read_text(encoding="utf-8"))
             markdown = Path(report.markdown_path).read_text(encoding="utf-8")
         self.assertTrue(report.passed)
-        self.assertEqual(2, len(report.cases))
+        self.assertEqual(12, len(report.cases))
         self.assertTrue(all(value == 1.0 for value in report.metrics.values()))
         self.assertEqual(PROMPT_VERSION, saved["prompt_version"])
         self.assertEqual(PROMPT_SHA256, saved["prompt_sha256"])
@@ -44,7 +44,7 @@ class EvaluationTests(unittest.TestCase):
             suite_path.write_text(json.dumps(suite), encoding="utf-8")
             report = run_evaluation(suite_path, root / "output")
         self.assertFalse(report.passed)
-        self.assertEqual(0.5, report.metrics["result_accuracy"])
+        self.assertAlmostEqual(11 / 12, report.metrics["result_accuracy"])
         self.assertFalse(report.gate_results["result_accuracy"])
 
     def test_suite_rejects_paths_outside_its_directory(self) -> None:

@@ -1,0 +1,150 @@
+id: T-001
+quelle: urteil
+gericht_az: "LG München I, 33 O 15098/22"
+datum: "2023-10-10"
+fundstelle_url: "https://www.gesetze-bayern.de/Content/Document/Y-300-Z-GRURRS-B-2023-N-36681"
+fundstelle_zusatz: "GRUR-RS 2023, 36681; MMR 2024, 813. Volltext-PDF (Scan): https://www.vzbv.de/sites/default/files/2023-12/LG%20M%C3%BCnchen%20I_10.10.2023.pdf"
+rechtskraeftig: true
+rechtskraft_hinweis: >
+  Berufung zum OLG München (6 U 4292/23 e) wurde von der Beklagten am 27.12.2023
+  zurückgenommen.
+parteien:
+  klaeger: "Verbraucherzentrale Bundesverband e.V. (vzbv)"
+  beklagte: "Sky Deutschland Fernsehen GmbH & Co. KG (Streamingdienst WOW)"
+zitat_geprueft: true
+zitat_quelle: "gesetze-bayern.de, Volltext, abgerufen 2026-08-21"
+
+# --- Was war der Fall ---
+sachverhalt: >
+  Die Beklagte bietet über ihre Internetseite kostenpflichtige Streaming-Abonnements an.
+  Am unteren Rand der Startseite befand sich ein Link „... Abo kündigen“. Nach dessen
+  Betätigung gelangte der Nutzer nicht auf eine Bestätigungsseite, sondern auf eine
+  Unterseite, auf der E-Mail-Adresse und PIN/Passwort abgefragt wurden. Erst nach
+  erfolgreicher Anmeldung war eine Kündigung möglich.
+fallgruppe: kuendigungsbutton
+verstoss_modus: vorhanden_unzureichend
+kanal:
+  - website
+rechtsgrundlage:
+  - norm: "§ 2 Abs. 1 UKlaG"
+    funktion: anspruchsgrundlage
+  - norm: "§ 312k Abs. 2 BGB"
+    funktion: anspruchsbegruendend
+  - norm: "§ 8 Abs. 3 Nr. 3 UWG i.V.m. § 4 UKlaG"
+    funktion: aktivlegitimation
+  - norm: "§ 890 ZPO"
+    funktion: ordnungsmittelandrohung
+
+# --- Der Tenor (wörtlich) ---
+tenor_text: >
+  I. Die Beklagte wird verurteilt, es bei Meidung eines für jeden Fall der
+  Zuwiderhandlung fälligen Ordnungsgeldes bis zu € 250.000,00 ersatzweise,
+  Ordnungshaft oder Ordnungshaft bis zu 6 Monaten, letztere zu vollziehen an den
+  Geschäftsführern der Komplementär GmbH, im Rahmen geschäftlicher Handlungen
+  gegenüber Verbrauchern zu unterlassen, auf der Internetseite https://www....de,
+  die den Abschluss von entgeltlichen Abonnements in Form von Dauerschuldverhältnissen
+  auf elektronischem Weg ermöglicht, im Footer der Startseite einen Link
+  „... Abo kündigen“ bereit zu stellen, der nach Betätigung nicht unmittelbar zu einer
+  Bestätigungsseite führt, wenn dies geschieht wie in Anlage K 1.
+verletzungsform_anlage: "Anlage K 1 (Ablichtung der Internetseite)"
+
+# --- Warum der Tenor so aussieht (Lernmaterial) ---
+tenor_bausteine:
+  - text: "es bei Meidung eines für jeden Fall der Zuwiderhandlung fälligen Ordnungsgeldes
+      bis zu € 250.000,00 ersatzweise, Ordnungshaft oder Ordnungshaft bis zu 6 Monaten,
+      letztere zu vollziehen an den Geschäftsführern der Komplementär GmbH"
+    funktion: ordnungsmittelandrohung
+    baustein_id: B-OM-02
+  - text: "im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern zu unterlassen"
+    funktion: adressatenkreis
+    baustein_id: B-AK-01
+  - text: "auf der Internetseite https://www....de, die den Abschluss von entgeltlichen
+      Abonnements in Form von Dauerschuldverhältnissen auf elektronischem Weg ermöglicht"
+    funktion: anwendungsbereich
+    baustein_id: B-AB-02
+    anmerkung: >
+      Kritisch eng: benennt EINE konkrete Domain. Vgl. Feld nachtraeglich_bewertet.
+  - text: "im Footer der Startseite einen Link „... Abo kündigen“ bereit zu stellen, der
+      nach Betätigung nicht unmittelbar zu einer Bestätigungsseite führt"
+    funktion: verbotene_handlung
+    baustein_id: B-VH-12
+    anmerkung: >
+      Doppelt verengt: Ort (Footer der Startseite) UND Beschriftung des Links.
+  - text: "wenn dies geschieht wie in Anlage K 1"
+    funktion: konkrete_verletzungsform
+    baustein_id: B-KV-02
+
+# --- Reichweite ---
+kerngleich_umfasst:
+  - beschreibung: "Link im Footer der Startseite, der auf eine Login-Maske mit
+      E-Mail + Passwort führt, aber anders beschriftet ist (z. B. „Vertrag beenden“)"
+    begruendung: >
+      Die Beschriftung ist im Tenor durch „...“ anonymisiert; tragendes Element ist,
+      dass der Link nicht unmittelbar zur Bestätigungsseite führt.
+    sicherheit: mittel
+  - beschreibung: "Link im Footer, der auf eine Zwischenseite mit Abfrage einer
+      Kundennummer führt, bevor die Bestätigungsseite erscheint"
+    begruendung: >
+      Auch hier führt der Link nicht unmittelbar zur Bestätigungsseite; die
+      Zwischenschaltung ist die untersagte Handlung.
+    sicherheit: mittel
+
+nicht_umfasst:
+  - beschreibung: "Kündigungsschaltfläche führt unmittelbar auf eine Bestätigungsseite,
+      auf der Name, Anschrift und Geburtsdatum eingegeben werden können"
+    begruendung: "Erfüllt alle tragenden Elemente; genau der vom Gericht geforderte Zustand."
+    sicherheit: hoch
+  - beschreibung: "Der Kündigungslink wird aus dem Footer entfernt und stattdessen nur
+      im eingeloggten Kundenbereich angeboten"
+    begruendung: >
+      Der Tenor untersagt eine Handlung „im Footer der Startseite“. Das vollständige
+      Fehlen des Links im Footer ist zwar ein eigenständiger Verstoß gegen § 312k
+      Abs. 2 S. 4 BGB, aber von DIESEM Tenor nicht erfasst — neuer Sachverhalt.
+    sicherheit: hoch
+  - beschreibung: "Login-Hürde in der Mobil-App des Anbieters"
+    begruendung: >
+      Der Tenor ist auf „die Internetseite https://www....de“ begrenzt. Die
+      Entscheidungsgründe (Rn. 24) legen den Webseitenbegriff zwar funktional weit aus
+      und beziehen Apps ein — der Tenor selbst tut dies nicht.
+    sicherheit: mittel
+  - beschreibung: "Login-Hürde auf einer anderen Domain desselben Konzerns"
+    begruendung: "Der Tenor nennt eine einzelne Internetseite."
+    sicherheit: hoch
+
+# --- Lernsignal aus der Praxis ---
+nachtraeglich_bewertet:
+  zu_eng: ja
+  hinweis: >
+    Dieser Tenor ist an drei Stellen enger als der Sachverhalt es erzwingt:
+    (1) eine einzelne Domain statt technikneutraler Formulierung,
+    (2) „im Footer der Startseite“ statt ortsunabhängig,
+    (3) die konkrete Linkbeschriftung.
+    Auffällig ist der Kontrast zu den Entscheidungsgründen: Rn. 24 stellt ausdrücklich
+    fest, dass der Webseitenbegriff funktional zu verstehen ist und auch Apps und
+    Smart-TV-Oberflächen umfasst. Diese Weite ist im Tenor nicht abgebildet.
+    Für vergleichbare Fälle: Anwendungsbereich technikneutral fassen
+    (vgl. B-AB-03) und die Ortsangabe weglassen.
+  bewertet_von: "Arbeitsbewertung, juristisch nicht freigegeben"
+
+# --- Brücke zum Monitor ---
+pruefbare_merkmale:
+  - merkmal: "Kündigungslink im Footer der Startseite vorhanden"
+    pruefung: "DOM-Suche nach Linktext mit /kündig|Abo beenden|Vertrag beenden/i im <footer>"
+    automatisierbar: true
+  - merkmal: "Ziel des Links ist keine Login-Maske"
+    pruefung: "Link folgen, Zielseite auf <input type=password> und Felder mit
+      name/id ~ /pass|pin|login/ prüfen"
+    automatisierbar: true
+  - merkmal: "Zielseite ist eine Bestätigungsseite i.S.d. § 312k Abs. 2 S. 3 Nr. 1 BGB"
+    pruefung: "Eingabefelder für Name, Anschrift und/oder Geburtsdatum vorhanden;
+      Bestätigungsschaltfläche vorhanden"
+    automatisierbar: true
+  - merkmal: "Kündigung ohne Login tatsächlich durchführbar"
+    pruefung: "manuell — Absenden erzeugt Rechtsfolge, nicht automatisiert testbar"
+    automatisierbar: false
+
+sicherheit: hoch
+uneinigkeit: null
+geprueft_von: "Claude (Recherche + Erstannotation)"
+geprueft_am: "2026-08-21"
+freigabe_jurist: false

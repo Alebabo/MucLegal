@@ -3,93 +3,442 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MucLegal - Fallprüfung</title>
+  <title>MucLegal · Unterlassungs- und Umsetzungsmonitor</title>
   <style>
-    :root { --navy:#132238; --teal:#007a78; --pale:#e9f5f3; --line:#d6dee8; --muted:#5c6776; --amber:#9a5800; }
+    :root {
+      color-scheme:light; --background:#f8fafc; --card:#fff; --foreground:#0f172a;
+      --muted:#64748b; --muted-bg:#f1f5f9; --border:#e2e8f0; --primary:#0891b2;
+      --primary-fg:#fff; --success:#059669; --warning:#d97706; --danger:#dc2626;
+      --radius:.62rem; --shadow:0 1px 2px rgb(15 23 42 / .045);
+    }
     * { box-sizing:border-box; }
-    body { margin:0; background:#f5f7fa; color:var(--navy); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
-    header { background:var(--navy); color:white; padding:18px max(24px,calc((100vw - 1120px)/2)); display:flex; justify-content:space-between; align-items:center; }
-    header strong { font-size:21px; letter-spacing:.2px; }
-    header span { color:#b8dedb; font-size:13px; }
-    main { max-width:1120px; margin:28px auto; padding:0 24px 40px; }
-    .status { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
-    .pill { border-radius:999px; padding:5px 10px; font-weight:700; font-size:12px; background:#fff1d6; color:var(--amber); }
-    .pill.decided { background:var(--pale); color:var(--teal); }
-    .grid { display:grid; grid-template-columns:1.35fr .85fr; gap:18px; }
-    .card { background:white; border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow:0 2px 10px #1322380b; margin-bottom:18px; }
-    h1 { font-size:25px; margin:0 0 5px; }
-    h2 { font-size:16px; margin:0 0 14px; color:var(--teal); }
-    h3 { font-size:13px; margin:17px 0 5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
-    p { margin:6px 0; }
+    html,body { width:100%; height:100%; margin:0; overflow:hidden; }
+    body { background:var(--background); color:var(--foreground); font:13px/1.4 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    button,input,select,textarea { font:inherit; }
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid color-mix(in srgb,var(--primary) 35%,transparent); outline-offset:2px; }
+    .app { height:100dvh; min-height:0; display:grid; grid-template-rows:clamp(54px,7.2vh,66px) minmax(0,1fr); }
+    .topbar { display:flex; align-items:center; gap:16px; padding:8px clamp(14px,2vw,28px); background:#fff; border-bottom:1px solid var(--border); }
+    .logo { width:clamp(164px,16vw,218px); max-height:45px; object-fit:contain; object-position:left center; }
+    .topbar .separator { width:1px; height:28px; background:var(--border); }
+    .brand-copy { min-width:0; }
+    .brand-copy strong { display:block; font-size:13px; }
+    .brand-copy span { color:var(--muted); font-size:11px; }
+    .badge { display:inline-flex; align-items:center; gap:5px; width:max-content; border:1px solid var(--border); border-radius:999px; padding:3px 8px; background:#fff; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+    .badge::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--primary); }
+    .topbar .badge { margin-left:auto; }
+    .lab-link { display:inline-flex; align-items:center; min-height:30px; border:1px solid var(--border); border-radius:7px; padding:0 10px; color:var(--foreground); font-size:10px; font-weight:700; text-decoration:none; white-space:nowrap; }
+    .lab-link:hover { background:var(--muted-bg); }
+    .sidebar-toggle { display:none; }
+    .workspace { min-height:0; display:grid; grid-template-columns:minmax(0,1.62fr) minmax(360px,1fr); }
+    .control { min-height:0; overflow:hidden; padding:clamp(10px,1.6vh,18px) clamp(12px,1.6vw,24px); display:flex; flex-direction:column; gap:clamp(8px,1.25vh,14px); }
+    .control.intake-mode { overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+    .proof { min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; background:#fff; border-left:1px solid var(--border); }
+    .proof-inner { min-height:100%; padding:clamp(12px,1.6vw,22px); }
+    .card { border:1px solid var(--border); border-radius:var(--radius); background:var(--card); box-shadow:var(--shadow); }
+    .card-pad { padding:clamp(10px,1.4vh,16px); }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:clamp(16px,1.45vw,20px); letter-spacing:-.02em; }
+    h2 { font-size:13px; }
+    h3 { color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
     .muted { color:var(--muted); }
-    .change { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .change div { padding:13px; border-radius:8px; background:#f7f9fb; border-left:3px solid var(--line); }
-    .change div:last-child { background:var(--pale); border-color:var(--teal); }
-    .score { font-size:30px; font-weight:750; color:var(--teal); }
-    ul { padding-left:20px; }
-    .artifacts { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    a { color:var(--teal); }
-    form { display:grid; gap:8px; }
-    button { border:1px solid var(--teal); border-radius:8px; background:white; color:var(--teal); padding:10px 12px; text-align:left; cursor:pointer; font-weight:650; }
-    button:hover { background:var(--pale); }
-    .warning { background:#fff7e9; border-left:4px solid #d48200; padding:11px 13px; border-radius:6px; color:#704100; }
-    code { font-size:12px; word-break:break-all; }
-    @media (max-width:800px) { .grid,.change { grid-template-columns:1fr; } }
+    .url-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }
+    .url-head p { margin-top:2px; max-width:670px; font-size:11px; }
+    .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-top:10px; }
+    .tenor-panel summary { cursor:pointer; font-weight:700; }
+    .tenor-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:9px; }
+    .tenor-grid .wide { grid-column:1/-1; }
+    .tenor-grid textarea { min-height:54px; resize:vertical; padding:8px 10px; }
+    .tenor-draft { margin-top:8px; padding:8px; border-left:3px solid var(--primary); background:var(--muted-bg); font-size:11px; }
+    .tenor-draft p { margin-top:3px; }
+    .tenor-actions { display:flex; align-items:center; gap:6px; margin-top:7px; }
+    .case-list { display:grid; gap:6px; margin-top:9px; }
+    .case-row { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--muted-bg); font-size:11px; }
+    .case-row small { display:block; color:var(--muted); margin-top:2px; }
+    .conditional[hidden] { display:none; }
+    .input,.select { height:36px; width:100%; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; color:var(--foreground); padding:0 10px; box-shadow:0 1px 1px rgb(15 23 42 / .03); }
+    .button { height:36px; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; color:var(--foreground); padding:0 13px; font-weight:650; cursor:pointer; white-space:nowrap; }
+    .button:hover { background:var(--muted-bg); }
+    .button.primary { border-color:var(--primary); background:var(--primary); color:var(--primary-fg); }
+    .button.primary:hover { filter:brightness(.94); }
+    .button:disabled { opacity:.45; cursor:not-allowed; }
+    .alert { display:flex; gap:8px; align-items:flex-start; margin-top:8px; padding:7px 9px; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:var(--muted-bg); font-size:11px; }
+    .alert.warning { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
+    .pipeline-card { padding:clamp(10px,1.25vh,14px); }
+    .section-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px; }
+    .steps { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:5px; }
+    .step { position:relative; min-width:0; border:1px solid var(--border); border-radius:calc(var(--radius) - 2px); background:#fff; padding:7px 5px; text-align:center; color:var(--muted); }
+    .step-dot { display:block; width:7px; height:7px; margin:0 auto 4px; border:1px solid #94a3b8; border-radius:50%; background:#fff; }
+    .step-name { display:block; overflow:hidden; font-size:10px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .step-state { display:block; margin-top:1px; font-size:9px; }
+    .step[data-state=active] { border-color:#67e8f9; background:#ecfeff; color:#0e7490; }
+    .step[data-state=active] .step-dot { border-color:var(--primary); background:var(--primary); box-shadow:0 0 0 3px #cffafe; }
+    .step[data-state=success] { border-color:#a7f3d0; background:#ecfdf5; color:#047857; }
+    .step[data-state=success] .step-dot { border-color:var(--success); background:var(--success); }
+    .step[data-state=skipped] { border-style:dashed; opacity:.7; }
+    .step[data-state=warning] { border-color:#fed7aa; background:#fff7ed; color:#b45309; }
+    .step[data-state=warning] .step-dot { border-color:var(--warning); background:var(--warning); }
+    .step[data-state=failed] { border-color:#fecaca; background:#fef2f2; color:#b91c1c; }
+    .step[data-state=failed] .step-dot { border-color:var(--danger); background:var(--danger); }
+    .run-status { min-height:30px; display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 8px; border-top:1px solid var(--border); color:var(--muted); font-size:11px; }
+    .run-status strong { color:var(--foreground); }
+    .tech-grid { min-height:0; flex:1; display:grid; grid-template-columns:1fr 1fr; gap:clamp(8px,1.2vh,12px); }
+    .metric-card { min-height:0; padding:clamp(10px,1.25vh,14px); overflow:hidden; }
+    .metric-head { display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px solid var(--border); }
+    .metric-list { display:grid; gap:clamp(6px,1vh,10px); padding-top:9px; }
+    .metric { display:grid; grid-template-columns:minmax(96px,.7fr) minmax(0,1.3fr); gap:8px; align-items:start; }
+    .metric dt { color:var(--muted); }
+    .metric dd { margin:0; min-width:0; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .metric code { font:10px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .status-chip { display:inline-flex; align-items:center; border-radius:999px; padding:2px 7px; background:var(--muted-bg); font-size:10px; font-weight:700; }
+    .status-chip.ok { background:#ecfdf5; color:#047857; }
+    .status-chip.warn { background:#fff7ed; color:#b45309; }
+    .review { display:flex; align-items:center; gap:10px; padding:clamp(8px,1vh,11px) clamp(10px,1.2vw,14px); }
+    .review-copy { min-width:150px; margin-right:auto; }
+    .review-copy p { font-size:10px; color:var(--muted); }
+    .review form { display:flex; gap:6px; }
+    .review .button { height:30px; padding:0 9px; font-size:10px; }
+    .proof-head { position:sticky; top:0; z-index:3; margin:-1px -1px 0; padding:0 1px 12px; background:#fff; }
+    .proof-title { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .proof-title p { margin-top:2px; font-size:11px; color:var(--muted); }
+    .selectors { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; }
+    .select { height:34px; font-size:11px; }
+    .proof-summary { margin-bottom:12px; padding:10px; background:var(--muted-bg); box-shadow:none; }
+    .summary-url { overflow:hidden; margin-bottom:8px; font-size:11px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px 10px; font-size:10px; }
+    .summary-grid span { color:var(--muted); }
+    .summary-grid strong { display:block; overflow:hidden; color:var(--foreground); text-overflow:ellipsis; white-space:nowrap; }
+    .artifact-group { margin-top:12px; }
+    .artifact-group h3 { margin-bottom:6px; }
+    .artifact-list { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+    .artifact { display:flex; align-items:center; gap:7px; min-width:0; border:1px solid var(--border); border-radius:calc(var(--radius) - 3px); background:#fff; padding:7px 8px; color:var(--foreground); text-align:left; cursor:pointer; }
+    .artifact:hover:not(:disabled),.artifact.selected { border-color:#67e8f9; background:#ecfeff; }
+    .artifact:disabled { color:#94a3b8; background:#f8fafc; cursor:default; }
+    .artifact-mark { flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:var(--success); }
+    .artifact:disabled .artifact-mark { background:#cbd5e1; }
+    .artifact span:last-child { overflow:hidden; font-size:10px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .preview { margin-top:12px; overflow:hidden; }
+    .preview-bar { display:flex; align-items:center; gap:8px; min-height:34px; padding:7px 9px; border-bottom:1px solid var(--border); }
+    .preview-bar strong { overflow:hidden; margin-right:auto; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+    .preview-bar a { color:var(--primary); font-size:10px; font-weight:650; text-decoration:none; }
+    .preview-empty { display:grid; min-height:150px; place-items:center; padding:20px; color:var(--muted); text-align:center; }
+    pre { max-height:330px; min-height:150px; margin:0; overflow:auto; padding:11px; background:#0f172a; color:#dbeafe; font:10px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
+    .pdf-frame { width:100%; height:430px; border:0; background:var(--muted-bg); }
+    .image-preview { display:block; width:100%; max-height:520px; object-fit:contain; background:var(--muted-bg); }
+    [hidden] { display:none !important; }
+    @media (max-height:800px) {
+      .brand-copy span,.url-head p { display:none; }
+      .control { gap:7px; padding-top:8px; padding-bottom:8px; }
+      .card-pad,.pipeline-card,.metric-card { padding:9px; }
+      .url-form { margin-top:7px; }
+      .alert { margin-top:6px; padding:5px 8px; }
+      .step { padding:5px 3px; }
+      .metric-list { gap:5px; padding-top:6px; }
+      .review { padding-top:6px; padding-bottom:6px; }
+    }
+    @media (max-width:1023px) {
+      .workspace { display:block; }
+      .control { height:100%; }
+      .proof { position:fixed; z-index:20; inset:clamp(54px,7.2vh,66px) 0 0 auto; width:min(92vw,480px); border-left:1px solid var(--border); box-shadow:-16px 0 40px rgb(15 23 42 / .16); transform:translateX(102%); transition:transform .2s ease; }
+      .proof.open { transform:translateX(0); }
+      .sidebar-toggle { display:inline-flex; }
+    }
   </style>
 </head>
 <body>
-<header><strong>MucLegal</strong><span>Unterlassungs- und Umsetzungsmonitor</span></header>
-<main>
-  <div class="status">
-    <span class="pill{% if human_review %} decided{% endif %}">{% if human_review %}MENSCHLICH: {{ human_review.decision|upper }}{% else %}MENSCHLICHE PRÜFUNG OFFEN{% endif %}</span>
-    <span class="muted">{{ case.fall_id }} · {{ case.erkannt_am }}</span>
-  </div>
-  <div class="grid">
-    <section>
-      <div class="card">
-        <h1>{{ case.fall_id }}</h1>
-        <p class="muted">{{ case.url }}</p>
-        <h2>Festgestellte Änderung</h2>
-        <div class="change"><div><h3>Vorher</h3>{{ case.vorher }}</div><div><h3>Nachher</h3>{{ case.nachher }}</div></div>
-      </div>
-      <div class="card">
-        <h2>Automatische Vorprüfung</h2>
-        <div class="score">{{ "%.0f"|format(case.assessment.confidence * 100) }} %</div>
-        <strong>{{ case.assessment.ergebnis }}</strong>
-        <p>{{ case.assessment.begruendung }}</p>
-        <h3>Tatsachenbasis</h3>
-        <ul>{% for fact in case.assessment.tatsachenbasis %}<li>{{ fact }}</li>{% endfor %}</ul>
-        <h3>Stärkstes Gegenargument</h3><p>{{ case.assessment.staerkstes_gegenargument }}</p>
-        <h3>Unsicherheit</h3><p>{{ case.assessment.unsicherheit }}</p>
-        <p class="warning">Die Modellbewertung ist keine abschließende Rechtsentscheidung. Im Modelloutput bleibt <code>freigabe_durch_mensch: null</code>.</p>
-      </div>
-    </section>
-    <aside>
-      <div class="card">
-        <h2>Menschliche Entscheidung</h2>
-        <form method="post" action="/review">
-          <button name="decision" value="freigegeben">✓ Freigeben</button>
-          <button name="decision" value="abgelehnt">× Ablehnen</button>
-          <button name="decision" value="weitere_pruefung">… Weitere Prüfung</button>
+<div class="app">
+  <header class="topbar">
+    {% if workflow_enabled %}<img class="logo" src="/static/muclegal-logo-light.png" alt="MucLegal">{% else %}<strong>MucLegal</strong>{% endif %}
+    <div class="separator"></div>
+    <div class="brand-copy"><strong>Unterlassungs- und Umsetzungsmonitor</strong><span>Juristische Vorprüfung mit menschlicher Entscheidung</span></div>
+    <span class="badge">Hackathon-Prototyp</span>
+    <a class="lab-link" href="/beweis-labor">Beweislabor</a>
+    <button id="sidebar-toggle" class="button sidebar-toggle" type="button">Proof</button>
+  </header>
+
+  <div class="workspace">
+    <main class="control{% if case_intake_enabled %} intake-mode{% endif %}">
+      {% if case_intake_enabled %}
+      <details class="card card-pad tenor-panel" open>
+        <summary>1 · Bekannten Erstverstoß erfassen</summary>
+        <p style="margin-top:7px;color:var(--muted);font-size:11px">Die Verbraucherzentrale meldet den bereits geprüften Verstoß. MucLegal sucht keine Erstverstöße; ein Screenshot dient nur als Beleg und wird nicht visuell ausgewertet.</p>
+        <form id="case-intake-form" class="tenor-grid">
+          <input id="intake-fall-id" class="input" required maxlength="200" placeholder="Fall-ID" aria-label="Fall-ID">
+          <input id="intake-domain" class="input" required maxlength="253" placeholder="example.de" aria-label="Domain">
+          <input id="intake-source-url" class="input wide" type="url" required maxlength="2048" placeholder="https://example.de/agb" aria-label="Konkrete Fundstellen-URL">
+          <select id="intake-type" class="select" aria-label="Verstoßtyp"><option value="klausel">Klausel</option><option value="element">Button / Element</option></select>
+          <input id="intake-pages" class="input" required value="AGB, Startseite" aria-label="Relevante Seitentypen">
+          <textarea id="intake-target-urls" class="input wide" maxlength="12000" placeholder="Verbindliche Prüf-URLs · eine URL pro Zeile&#10;https://example.de/&#10;https://example.de/policies/terms-of-service" aria-label="Verbindliche Prüf-URLs"></textarea>
+          <textarea id="intake-description" class="input wide" required maxlength="4000" placeholder="Von der Verbraucherzentrale festgestellter Verstoß" aria-label="Beschreibung"></textarea>
+          <textarea id="intake-tenor" class="input wide" required maxlength="8000" placeholder="Freigegebener Tenor oder tragendes Tenorelement" aria-label="Tenorelement"></textarea>
+          <textarea id="intake-target" class="input wide" required maxlength="4000" placeholder="Was soll künftig gefunden oder vermisst werden?" aria-label="Monitoringziel"></textarea>
+          <textarea id="intake-not-covered" class="input wide" maxlength="6000" placeholder="Nicht umfasst · eine Abgrenzung pro Zeile" aria-label="Nicht vom Fallprofil umfasst"></textarea>
+          <textarea id="intake-clause" class="input wide conditional" required maxlength="12000" placeholder="Beanstandeter Wortlaut der Klausel" aria-label="Beanstandeter Klauselwortlaut"></textarea>
+          <div id="intake-element-fields" class="wide tenor-grid conditional" hidden>
+            <input id="intake-element-label" class="input" maxlength="1000" placeholder="Bezeichnung des Elements" aria-label="Elementbezeichnung">
+            <select id="intake-element-error" class="select" aria-label="Fehlerart">{% for error in element_errors %}<option value="{{ error }}">{{ error }}</option>{% endfor %}</select>
+            <textarea id="intake-element-labels" class="input wide" maxlength="4000" placeholder="Weitere beobachtete Button-Bezeichnungen · eine pro Zeile" aria-label="Weitere Button-Bezeichnungen"></textarea>
+            <textarea id="intake-element-function" class="input wide" maxlength="2000" placeholder="Erwartete Funktion des Elements" aria-label="Elementfunktion"></textarea>
+          </div>
+          <label class="input wide" style="display:block">Optionaler Screenshot des Erstverstoßes · nur Beweismittel<input id="intake-screenshot" type="file" accept="image/png,image/jpeg,image/webp" style="display:block;margin-top:5px"></label>
+          <button class="button primary" type="submit">Fall zur menschlichen Prüfung speichern</button>
+          <span id="intake-status" class="status-chip">noch nicht gespeichert</span>
         </form>
-        {% if human_review %}<p class="muted">Gespeichert: {{ human_review.decided_at }}</p>{% endif %}
-      </div>
-      <div class="card">
-        <h2>Beweiskette</h2>
-        <p><strong>WARC:</strong> {{ case.evidence.warc_status }}</p>
-        <p><strong>RFC 3161:</strong> {{ case.evidence.timestamp_status }}</p>
-        <p><strong>Wayback:</strong> {{ case.evidence.wayback_status }}</p>
-        <h3>Manifest SHA-256</h3><code>{{ case.evidence.manifest_sha256 }}</code>
-        <h3>Artefakte</h3>
-        <div class="artifacts">
-          {% for label in ["raw_html","response_headers","normalized_text","diff","model_input","model_output","warc","manifest","report"] %}
-            {% if case.artifacts.get(label) %}<a href="/artifact/{{ label }}">{{ label }}</a>{% endif %}
+        <div id="monitoring-case-list" class="case-list">
+          {% for item in monitoring_cases %}
+          <div class="case-row" data-case-id="{{ item.case_id }}"><div><strong>{{ item.fall_id }} · {{ item.violation_type }}</strong><small>Erstverstoß: Verbraucherzentrale · {{ item.target_urls|length }} verbindliche Prüf-URL(s) · {{ item.source_url }}</small></div><div><span class="status-chip{% if item.decision == 'freigegeben' %} ok{% endif %}">{{ item.decision }}</span>{% if item.decision != 'freigegeben' %}<button class="button case-review" type="button" data-decision="freigegeben">Fall freigeben</button>{% endif %}</div></div>
           {% endfor %}
         </div>
+      </details>
+      {% endif %}
+
+      <details class="card card-pad tenor-panel"{% if not active_tenor or (tenor_draft and tenor_draft.decision != 'freigegeben') %} open{% endif %}>
+        <summary>{% if case_intake_enabled %}2{% else %}1{% endif %} · Unterlassungstenor prüfen und freigeben</summary>
+        {% if workflow_enabled %}
+        <form method="post" action="/tenor-draft" class="tenor-grid">
+          <input class="input" name="fall_id" required maxlength="200" value="VZ-2024-0417" aria-label="Fall-ID">
+          <input class="input" name="schuldner" required maxlength="500" value="Beispiel Möbel GmbH" aria-label="Schuldner">
+          <input class="input wide" name="fundstelle" required maxlength="2048" value="https://example.org/angebote" aria-label="Fundstelle">
+          <textarea class="input wide" name="beschreibung" required maxlength="4000" aria-label="Festgestellter Verstoß">mit künstlicher Dringlichkeit für eine Rabattaktion zu werben, obwohl die angegebene Befristung tatsächlich nicht besteht</textarea>
+          <input class="input wide" name="rechtsgrundlagen" required value="§ 5 UWG, § 8 Abs. 1 UWG" aria-label="Belegte Rechtsgrundlagen, kommagetrennt">
+          <button class="button primary" type="submit">Prüfentwurf erstellen</button>
+        </form>
+        {% endif %}
+        {% if tenor_draft %}
+        <div class="tenor-draft">
+          <strong>KI-/Demo-Entwurf · {{ tenor_draft.mode }}</strong>
+          <p>{{ tenor_draft.draft.entwurf }}</p>
+          <p><strong>Nicht umfasst:</strong> {{ tenor_draft.draft.nicht_umfasst|join(", ") }}</p>
+          <div class="tenor-actions">
+            <span class="status-chip{% if tenor_draft.decision == 'freigegeben' %} ok{% endif %}">{{ tenor_draft.decision or "MENSCHLICHE PRÜFUNG OFFEN" }}</span>
+            {% if workflow_enabled %}<form method="post" action="/tenor-review"><input type="hidden" name="draft_id" value="{{ tenor_draft.draft_id }}"><button class="button" name="decision" value="freigegeben">Tenor freigeben</button><button class="button" name="decision" value="abgelehnt">Ablehnen</button><button class="button" name="decision" value="weitere_pruefung">Offen</button></form>{% endif %}
+          </div>
+        </div>
+        {% elif active_tenor %}<div class="tenor-draft"><strong>Aktiver, synthetischer Demo-Tenor</strong><p>{{ active_tenor.tenor }}</p></div>{% endif %}
+      </details>
+
+      <section class="card card-pad">
+        <div class="url-head">
+          <div><h1>{% if case_intake_enabled %}3 · Umsetzung überwachen{% else %}2 · Umsetzung auf öffentlicher URL überwachen{% endif %}</h1><p>{% if case_intake_enabled %}Nur ein von der Verbraucherzentrale gemeldeter und menschlich freigegebener Fall kann gestartet werden.{% else %}Der erste Abruf speichert die Baseline. Nur eine relevante spätere Änderung startet die juristische Vorprüfung und Beweissicherung.{% endif %}</p></div>
+          <span class="badge">Mensch entscheidet</span>
+        </div>
+        {% if workflow_enabled %}
+        <form id="run-form" class="url-form">
+          {% if case_intake_enabled %}
+          <select id="monitoring-case" class="select" required aria-label="Freigegebenen Monitoringfall wählen"><option value="">Freigegebenen Fall wählen</option>{% for item in monitoring_cases if item.decision == 'freigegeben' %}<option value="{{ item.case_id }}">{{ item.fall_id }} · {{ item.domain }}</option>{% endfor %}</select>
+          {% else %}
+          <input id="url" class="input" name="url" type="url" required placeholder="https://www.beispiel.de/angebote" aria-label="Webadresse">
+          {% endif %}
+          <button id="run-button" class="button primary" type="submit"{% if not anthropic_ready and not case_intake_enabled %} disabled{% endif %}>Monitoring starten</button>
+        </form>
+        {% if not anthropic_ready and not case_intake_enabled %}<div class="alert warning">ANTHROPIC_API_KEY fehlt am Server. Ein Schlüssel wird nie im Browser eingegeben.</div>{% endif %}
+        {% else %}<div class="alert">Offline-Demolauf – Live-Abruf ist in dieser Ansicht deaktiviert.</div>{% endif %}
+      </section>
+
+      <section class="card pipeline-card">
+        <div class="section-row"><h2>3 · Technischer Prüfpfad</h2><span id="terminal-badge" class="status-chip">wartend</span></div>
+        <div class="steps" id="steps">
+          {% for key,label in [("fetch","Abruf"),("normalize","Normalisierung"),("screenshot","Screenshot"),("compare","Vergleich"),("anthropic","Anthropic"),("warc","WARC"),("manifest","Manifest"),("timestamp","TSA/PDF")] %}
+          <div class="step" data-step="{{ key }}" data-state="waiting"><span class="step-dot"></span><span class="step-name">{{ label }}</span><span class="step-state">wartend</span></div>
+          {% endfor %}
+        </div>
+        <div class="run-status" aria-live="polite"><strong id="run-code">Bereit</strong><span id="run-message">Noch kein Lauf in dieser Sitzung.</span></div>
+      </section>
+
+      <div class="tech-grid">
+        <section class="card metric-card">
+          <div class="metric-head"><h2>4 · Juristische Vorprüfung</h2><span id="schema-chip" class="status-chip">kein Ergebnis</span></div>
+          <dl class="metric-list">
+            <div class="metric"><dt>Vierklassen-Befund</dt><dd id="four-class-result">{% if case and case.clause_findings %}{{ case.clause_findings[0].classification }}{% else %}—{% endif %}</dd></div>
+            <div class="metric"><dt>Klauselpaare</dt><dd id="clause-pair-count">{{ case.clause_findings|length if case and case.clause_findings else "—" }}</dd></div>
+            <div class="metric"><dt>Aggregat</dt><dd id="result-code">{{ case.assessment.ergebnis if case else "—" }}</dd></div>
+            <div class="metric"><dt>Confidence</dt><dd id="confidence">{% if case %}{{ "%.0f"|format(case.assessment.confidence * 100) }} %{% else %}—{% endif %}</dd></div>
+            <div class="metric"><dt>Schema</dt><dd id="schema-valid">{% if case %}valide{% else %}—{% endif %}</dd></div>
+            <div class="metric"><dt>Modus</dt><dd id="analysis-mode">{{ case.analysis_mode if case else "—" }}</dd></div>
+          </dl>
+        </section>
+        <section class="card metric-card">
+          <div class="metric-head"><h2>5 · Beweisstatus</h2><span id="evidence-chip" class="status-chip">lokal</span></div>
+          <dl class="metric-list">
+            <div class="metric"><dt>Aktueller Hash</dt><dd><code id="current-hash">{{ case.snapshot_sha256 if case and case.snapshot_sha256 else "—" }}</code></dd></div>
+            <div class="metric"><dt>Vorheriger Hash</dt><dd><code id="previous-hash">{{ case.previous_snapshot_sha256 if case and case.previous_snapshot_sha256 else "—" }}</code></dd></div>
+            <div class="metric"><dt>WARC</dt><dd id="warc-status">{{ case.evidence.warc_status if case else "—" }}</dd></div>
+            <div class="metric"><dt>Aufnahmebezug</dt><dd id="capture-relation">{{ case.evidence.capture_relation if case and case.evidence.capture_relation else "—" }}</dd></div>
+            <div class="metric"><dt>Manifest</dt><dd id="manifest-status">{% if case %}verifiziert{% else %}—{% endif %}</dd></div>
+            <div class="metric"><dt>TSA / PDF</dt><dd id="tsa-status">{% if case %}{{ case.evidence.timestamp_status }} / erzeugt{% else %}—{% endif %}</dd></div>
+          </dl>
+        </section>
+      </div>
+
+      <section class="card review">
+        <div class="review-copy"><h2>6 · Menschlich entscheiden</h2><p>Das Modell setzt <code>freigabe_durch_mensch: null</code>.</p></div>
+        <span class="status-chip{% if human_review %} ok{% endif %}">{% if human_review %}MENSCHLICH: {{ human_review.decision|upper }}{% else %}MENSCHLICHE PRÜFUNG OFFEN{% endif %}</span>
+        {% if case %}<form method="post" action="/review"><button class="button" name="decision" value="freigegeben">Freigeben</button><button class="button" name="decision" value="abgelehnt">Ablehnen</button><button class="button" name="decision" value="weitere_pruefung">Offen</button></form>{% endif %}
+      </section>
+    </main>
+
+    <aside class="proof" id="proof-sidebar" aria-label="Proof und Artefakte">
+      <div class="proof-inner">
+        <div class="proof-head">
+          <div class="proof-title"><div><h1>Proof & Artefakte</h1><p>Lokale Beweispakete nach URL und Zeitpunkt</p></div><button id="sidebar-close" class="button sidebar-toggle" type="button">Schließen</button></div>
+          <div class="selectors"><select id="url-select" class="select" aria-label="URL wählen"><option value="">Keine URL</option></select><select id="run-select" class="select" aria-label="Beweislauf wählen"><option value="">Kein Lauf</option></select></div>
+        </div>
+        <section id="proof-summary" class="card proof-summary"><div class="summary-url">Noch kein vollständiges Beweispaket</div><div class="summary-grid"><div><span>Status</span><strong>—</strong></div><div><span>Zeitpunkt</span><strong>—</strong></div></div></section>
+        <div id="artifact-groups"></div>
+        <section class="card preview" id="preview-card">
+          <div class="preview-bar"><strong id="preview-title">Vorschau</strong><a id="preview-open" href="#" target="_blank" rel="noopener" hidden>Öffnen / laden</a></div>
+          <div id="preview-empty" class="preview-empty">Artefakt auswählen. HTML wird ausschließlich als ungefährlicher Quelltext dargestellt.</div>
+          <pre id="text-preview" hidden></pre>
+          <img id="image-preview" class="image-preview" alt="Gespeicherter Full-Page-Screenshot" hidden>
+          <iframe id="pdf-preview" class="pdf-frame" title="PDF-Vorschau" hidden></iframe>
+        </section>
       </div>
     </aside>
   </div>
-</main>
+</div>
+
+<script>
+(() => {
+  const terminal = new Set(["baseline_created","unchanged","completed","completed_with_warnings","failed","referenzzustand_dokumentiert","unveraendert_fortbestehend","beseitigt","kerngleich_wiederaufgetreten","neuer_sachverhalt","unsicher","pruefung_unvollstaendig"]);
+  const stateLabels = {waiting:"wartend",active:"aktiv",success:"erfolgreich",skipped:"übersprungen",warning:"Warnung",failed:"fehlgeschlagen"};
+  const runForm = document.getElementById("run-form");
+  const runButton = document.getElementById("run-button");
+  const sidebar = document.getElementById("proof-sidebar");
+  document.getElementById("sidebar-toggle").addEventListener("click", () => sidebar.classList.add("open"));
+  document.getElementById("sidebar-close").addEventListener("click", () => sidebar.classList.remove("open"));
+
+  function setSteps(states) {
+    document.querySelectorAll(".step").forEach(step => {
+      const state = states?.[step.dataset.step] || "waiting";
+      step.dataset.state = state;
+      step.querySelector(".step-state").textContent = stateLabels[state] || state;
+    });
+  }
+  function setRun(run) {
+    setSteps(run.steps);
+    document.getElementById("run-code").textContent = run.status;
+    document.getElementById("run-message").textContent = run.message;
+    const chip = document.getElementById("terminal-badge");
+    chip.textContent = run.status;
+    chip.className = "status-chip " + (run.status === "completed" ? "ok" : (run.status.includes("warning") || run.status === "failed" ? "warn" : ""));
+  }
+  async function api(url, options) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try { message = (await response.json()).detail || message; } catch (_) {}
+      throw new Error(message);
+    }
+    return response.json();
+  }
+  if (runForm) runForm.addEventListener("submit", async event => {
+    event.preventDefault(); runButton.disabled = true; setSteps();
+    try {
+      const caseSelect=document.getElementById("monitoring-case"), urlInput=document.getElementById("url");
+      const payload=caseSelect?{case_id:caseSelect.value}:{url:urlInput.value};
+      let run = await api("/api/runs", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      setRun(run);
+      while (!terminal.has(run.status)) { await new Promise(resolve => setTimeout(resolve,450)); run = await api(`/api/runs/${run.run_id}`); setRun(run); }
+      if (run.result_available) await loadCases(true);
+    } catch (error) {
+      document.getElementById("run-code").textContent = "failed";
+      document.getElementById("run-message").textContent = error.message;
+    } finally { runButton.disabled = false; }
+  });
+
+  const intakeForm=document.getElementById("case-intake-form"), intakeType=document.getElementById("intake-type");
+  function toggleIntakeType() {
+    if (!intakeType) return; const element=intakeType.value==="element";
+    document.getElementById("intake-clause").hidden=element; document.getElementById("intake-clause").required=!element;
+    document.getElementById("intake-element-fields").hidden=!element;
+    ["intake-element-label","intake-element-function","intake-element-error"].forEach(id=>document.getElementById(id).required=element);
+  }
+  if (intakeType) { intakeType.addEventListener("change",toggleIntakeType); toggleIntakeType(); }
+  async function screenshotPayload(file) {
+    if (!file) return null; const bytes=new Uint8Array(await file.arrayBuffer()); let binary="";
+    for(let offset=0;offset<bytes.length;offset+=0x8000) binary+=String.fromCharCode(...bytes.subarray(offset,offset+0x8000));
+    return {filename:file.name,media_type:file.type,data_base64:btoa(binary)};
+  }
+  if (intakeForm) intakeForm.addEventListener("submit",async event=>{
+    event.preventDefault(); const status=document.getElementById("intake-status"); status.textContent="wird gespeichert";
+    try {
+      const type=intakeType.value, file=document.getElementById("intake-screenshot").files[0];
+      const lines=id=>document.getElementById(id).value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+      const payload={fall_id:document.getElementById("intake-fall-id").value,domain:document.getElementById("intake-domain").value,source_url:document.getElementById("intake-source-url").value,violation_type:type,description:document.getElementById("intake-description").value,tenor_element:document.getElementById("intake-tenor").value,monitoring_target:document.getElementById("intake-target").value,relevant_page_types:document.getElementById("intake-pages").value.split(",").map(v=>v.trim()).filter(Boolean),target_urls:lines("intake-target-urls"),nicht_umfasst:lines("intake-not-covered"),clause_text:type==="klausel"?document.getElementById("intake-clause").value:null,element_label:type==="element"?document.getElementById("intake-element-label").value:null,element_labels:type==="element"?lines("intake-element-labels"):[],element_function:type==="element"?document.getElementById("intake-element-function").value:null,element_error:type==="element"?document.getElementById("intake-element-error").value:null,allowed_subdomains:[],screenshot:await screenshotPayload(file)};
+      const created=await api("/api/v1/cases",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}); status.textContent=`${created.fall_id} · menschliche Prüfung offen`; location.reload();
+    } catch(error) { status.textContent=error.message; status.className="status-chip warn"; }
+  });
+  document.querySelectorAll(".case-review").forEach(button=>button.addEventListener("click",async()=>{
+    const caseId=button.closest("[data-case-id]").dataset.caseId;
+    try { await api(`/api/v1/cases/${encodeURIComponent(caseId)}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:button.dataset.decision})}); location.reload(); } catch(error) { alert(error.message); }
+  }));
+
+  const urlSelect = document.getElementById("url-select");
+  const runSelect = document.getElementById("run-select");
+  let allCases = [];
+  async function loadCases(selectNewest=false) {
+    try { allCases = (await api("/api/cases")).cases; } catch (_) { allCases = []; }
+    const previous = urlSelect.value;
+    const urls = [...new Set(allCases.map(item => item.url))];
+    urlSelect.replaceChildren(...(urls.length ? urls.map(url => new Option(url,url)) : [new Option("Keine URL","")]));
+    if (!selectNewest && urls.includes(previous)) urlSelect.value = previous;
+    populateRuns();
+  }
+  function populateRuns() {
+    const cases = allCases.filter(item => item.url === urlSelect.value);
+    runSelect.replaceChildren(...(cases.length ? cases.map(item => new Option(formatDate(item.erkannt_am),item.case_id)) : [new Option("Kein Lauf","")]));
+    if (cases.length) loadCase(cases[0].case_id); else renderEmpty();
+  }
+  function formatDate(value) { const date = new Date(value); return Number.isNaN(date.valueOf()) ? value : date.toLocaleString("de-DE"); }
+  urlSelect.addEventListener("change", populateRuns);
+  runSelect.addEventListener("change", () => runSelect.value && loadCase(runSelect.value));
+
+  async function loadCase(caseId) {
+    const data = await api(`/api/cases/${encodeURIComponent(caseId)}`);
+    renderSummary(data); renderArtifacts(data); renderTechnical(data);
+  }
+  function renderSummary(data) {
+    const summary = document.getElementById("proof-summary"); summary.replaceChildren();
+    const url = document.createElement("div"); url.className="summary-url"; url.textContent=data.url; summary.append(url);
+    const grid = document.createElement("div"); grid.className="summary-grid";
+    [["Status",data.status],["Zeitpunkt",formatDate(data.erkannt_am)],["Manifest",short(data.manifest_sha256)],["Snapshot",short(data.snapshot_sha256)]].forEach(([label,value]) => {
+      const box=document.createElement("div"),span=document.createElement("span"),strong=document.createElement("strong"); span.textContent=label; strong.textContent=value||"—"; box.append(span,strong); grid.append(box);
+    }); summary.append(grid);
+  }
+  function renderTechnical(data) {
+    text("four-class-result",data.four_class_result); text("clause-pair-count",data.clause_pair_count);
+    text("result-code",data.result_code); text("confidence",data.confidence == null ? "—" : `${Math.round(data.confidence*100)} %`);
+    text("schema-valid",data.schema_valid ? "valide" : "ungültig"); text("current-hash",data.snapshot_sha256); text("previous-hash",data.previous_snapshot_sha256);
+    text("warc-status",data.warc_status); text("capture-relation",data.capture_relation); text("manifest-status",data.manifest_sha256 ? "verifiziert" : "fehlt"); text("tsa-status",`${data.timestamp_status||"—"} / ${data.artifacts.some(a=>a.label==="report"&&a.available)?"erzeugt":"fehlt"}`);
+    const schema=document.getElementById("schema-chip"); schema.textContent=data.schema_valid?"schema-valide":"ungültig"; schema.className=`status-chip ${data.schema_valid?"ok":"warn"}`;
+    const evidence=document.getElementById("evidence-chip"); evidence.textContent=data.status; evidence.className=`status-chip ${data.status==="completed"?"ok":"warn"}`;
+  }
+  function text(id,value) { document.getElementById(id).textContent=value||"—"; }
+  function short(value) { return value ? `${value.slice(0,10)}…${value.slice(-6)}` : "—"; }
+  function renderArtifacts(data) {
+    const root=document.getElementById("artifact-groups"); root.replaceChildren();
+    ["Abruf","Analyse","Beweis","Bericht"].forEach(groupName => {
+      const section=document.createElement("section"); section.className="artifact-group"; const title=document.createElement("h3"); title.textContent=groupName; section.append(title);
+      const list=document.createElement("div"); list.className="artifact-list";
+      data.artifacts.filter(a=>a.group===groupName).forEach(artifact => {
+        const button=document.createElement("button"); button.type="button"; button.className="artifact"; button.disabled=!artifact.available; button.title=artifact.available ? `${artifact.size} Bytes` : "Artefakt fehlt oder ist unvollständig";
+        const mark=document.createElement("span"); mark.className="artifact-mark"; const label=document.createElement("span"); label.textContent=artifact.available?artifact.title:`${artifact.title} · fehlt`; button.append(mark,label);
+        if (artifact.available) button.addEventListener("click",()=>preview(data.case_id,artifact,button)); list.append(button);
+      }); section.append(list); root.append(section);
+    }); showEmptyPreview("Artefakt auswählen. HTML wird ausschließlich als ungefährlicher Quelltext dargestellt.");
+  }
+  async function preview(caseId, artifact, button) {
+    document.querySelectorAll(".artifact.selected").forEach(item=>item.classList.remove("selected")); button.classList.add("selected");
+    const title=document.getElementById("preview-title"),open=document.getElementById("preview-open"),pre=document.getElementById("text-preview"),image=document.getElementById("image-preview"),pdf=document.getElementById("pdf-preview"),empty=document.getElementById("preview-empty");
+    title.textContent=artifact.title; pre.hidden=true; image.hidden=true; pdf.hidden=true; empty.hidden=true; open.hidden=false; const fileUrl=`/artifact/${encodeURIComponent(caseId)}/${encodeURIComponent(artifact.label)}`; open.href=fileUrl;
+    if (artifact.kind==="pdf") { pdf.src=fileUrl; pdf.hidden=false; return; }
+    if (artifact.kind==="image") { image.src=fileUrl; image.hidden=false; return; }
+    if (artifact.kind==="text" && artifact.preview_available) { try { const data=await api(`/api/cases/${encodeURIComponent(caseId)}/preview/${encodeURIComponent(artifact.label)}`); pre.textContent=data.content; pre.hidden=false; } catch(error) { showEmptyPreview(error.message); } return; }
+    showEmptyPreview("Binäres oder großes Artefakt: sicher herunterladen beziehungsweise in einem neuen Tab öffnen.",true);
+  }
+  function showEmptyPreview(message,keepOpen=false) { const empty=document.getElementById("preview-empty"); empty.textContent=message; empty.hidden=false; document.getElementById("text-preview").hidden=true; document.getElementById("image-preview").hidden=true; document.getElementById("pdf-preview").hidden=true; if(!keepOpen)document.getElementById("preview-open").hidden=true; }
+  function renderEmpty() { document.getElementById("artifact-groups").replaceChildren(); showEmptyPreview("Noch kein vollständiges Beweispaket vorhanden."); }
+  loadCases();
+})();
+</script>
 </body>
 </html>
-

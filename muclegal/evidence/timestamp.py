@@ -43,7 +43,13 @@ class OpenSslTsaClient:
         max_attempts: int = 3,
         retry_backoff_seconds: float = 1,
     ) -> None:
-        self.openssl_path = openssl_path or find_tool("openssl")
+        if openssl_path is not None:
+            self.openssl_path: str | None = openssl_path
+        else:
+            try:
+                self.openssl_path = find_tool("openssl")
+            except FileNotFoundError:
+                self.openssl_path = None
         self.tsa_url = tsa_url
         self.tsa_cert_url = tsa_cert_url
         self.ca_cert_url = ca_cert_url
@@ -63,6 +69,29 @@ class OpenSslTsaClient:
         status_path = output_directory / "tsa-status.json"
         tsa_cert_sha256: str | None = None
         ca_cert_sha256: str | None = None
+        if self.openssl_path is None:
+            query_path.write_text(
+                "RFC-3161-Anfrage nicht erzeugt: OpenSSL ist in dieser Laufzeit nicht verfügbar.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            result = TimestampResult(
+                "pending",
+                "Zeitstempel offen; OpenSSL ist in dieser Laufzeit nicht verfügbar.",
+                str(query_path),
+                None,
+                None,
+                None,
+                None,
+                None,
+                "https://freetsa.org/index_en.php",
+            )
+            status_path.write_text(
+                json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+                newline="\n",
+            )
+            return result
         query = subprocess.run(
             [
                 self.openssl_path,

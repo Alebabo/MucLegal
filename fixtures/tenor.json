@@ -4,7 +4,8 @@
   "ue_datum": "2024-11-08",
   "vertragsstrafe": {
     "modus": "neuer_hamburger_brauch",
-    "richtwert_eur": 5100
+    "richtwert_eur": 5100,
+    "hinweis": "Rein synthetischer Demo-Wert; keine gesetzliche oder automatische Empfehlung."
   },
   "tenor": "Es wird untersagt, mit zeitlich befristeten Rabattaktionen zu werben, wenn die angegebene Frist tatsächlich nicht besteht.",
   "verbotene_praxis": "künstliche Dringlichkeit ohne realen Hintergrund",
