@@ -7,7 +7,9 @@ import sqlite3
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -44,6 +46,69 @@ class FakeFetcher:
             redirect_chain=(),
             body=body,
             decoded_html=body.decode("utf-8"),
+        )
+
+
+class BrowserFallbackFetcher(FakeFetcher):
+    def __init__(
+        self,
+        pages: dict[str, bytes],
+        *,
+        protected: set[str],
+        browser_pages: dict[str, bytes],
+    ) -> None:
+        super().__init__(pages)
+        self.protected = protected
+        self.browser_pages = browser_pages
+        self.last_browser_capture = None
+        self._capture_root: Path | None = None
+
+    def fetch(self, url: str) -> FetchResult:
+        if url in self.protected:
+            raise FetchFailure(
+                "protected_or_login_page",
+                "Abruf abgebrochen: HTTP-Zugriffsschutz (Status 403).",
+                status_code=403,
+                manual_review=True,
+            )
+        return super().fetch(url)
+
+    @contextmanager
+    def capture_session(self, output_root: str | Path):
+        self._capture_root = Path(output_root) / "synthetic-browser-run"
+        self._capture_root.mkdir(parents=True, exist_ok=False)
+        try:
+            yield self
+        finally:
+            self._capture_root = None
+
+    def fetch_in_browser(self, url: str) -> FetchResult:
+        body = self.browser_pages.get(url)
+        if body is None or self._capture_root is None:
+            raise FetchFailure(
+                "protected_or_login_page",
+                "Browser-Prüfversuch blieb geschützt.",
+                status_code=403,
+                manual_review=True,
+            )
+        artifact_root = self._capture_root / f"{len(list(self._capture_root.iterdir())) + 1:02d}-main"
+        artifact_root.mkdir()
+        (artifact_root / "raw.html").write_bytes(body)
+        (artifact_root / "screenshot-full-page.png").write_bytes(b"synthetic-png")
+        self.last_browser_capture = SimpleNamespace(
+            artifact_directory=str(artifact_root),
+            capture_completeness="vollstaendig_erfasst",
+        )
+        return FetchResult(
+            requested_url=url,
+            final_url=url,
+            fetched_at="2026-08-24T21:00:00+00:00",
+            status_code=200,
+            headers=(("Content-Type", "text/html; charset=utf-8"),),
+            redirect_chain=(),
+            body=body,
+            decoded_html=body.decode("utf-8"),
+            fetch_mode="browser_review",
         )
 
 
@@ -198,6 +263,105 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual([], result.coverage["missing_required_target_urls"])
         self.assertTrue(any(item["url"] == terms_url for item in result.document_findings))
         self.assertTrue(any(item["reported_clause_exact"] for item in result.document_findings))
+
+    def test_required_protected_target_uses_transparent_browser_fallback(self) -> None:
+        event_url = "https://example.test/event"
+        home_url = "https://example.test/"
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            home_url: b"<html><body><main>Ticketmarkt</main></body></html>",
+        }
+        browser_pages = {
+            event_url: b"<html><body><main>Oeffentliche Veranstaltungsseite</main></body></html>",
+        }
+
+        def no_match(url: str, destination: Path, **kwargs) -> DomInspectionCapture:
+            del url, kwargs
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("{}", encoding="utf-8")
+            screenshot = destination.with_suffix(".png")
+            screenshot.write_bytes(b"png")
+            return DomInspectionCapture(
+                str(destination), str(screenshot), "0" * 64, (), (), (),
+                "kein_passender_navigationspfad", (),
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.create({
+                **element_payload(),
+                "source_url": event_url,
+                "target_urls": [event_url, home_url],
+            })
+            case = repository.review(case.case_id, "freigegeben")
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=BrowserFallbackFetcher(
+                    pages,
+                    protected={event_url},
+                    browser_pages=browser_pages,
+                ),
+                dom_inspector=no_match,
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+            manifest = json.loads(Path(result.artifacts["manifest"]).read_text(encoding="utf-8"))
+
+        self.assertEqual("referenzzustand_dokumentiert", result.status)
+        self.assertTrue(result.coverage["complete_within_scope"])
+        self.assertIn(event_url, result.coverage["captured_required_target_urls"])
+        self.assertEqual([], result.coverage["blocked_urls"])
+        self.assertEqual("captured", result.coverage["browser_fallbacks"][0]["browser_status"])
+        self.assertEqual("browser_review", result.coverage["browser_fallbacks"][0]["browser_fetch_mode"])
+        self.assertTrue(
+            any(
+                item["path"].endswith("screenshot-full-page.png")
+                for item in manifest["artifacts"]
+            )
+        )
+
+    def test_failed_required_dom_inspection_keeps_coverage_incomplete(self) -> None:
+        event_url = "https://example.test/event"
+        home_url = "https://example.test/"
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            event_url: b"<html><body><main>Veranstaltung</main></body></html>",
+            home_url: b"<html><body><main>Ticketmarkt</main></body></html>",
+        }
+
+        def partial_inspection(url: str, destination: Path, **kwargs) -> DomInspectionCapture:
+            del kwargs
+            if url == event_url:
+                raise RuntimeError("synthetischer Browserabbruch")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("{}", encoding="utf-8")
+            screenshot = destination.with_suffix(".png")
+            screenshot.write_bytes(b"png")
+            return DomInspectionCapture(
+                str(destination), str(screenshot), "0" * 64, (), (), (),
+                "kein_passender_navigationspfad", (),
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.create({
+                **element_payload(),
+                "source_url": event_url,
+                "target_urls": [event_url, home_url],
+            })
+            case = repository.review(case.case_id, "freigegeben")
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=FakeFetcher(pages),
+                dom_inspector=partial_inspection,
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+
+        self.assertEqual("pruefung_unvollstaendig", result.status)
+        self.assertFalse(result.coverage["complete_within_scope"])
+        self.assertEqual([event_url], result.coverage["missing_dom_target_urls"])
+        self.assertTrue(result.coverage["dom_inspection_incomplete"])
 
     def test_button_label_variants_are_forwarded_to_dom_inspection(self) -> None:
         pages = {

@@ -7,6 +7,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest import mock
 
 from pypdf import PdfReader
 
@@ -19,6 +20,7 @@ from muclegal.evidence import (
     verify_manifest,
 )
 from muclegal.evidence.wayback import WaybackClient
+from muclegal.evidence.tools import KNOWN_WINDOWS_TOOLS, find_tool
 
 
 class _StaticHandler(BaseHTTPRequestHandler):
@@ -40,6 +42,22 @@ class _StaticHandler(BaseHTTPRequestHandler):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_windows_tool_fallback_is_never_used_on_non_windows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory) / "warcio.exe"
+            fake.write_bytes(b"not-a-linux-executable")
+            original = KNOWN_WINDOWS_TOOLS["warcio"]
+            KNOWN_WINDOWS_TOOLS["warcio"] = (fake,)
+            try:
+                with (
+                    mock.patch("muclegal.evidence.tools.os.name", "posix"),
+                    mock.patch("muclegal.evidence.tools.shutil.which", return_value=None),
+                    self.assertRaises(FileNotFoundError),
+                ):
+                    find_tool("warcio")
+            finally:
+                KNOWN_WINDOWS_TOOLS["warcio"] = original
+
     def test_primary_warc_uses_exact_stored_snapshot_bytes(self) -> None:
         body = b"<!doctype html><main>Exakter primaerer Snapshot</main>"
         with tempfile.TemporaryDirectory() as output:

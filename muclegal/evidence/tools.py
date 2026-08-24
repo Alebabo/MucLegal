@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -22,8 +23,9 @@ def find_tool(name: str) -> str:
     discovered = shutil.which(name)
     if discovered:
         return discovered
-    for candidate in KNOWN_WINDOWS_TOOLS.get(name, ()):
-        if candidate.is_file():
-            return str(candidate)
+    if os.name == "nt":
+        for candidate in KNOWN_WINDOWS_TOOLS.get(name, ()):
+            if candidate.is_file():
+                return str(candidate)
     raise FileNotFoundError(f"Benötigtes Werkzeug {name!r} wurde nicht gefunden.")
 

@@ -7,6 +7,7 @@ import shutil
 import time
 import uuid
 from collections import deque
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -103,78 +104,145 @@ class CaseDomainMonitor:
         visited: list[str] = []
         skipped: list[dict] = []
         blocked: list[dict] = []
+        browser_fallbacks: list[dict] = []
+        browser_artifact_directories: list[str] = []
         pages: list[dict] = []
         seen: set[str] = set()
         budget_exhausted = False
-        while queue:
-            if len(visited) >= self.policy.max_urls or time.monotonic() - started >= self.policy.max_seconds:
-                budget_exhausted = True
-                break
-            url, depth, source, required = queue.popleft()
-            if url in seen:
-                continue
-            seen.add(url)
-            if depth > self.policy.max_depth:
-                skipped.append({"url": url, "reason": "linktiefe", "depth": depth})
-                continue
-            if not _allowed(url, allowed_hosts):
-                skipped.append({"url": url, "reason": "nicht_freigegebener_host", "depth": depth})
-                continue
-            try:
-                fetched = self.fetcher.fetch(url)
-            except FetchFailure as exc:
-                failure = {
+        with ExitStack() as browser_stack:
+            browser_session_started = False
+            while queue:
+                if len(visited) >= self.policy.max_urls or time.monotonic() - started >= self.policy.max_seconds:
+                    budget_exhausted = True
+                    break
+                url, depth, source, required = queue.popleft()
+                if url in seen:
+                    continue
+                seen.add(url)
+                if depth > self.policy.max_depth:
+                    skipped.append({"url": url, "reason": "linktiefe", "depth": depth})
+                    continue
+                if not _allowed(url, allowed_hosts):
+                    skipped.append({"url": url, "reason": "nicht_freigegebener_host", "depth": depth})
+                    continue
+                direct_failure: FetchFailure | None = None
+                try:
+                    fetched = self.fetcher.fetch(url)
+                except FetchFailure as exc:
+                    direct_failure = exc
+                    if required and exc.code == "protected_or_login_page":
+                        try:
+                            if not browser_session_started:
+                                browser_stack.enter_context(
+                                    self.fetcher.capture_session(run_root / "browser-fallback")
+                                )
+                                browser_session_started = True
+                            fetched = self.fetcher.fetch_in_browser(url)
+                            capture = getattr(self.fetcher, "last_browser_capture", None)
+                            artifact_directory = getattr(capture, "artifact_directory", None)
+                            if artifact_directory:
+                                browser_artifact_directories.append(str(artifact_directory))
+                            browser_fallbacks.append({
+                                "url": url,
+                                "direct_failure": str(exc),
+                                "direct_status_code": exc.status_code,
+                                "browser_status": "captured",
+                                "browser_fetch_mode": fetched.fetch_mode,
+                                "capture_completeness": getattr(
+                                    capture, "capture_completeness", None
+                                ),
+                                "artifact_directory": artifact_directory,
+                            })
+                        except Exception as browser_exc:
+                            capture = getattr(self.fetcher, "last_browser_capture", None)
+                            artifact_directory = getattr(capture, "artifact_directory", None)
+                            if artifact_directory:
+                                browser_artifact_directories.append(str(artifact_directory))
+                            failure = {
+                                "url": url,
+                                "reason": exc.code,
+                                "message": str(exc),
+                                "manual_review": True,
+                                "source": source,
+                                "required_by_case_profile": required,
+                                "browser_fallback": {
+                                    "status": "failed",
+                                    "message": str(browser_exc),
+                                    "artifact_directory": artifact_directory,
+                                },
+                            }
+                            browser_fallbacks.append({
+                                "url": url,
+                                "direct_failure": str(exc),
+                                "direct_status_code": exc.status_code,
+                                "browser_status": "failed",
+                                "browser_failure": str(browser_exc),
+                                "artifact_directory": artifact_directory,
+                            })
+                            blocked.append(failure)
+                            continue
+                    else:
+                        failure = {
+                            "url": url,
+                            "reason": exc.code,
+                            "message": str(exc),
+                            "manual_review": exc.manual_review,
+                            "source": source,
+                            "required_by_case_profile": required,
+                        }
+                        if required:
+                            blocked.append(failure)
+                        else:
+                            skipped.append(failure)
+                        continue
+                visited.append(url)
+                extension = ".pdf" if _is_pdf(fetched.headers, fetched.body, url) else ".html"
+                page_path = pages_root / f"{len(visited):03d}-{hashlib.sha256(url.encode()).hexdigest()[:10]}{extension}"
+                page_path.write_bytes(fetched.body)
+                headers_path = page_path.with_suffix(page_path.suffix + ".headers.json")
+                _write_json(headers_path, list(fetched.headers))
+                text = _extract_document_text(fetched, extension)
+                page = {
                     "url": url,
-                    "reason": exc.code,
-                    "message": str(exc),
-                    "manual_review": exc.manual_review,
+                    "final_url": fetched.final_url,
+                    "depth": depth,
                     "source": source,
-                    "required_by_case_profile": required,
+                    "required_by_case_profile": url in required_targets,
+                    "content_type": "pdf" if extension == ".pdf" else "html",
+                    "artifact_path": str(page_path),
+                    "headers_path": str(headers_path),
+                    "sha256": hashlib.sha256(fetched.body).hexdigest(),
+                    "text": text,
+                    "fetched_at": fetched.fetched_at,
+                    "status_code": fetched.status_code,
+                    "fetch_mode": fetched.fetch_mode,
+                    "direct_fetch_failure": str(direct_failure) if direct_failure else None,
                 }
-                if required:
-                    blocked.append(failure)
-                else:
-                    skipped.append(failure)
-                continue
-            visited.append(url)
-            extension = ".pdf" if _is_pdf(fetched.headers, fetched.body, url) else ".html"
-            page_path = pages_root / f"{len(visited):03d}-{hashlib.sha256(url.encode()).hexdigest()[:10]}{extension}"
-            page_path.write_bytes(fetched.body)
-            headers_path = page_path.with_suffix(page_path.suffix + ".headers.json")
-            _write_json(headers_path, list(fetched.headers))
-            text = _extract_document_text(fetched, extension)
-            page = {
-                "url": url,
-                "final_url": fetched.final_url,
-                "depth": depth,
-                "source": source,
-                "required_by_case_profile": url in required_targets,
-                "content_type": "pdf" if extension == ".pdf" else "html",
-                "artifact_path": str(page_path),
-                "headers_path": str(headers_path),
-                "sha256": hashlib.sha256(fetched.body).hexdigest(),
-                "text": text,
-                "fetched_at": fetched.fetched_at,
-                "status_code": fetched.status_code,
-            }
-            pages.append(page)
-            if extension == ".html" and depth < self.policy.max_depth:
-                discovered = _links(fetched.decoded_html, fetched.final_url)
-                discovered.sort(key=lambda item: (_priority(item[0], item[1]), item[0]), reverse=True)
-                for link, label in discovered:
-                    if link not in seen and _allowed(link, allowed_hosts):
-                        queue.append((link, depth + 1, f"link:{label[:100]}", False))
+                pages.append(page)
+                if extension == ".html" and depth < self.policy.max_depth:
+                    discovered = _links(fetched.decoded_html, fetched.final_url)
+                    discovered.sort(key=lambda item: (_priority(item[0], item[1]), item[0]), reverse=True)
+                    for link, label in discovered:
+                        if link not in seen and _allowed(link, allowed_hosts):
+                            queue.append((link, depth + 1, f"link:{label[:100]}", False))
 
         progress("normalize", "AGB- und Seitentexte wurden ausschließlich gegen den gemeldeten Verstoß geprüft.")
         document_findings = self._document_findings(case, pages)
         element_findings: list[dict] = []
         manual_reasons = [item["message"] for item in blocked if item.get("manual_review")]
+        inspected_dom_targets: list[str] = []
         if case.violation_type == "element":
             progress("screenshot", "Gemeldete Elemente werden im gerenderten DOM geprüft.")
-            element_findings, dom_reasons = self._inspect_elements(case, pages, dom_root)
+            element_findings, dom_reasons, inspected_dom_targets = self._inspect_elements(
+                case, pages, dom_root
+            )
             manual_reasons.extend(dom_reasons)
 
-        dom_incomplete = case.violation_type == "element" and not element_findings
+        missing_dom_targets = (
+            [url for url in required_targets if url not in inspected_dom_targets]
+            if case.violation_type == "element" else []
+        )
+        dom_incomplete = case.violation_type == "element" and bool(missing_dom_targets)
         captured_required_targets = [url for url in required_targets if url in visited]
         missing_required_targets = [url for url in required_targets if url not in visited]
         complete = (
@@ -197,6 +265,9 @@ class CaseDomainMonitor:
             "visited_urls": visited,
             "skipped_urls": skipped,
             "blocked_urls": blocked,
+            "browser_fallbacks": browser_fallbacks,
+            "inspected_dom_target_urls": inspected_dom_targets,
+            "missing_dom_target_urls": missing_dom_targets,
             "dom_inspection_incomplete": dom_incomplete,
             "budget_exhausted": budget_exhausted,
             "complete_within_scope": complete,
@@ -260,6 +331,18 @@ class CaseDomainMonitor:
         for path in sorted(dom_root.glob("*")) if dom_root.exists() else ():
             if path.is_file():
                 evidence_files[f"dom_{path.stem}_{path.suffix.lstrip('.')}"] = path
+        for directory in dict.fromkeys(browser_artifact_directories):
+            artifact_root = Path(directory).resolve()
+            if artifact_root != run_root and run_root not in artifact_root.parents:
+                manual_reasons.append(
+                    f"Browser-Fallback-Artefaktpfad lag außerhalb des Laufverzeichnisses: {artifact_root}"
+                )
+                continue
+            for path in sorted(artifact_root.rglob("*")):
+                if path.is_file():
+                    relative = path.relative_to(run_root).as_posix()
+                    key = "browser_" + re.sub(r"[^a-zA-Z0-9]+", "_", relative).strip("_")
+                    evidence_files[key] = path
         reported_screenshot = None
         if case.screenshot_path and Path(case.screenshot_path).is_file():
             reported_screenshot = run_root / f"reported-initial-violation{Path(case.screenshot_path).suffix}"
@@ -377,9 +460,9 @@ class CaseDomainMonitor:
 
     def _inspect_elements(
         self, case: MonitoringCase, pages: list[dict], destination: Path
-    ) -> tuple[list[dict], list[str]]:
+    ) -> tuple[list[dict], list[str], list[str]]:
         if self.dom_inspector is None:
-            return [], ["Playwright-DOM-Prüfung ist nicht konfiguriert."]
+            return [], ["Playwright-DOM-Prüfung ist nicht konfiguriert."], []
         destination.mkdir(parents=True, exist_ok=True)
         profile_targets = {canonical_url(url) for url in case.target_urls}
         relevant = [
@@ -391,6 +474,7 @@ class CaseDomainMonitor:
         ][: self.policy.max_dom_pages]
         findings: list[dict] = []
         reasons: list[str] = []
+        inspected_urls: list[str] = []
         for index, page in enumerate(relevant, start=1):
             try:
                 capture = self.dom_inspector(
@@ -422,8 +506,9 @@ class CaseDomainMonitor:
                     "sha256": capture.sha256,
                 }
             )
+            inspected_urls.append(page["url"])
             reasons.extend(capture.manual_review_reasons)
-        return findings, reasons
+        return findings, reasons, inspected_urls
 
     def _has_history(self, case_id: str) -> bool:
         directory = self.store / case_id

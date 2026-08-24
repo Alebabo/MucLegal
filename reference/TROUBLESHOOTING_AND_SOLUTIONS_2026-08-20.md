@@ -1059,6 +1059,109 @@ deterministische Prototyp-Heuristik. Nicht erkannte Fallgruppen dürfen weiterhi
 lokale Vorschläge erzeugen; eine menschliche Freigabe erfolgt ausschließlich über die
 backendgebundene Maske.
 
+# Hetzner-Domainmonitor meldet Windows-`warcio.exe` trotz gültigem Linux-WARC
+
+### Symptom
+
+Der manuell freigegebene Viagogo-Erstlauf vom 24.08.2026
+(`20260824T210107215540Z-57fc3a84`) beendete die fachliche Prüfung wegen eines
+HTTP-403-Schutzes der erforderlichen Ticketseite nachvollziehbar als
+`pruefung_unvollstaendig`. Zusätzlich enthielt `result.json` jedoch den davon
+unabhängigen Warnhinweis, die WARC-Datei der erreichbaren Startseite habe wegen
+`[Errno 13] Permission denied:
+'/home/muclegal/AppData/Local/Programs/Python/Python313/Scripts/warcio.exe'` nicht
+erzeugt werden können. Tatsächlich lagen `page-001.warc.gz` und `page-001.cdx` im
+Laufverzeichnis.
+
+### Ursache und Diagnose
+
+Die unmittelbare Fehlerursache ist die Auswahl eines nicht zur Linux-Laufzeit
+passenden Windows-Console-Script-Pfads für die WARC-Validierung. Die systemd-Unit
+läuft als `muclegal` aus `/opt/muclegal/releases/20260824-191613-add4929`; ihr
+`PATH` enthält `/opt/muclegal/venv/bin` nicht. Dort ist aber ein ausführbares
+Linux-`warcio` installiert. Der gespeicherte WARC-Datensatz bestand anschließend
+mit genau diesem CLI die Digestprüfung. Auch ein separater Aufruf von
+`validate_warc` unter demselben Benutzer, demselben Release, demselben `HOME` und
+dem eingeschränkten Service-`PATH` fiel korrekt auf die In-Process-Validierung
+zurück und las einen Record erfolgreich. Warum der abgeschlossene Workerlauf trotz
+des vorhandenen `OSError`-Fallbacks den Windows-Pfad als Warnung speicherte, ließ
+sich nachträglich nicht reproduzieren; eine weitergehende Ursache wird daher nicht
+als geklärt ausgegeben.
+
+### Lösung
+
+`find_tool` berücksichtigt die fest hinterlegten Windows-Werkzeugpfade jetzt nur
+noch bei `os.name == "nt"`. Unter Linux kann dadurch auch ein versehentlich
+vorhandener Pfad unter `AppData/.../warcio.exe` niemals als Validator ausgewählt
+werden. Weil die systemd-Unit den Venv-Binärpfad nicht in `PATH` führt, verwendet
+das Hetzner-Backend weiterhin den bereits vorhandenen gleichwertigen
+In-Process-Validator mit `ArchiveIterator(check_digests=True)`. Der gültige
+WARC-Datensatz des ursprünglichen Laufs wird nicht wegen des fehlerhaften
+Warnhinweises verworfen.
+
+### Verifikation und verbleibende Grenze
+
+`/opt/muclegal/venv/bin/warcio check -v` meldete für die erzeugte
+`page-001.warc.gz` `digest pass`; `validate_warc` meldete im separaten
+Service-Umgebungs-Probeaufruf `warcio (Python): 1 Record(s) erfolgreich gelesen.`
+Der neue Plattformtest erzwingt unabhängig vom Entwicklungsbetriebssystem eine
+POSIX-Laufzeit und bestätigt, dass ein vorhandener synthetischer Windows-Pfad dort
+nicht verwendet wird. Der vollständige lokale Lauf bestand mit `160 passed`.
+Ein erneuter produktiver Domainlauf muss zusätzlich ohne Windows-Pfad-Warnung
+enden.
+
+# Fallmonitor versuchte nach HTTP 403 keinen transparenten Browserabruf
+
+### Symptom
+
+Im Viagogo-Erstlauf `20260824T210107215540Z-57fc3a84` wurde die ausdrücklich im
+Fallprofil verlangte Ticketseite nach der direkten HTTP-403-Antwort sofort unter
+`blocked_urls` abgelegt. Obwohl der Fehlertext selbst einen transparenten
+Browser-Prüfversuch als zulässige nächste Stufe bezeichnete, wurde nur die direkt
+erreichbare Startseite mit Playwright auf das gemeldete Element geprüft. Der Lauf
+endete nach 4,224 Sekunden als `pruefung_unvollstaendig`.
+
+### Ursache und Diagnose
+
+Die Warteschleife in `CaseDomainMonitor.run` behandelte jeden `FetchFailure`
+terminal. Der bereits vorhandene, robots-konforme `HttpFetcher.fetch_in_browser`
+und sein laufbezogener `CaptureRunController` wurden im Domainmonitor nicht
+aufgerufen. Zusätzlich galt die DOM-Abdeckung schon dann als vollständig, wenn
+irgendeine relevante Seite erfolgreich geprüft worden war. Das Scheitern eines
+zweiten erforderlichen Prüfziels blieb deshalb außerhalb der allgemeinen URL-
+Abdeckung ohne eigenes DOM-Abdeckungsgate.
+
+### Lösung
+
+Nur für ein vom Menschen freigegebenes, ausdrücklich erforderliches Fallprofilziel
+mit `protected_or_login_page` startet der Domainmonitor jetzt genau einen
+transparenten Browser-Fallback. Robots-Regeln, öffentlicher Netzwerkcheck,
+Projekt-User-Agent, `navigator.webdriver=true`, frischer Kontext, fehlender Proxy
+und das Verbot verändernder Requests bleiben unverändert. Direkter Schutzstatus,
+Browserausgang und Erfassungsumfang werden in `coverage.browser_fallbacks`
+getrennt dokumentiert. Sämtliche dabei erzeugten HTML-, Text-, Metadaten- und
+Bildartefakte liegen innerhalb des Laufverzeichnisses und werden in das SHA-256-
+Manifest aufgenommen.
+
+Für Elementfälle vergleicht das Abschlussgate außerdem alle erforderlichen URLs
+mit `inspected_dom_target_urls`. Jede nicht erfolgreich geprüfte Pflichtseite
+erscheint in `missing_dom_target_urls` und erzwingt weiterhin
+`pruefung_unvollstaendig`; ein erfolgreicher Scan nur der Startseite kann damit
+nicht mehr als vollständige Prüfung der Ticketseite gelten.
+
+### Verifikation und verbleibende Grenze
+
+Ein synthetischer Regressionstest reproduziert direkten HTTP-403-Schutz, liefert
+die Pflichtseite anschließend im Browsermodus aus und bestätigt vollständige
+Abdeckung sowie das manifestierte Browserbild. Ein zweiter Test lässt nur eines
+von zwei erforderlichen DOM-Zielen scheitern und bestätigt den unvollständigen
+Status. Zusammen mit allen übrigen Tests bestand der lokale Lauf mit
+`160 passed`; der isolierte Browser-Smoke-Test mit `https://example.com` erzeugte
+ein herunterladbares technisches Beweispaket. Der Browser-Fallback überwindet
+keinen fortbestehenden Seitenschutz: Liefert auch Chromium eine Challenge, ein
+Login oder HTTP 403, bleibt der Fall mit den gespeicherten Schutzartefakten zur
+manuellen Prüfung offen.
+
 # OpenAI-Tenorvorschläge scheitern trotz gültigem API-Schlüssel mit HTTP 429
 
 ### Symptom
