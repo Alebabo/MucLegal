@@ -1,0 +1,13 @@
+Wenn ich links im beweislab bin dann sieht das desgn der seite anders aus als auf den anderen seiten
+
+---
+
+Warum kann er bei mirageperfum.de nciht die agb screenshoten wenn der api key fehlt
+
+---
+
+bereits archivierte tenore soll man anpassen können und man soll wenn man den tenor ausgewählt hat un er im textfeld ist die möglichkeit haben darunter wie in einem chatfenster einzugeben, ob und wie er verändert werden soll. Zudem musst du nochmal bei der maske schauen, da die erzeugten tenore dort nicht so gut sind wie beim freitext. Beim freitext soll außerdem die möglichkeit bestehen, bzw. es soll. bei bedarf gefragt werden, welche spezisfischen Gesetzte betroffen sind und wo genau der verstoß legt wie in der maske
+
+---
+
+[https://mirageperfume.com/](https://mirageperfume.com/) da werden die datenschutzerklörungen und die agbs nichtausgegeben, **GREY MODE · Hinweis: AGB-Screenshot nicht erzeugt: TTFError: Can't open file "C:/Windows/Fonts/ar** &#x20;
