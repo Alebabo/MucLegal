@@ -1,0 +1,1 @@
+Es soll alles ohne zu scrolllen sichtbar sein und es soll eine scrollbare seitbar geben wo man proof sehen kann und andere url artefakte aufrufen kann
