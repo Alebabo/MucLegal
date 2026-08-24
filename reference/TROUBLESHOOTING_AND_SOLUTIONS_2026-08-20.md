@@ -1162,6 +1162,44 @@ keinen fortbestehenden Seitenschutz: Liefert auch Chromium eine Challenge, ein
 Login oder HTTP 403, bleibt der Fall mit den gespeicherten Schutzartefakten zur
 manuellen Prüfung offen.
 
+# DataDome-Interstitial wurde als teilweise erfasste Ticketseite behandelt
+
+### Symptom
+
+Der erste Viagogo-Wiederholungslauf nach Aktivierung des transparenten
+Browser-Fallbacks (`20260824T212640008341Z-b8158375`) erfasste nach dem direkten
+HTTP 403 im Browser ein HTML-Dokument mit `geo.captcha-delivery.com`, einem
+`/interstitial/`-Iframe und dem Titel `DataDome Device Check`. Dieser Stand wurde
+als `browser_status: captured` und `capture_completeness: teilweise_erfasst` in
+die Seitenliste aufgenommen, obwohl er ausschließlich eine CAPTCHA-Zwischenseite
+enthielt.
+
+### Ursache und Diagnose
+
+`_detect_block_page` erkannte sichtbare reCAPTCHA-, hCaptcha- und Cloudflare-
+Komponenten, aber noch keine DataDome-Interstitials. Die gespeicherte Browser-DOM-
+Datei belegt, dass der Marker außerhalb von Script-, Style-, Template- und
+Noscript-Blöcken als tatsächliches `iframe src` vorhanden war. Es handelt sich
+daher nicht um den bei Shopify bekannten inaktiven CAPTCHA-Bootstrapcode.
+
+### Lösung
+
+Die konservative Komponentenerkennung umfasst jetzt in sichtbarem Markup auch
+`captcha-delivery.com` und `datadome`. Ein bloßer Treffer in einem Script bleibt
+durch die bestehende Entfernung inaktiver Scriptblöcke ausdrücklich unbeachtlich.
+Der transparente Browser-Fallback gibt einen solchen Stand damit als
+`protected_or_login_page` zurück; das CAPTCHA wird weder bedient noch umgangen.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest verwendet denselben DataDome-Aufbau aus Script und sichtbarem
+Interstitial-Iframe und erwartet den Schutztyp `CAPTCHA oder Bot-Challenge`. Der
+bestehende Test für inaktiven Shopify-CAPTCHA-Code bleibt grün. Ein erneuter
+Hetzner-Lauf muss das DataDome-Ziel unter `blocked_urls` mit Browser-Fallback-
+Schutzbefund führen und darf dessen HTML nicht mehr als Ticketseiteninhalt in
+`document_findings` aufnehmen. Der Schutz wird weiterhin nicht überwunden; ohne
+eine frei zugängliche Seite bleibt die inhaltliche Prüfung unvollständig.
+
 # OpenAI-Tenorvorschläge scheitern trotz gültigem API-Schlüssel mit HTTP 429
 
 ### Symptom

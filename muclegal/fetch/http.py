@@ -562,7 +562,8 @@ def _detect_block_page(html: str) -> str | None:
     has_captcha_component = bool(
         re.search(
             r"<[^>]+\b(?:class|id|src)\s*=\s*['\"][^'\"]*"
-            r"(?:g-recaptcha|h-captcha|hcaptcha|captcha-container|cf-chl-)",
+            r"(?:g-recaptcha|h-captcha|hcaptcha|captcha-container|cf-chl-|"
+            r"captcha-delivery\.com|datadome)",
             visible_markup,
         )
         or "<h-captcha" in visible_markup

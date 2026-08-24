@@ -315,6 +315,18 @@ class PipelineAcceptanceTests(unittest.TestCase):
         """
         self.assertIsNone(_detect_block_page(page))
 
+    def test_datadome_interstitial_is_detected_outside_scripts(self) -> None:
+        page = """
+        <html><head><title>viagogo.de</title></head><body>
+          <script>var dd = {host: 'geo.captcha-delivery.com'};</script>
+          <iframe
+            src="https://geo.captcha-delivery.com/interstitial/?initialCid=test"
+            title="DataDome Device Check"
+          ></iframe>
+        </body></html>
+        """
+        self.assertIn("CAPTCHA oder Bot-Challenge", _detect_block_page(page))
+
     def test_adidas_http_200_security_page_is_still_protected(self) -> None:
         page = """
         <html><main><h1>What could have caused this?</h1>
