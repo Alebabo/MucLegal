@@ -1,0 +1,1 @@
+kannst du ein minimales ui erstellen wo man eine Webadresse eingibt und dann einen ablauf abläuft mit dem anthropic key
