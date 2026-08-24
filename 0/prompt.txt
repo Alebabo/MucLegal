@@ -1,0 +1,9 @@
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 2 tabs.
+- Current URL: http://127.0.0.1:8080/tenorhilfe
+</in-app-browser-context>
+
+## My request:
+es oll nach inhaltlicher vollständigkeit entschieden werden. Zudem soll man die möglichkeit ghaben wenn man "/" eingibt wie bei codex direkt die modi zu wechseln. Wenn mann dies tut soll der modus in fetter schrit dort stehen  und man soll danach weiterschrieben. wenn man im modus /fälle ist soll man einen fall aus dem archiv oder den hinweisen auswählen können. die soll erfolgen indem man anfägt den namen zu schrieben. es soll ungefähr so aussehen wie wenn man bei codex in den planmodus oder denzielmodus wechselt. frage mih wenn etwas unklar ist
