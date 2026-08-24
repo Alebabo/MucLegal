@@ -22,6 +22,17 @@ from muclegal.llm.tenor import (
     create_tenor_draft,
     validate_tenor_draft,
 )
+from muclegal.llm.tenor_questions import (
+    OpenAITenorQuestionAnalyzer,
+    TENOR_QUESTION_JSON_SCHEMA,
+    TENOR_QUESTION_PROMPT_SHA256,
+    TENOR_QUESTION_PROMPT_VERSION,
+    TenorQuestion,
+    TenorQuestionValidationError,
+    build_tenor_question_input,
+    create_tenor_question,
+    validate_tenor_question,
+)
 from muclegal.llm.classification import (
     CLAUSE_CLASSIFICATION_JSON_SCHEMA,
     CLASSIFICATIONS,
@@ -64,6 +75,15 @@ __all__ = [
     "build_tenor_input",
     "create_tenor_draft",
     "validate_tenor_draft",
+    "OpenAITenorQuestionAnalyzer",
+    "TENOR_QUESTION_JSON_SCHEMA",
+    "TENOR_QUESTION_PROMPT_SHA256",
+    "TENOR_QUESTION_PROMPT_VERSION",
+    "TenorQuestion",
+    "TenorQuestionValidationError",
+    "build_tenor_question_input",
+    "create_tenor_question",
+    "validate_tenor_question",
     "CLASSIFICATIONS",
     "CLAUSE_CLASSIFICATION_JSON_SCHEMA",
     "CONFIDENCE_LEVELS",

@@ -9,6 +9,11 @@ import {
   nextWrappedIndex,
 } from "../src/lib/minimal-tenor-logic.ts";
 import { composeDictationText, mergeDictationSegments } from "../src/lib/dictation.ts";
+import {
+  answeredQuestions,
+  composeClarifiedContext,
+  formatSliderAnswer,
+} from "../src/lib/tenor-questions.ts";
 
 test("asks for the first missing semantic fact", () => {
   const empty = assessCompleteness("");
@@ -75,4 +80,70 @@ test("replaces cumulative dictation results instead of appending them twice", ()
     composeDictationText("Ausgangstext.", segments),
     "Ausgangstext. Der erste Satz. Nach der Pause folgt Satz zwei.",
   );
+});
+
+test("keeps contextual questions and answers in the generated tenor context", () => {
+  const question = {
+    question_id: "q-1",
+    topic_id: "taeuschungstatsache",
+    text: "War die Frist tatsächlich verbindlich?",
+    answer_type: "yes_no",
+    placeholder: null,
+    slider: null,
+    options: [],
+  };
+  const turns = [{ question, answer: "Nein" }];
+  assert.deepEqual(answeredQuestions(turns), [
+    {
+      topic_id: "taeuschungstatsache",
+      question: "War die Frist tatsächlich verbindlich?",
+      answer: "Nein",
+      answer_type: "yes_no",
+    },
+  ]);
+  assert.match(
+    composeClarifiedContext("Die Aktion lief online.", turns),
+    /Rückfrage:.*\nAntwort: Nein/,
+  );
+});
+
+test("formats slider answers with the AI-selected unit", () => {
+  const question = {
+    question_id: "q-2",
+    topic_id: "quantifizierbare_dauer_oder_anzahl",
+    text: "Wie lange lief der Countdown?",
+    answer_type: "slider",
+    placeholder: null,
+    slider: {
+      minimum: 0,
+      maximum: 30,
+      step: 1,
+      minimum_label: "kurz",
+      maximum_label: "lang",
+      unit: "Tage",
+    },
+    options: [],
+  };
+  assert.equal(formatSliderAnswer(question, 12), "12 Tage");
+});
+
+test("preserves a selected or custom choice with its unique topic", () => {
+  const question = {
+    question_id: "q-3",
+    topic_id: "adressatenkreis",
+    text: "An wen richtet sich die Klausel?",
+    answer_type: "single_choice",
+    placeholder: "Andere Gruppe",
+    slider: null,
+    options: [
+      { value: "verbraucher", label: "Verbraucher" },
+      { value: "unternehmer", label: "Unternehmer" },
+    ],
+  };
+  const selected = answeredQuestions([{ question, answer: "Verbraucher" }]);
+  const custom = answeredQuestions([{ question, answer: "Vereinsmitglieder" }]);
+  assert.equal(selected[0].topic_id, "adressatenkreis");
+  assert.equal(selected[0].answer, "Verbraucher");
+  assert.equal(custom[0].answer, "Vereinsmitglieder");
+  assert.equal(custom[0].answer_type, "single_choice");
 });

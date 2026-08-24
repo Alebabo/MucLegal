@@ -19,6 +19,16 @@ from muclegal.llm.tenor import (
     create_tenor_proposals,
     validate_tenor_draft,
 )
+from muclegal.llm.tenor_questions import (
+    QUESTION_TOPICS,
+    TENOR_QUESTION_PROMPT_VERSION,
+    OpenAITenorQuestionAnalyzer,
+    TenorQuestionValidationError,
+    build_tenor_question_input,
+    create_tenor_question,
+    questions_are_similar,
+    validate_tenor_question,
+)
 from muclegal.ui import create_app
 
 
@@ -46,10 +56,68 @@ class StrategyTenorAnalyzer(DeterministicTenorAnalyzer):
         return value
 
 
+class ContextualQuestionAnalyzer:
+    mode = "test_openai"
+    model = "test-question-model"
+
+    def analyze(self, model_input: dict) -> dict:
+        if model_input["beantwortete_rueckfragen"]:
+            return {"ready_to_generate": True, "question": None}
+        return {
+            "ready_to_generate": False,
+            "question": {
+                "topic_id": "taeuschungstatsache",
+                "text": "Bestand die genannte Rabattfrist tatsächlich?",
+                "answer_type": "yes_no",
+                "placeholder": None,
+                "slider": None,
+                "options": [],
+            },
+        }
+
+
+class SequenceQuestionAnalyzer:
+    mode = "test_openai"
+    model = "test-question-model"
+
+    def __init__(self, *responses: dict) -> None:
+        self.responses = list(responses)
+        self.inputs: list[dict] = []
+
+    def analyze(self, model_input: dict) -> dict:
+        self.inputs.append(model_input)
+        if not self.responses:
+            raise AssertionError("Kein weiterer Test-Output vorbereitet.")
+        return self.responses.pop(0)
+
+
+def question_value(
+    *,
+    topic_id: str,
+    text: str,
+    answer_type: str = "text",
+    options: list[dict[str, str]] | None = None,
+    slider: dict | None = None,
+    placeholder: str | None = None,
+) -> dict:
+    return {
+        "ready_to_generate": False,
+        "question": {
+            "topic_id": topic_id,
+            "text": text,
+            "answer_type": answer_type,
+            "placeholder": placeholder,
+            "slider": slider,
+            "options": options or [],
+        },
+    }
+
+
 class TenorDraftTests(unittest.TestCase):
     def test_tenor_prompt_is_separately_versioned(self) -> None:
         self.assertEqual("2026-08-19-tenor-draft-1", TENOR_PROMPT_VERSION)
         self.assertEqual(64, len(TENOR_PROMPT_SHA256))
+        self.assertEqual("2026-08-24-tenor-questions-2", TENOR_QUESTION_PROMPT_VERSION)
 
     def test_deterministic_draft_is_valid_and_not_human_approved(self) -> None:
         model_input = build_tenor_input(**tenor_payload())
@@ -166,6 +234,248 @@ class TenorDraftTests(unittest.TestCase):
                 item["strategy"] for item in result["proposals"]
             ])
             self.assertTrue(all(item["freigabe_durch_mensch"] is None for item in result["proposals"]))
+
+    def test_contextual_question_api_uses_prior_answers(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                tenor_question_analyzer_factory=ContextualQuestionAnalyzer,
+            )
+            payload = {
+                "context": (
+                    "Die Beispiel GmbH wirbt auf ihrer Website gegenüber Verbrauchern "
+                    "mit einer angeblich nur heute geltenden Frist."
+                ),
+                "fallgruppe": "irrefuehrende_werbung",
+                "answered_questions": [],
+            }
+            with TestClient(app) as client:
+                question = client.post("/api/v1/tenor-questions", json=payload)
+                self.assertEqual(200, question.status_code, question.text)
+                self.assertEqual("yes_no", question.json()["question"]["answer_type"])
+                payload["answered_questions"] = [{
+                    "topic_id": question.json()["question"]["topic_id"],
+                    "question": question.json()["question"]["text"],
+                    "answer": "Nein",
+                    "answer_type": "yes_no",
+                }]
+                ready = client.post("/api/v1/tenor-questions", json=payload)
+            self.assertEqual(200, ready.status_code, ready.text)
+            self.assertTrue(ready.json()["ready_to_generate"])
+            self.assertIsNone(ready.json()["question"])
+
+    def test_slider_question_is_strictly_validated(self) -> None:
+        model_input = build_tenor_question_input(
+            context="Die Aktion lief mit einem sichtbaren Countdown auf der Website.",
+            fallgruppe="irrefuehrende_werbung",
+            answered_questions=[],
+        )
+        raw = question_value(
+            topic_id="quantifizierbare_dauer_oder_anzahl",
+            text="Wie viele Tage lief der Countdown?",
+            answer_type="slider",
+            slider={
+                "minimum": 0,
+                "maximum": 30,
+                "step": 1,
+                "minimum_label": "am selben Tag",
+                "maximum_label": "30 Tage",
+                "unit": "Tage",
+            },
+        )
+        result = create_tenor_question(
+            model_input,
+            type(
+                "SliderAnalyzer",
+                (),
+                {"mode": "test", "model": "test", "analyze": lambda self, _: raw},
+            )(),
+        )
+        self.assertEqual(15, result["question"]["slider"]["maximum"] // 2)
+        raw["question"]["slider"]["maximum"] = 0
+        with self.assertRaises(TenorQuestionValidationError):
+            validate_tenor_question(raw, model_input=model_input)
+
+    def test_agb_catalog_excludes_usage_context_and_accepts_immediate_ready(self) -> None:
+        model_input = build_tenor_question_input(
+            context=(
+                "Die Beispiel GmbH verwendet gegenüber Verbrauchern die Klausel: "
+                "‚Eine Kündigung ist ausschließlich schriftlich möglich.‘"
+            ),
+            fallgruppe="agb_klausel",
+            answered_questions=[],
+        )
+        open_topic_ids = {
+            item["topic_id"] for item in model_input["erlaubte_offene_themen"]
+        }
+        self.assertEqual(
+            {"schuldner", "adressatenkreis", "klauselwortlaut", "sachlicher_anwendungsbereich"},
+            open_topic_ids,
+        )
+        self.assertNotIn("fundstelle_werbung", open_topic_ids)
+        analyzer = SequenceQuestionAnalyzer(
+            question_value(
+                topic_id="fundstelle_werbung",
+                text="Auf welcher Website wird die Klausel verwendet?",
+            ),
+            {"ready_to_generate": True, "question": None},
+        )
+        result = create_tenor_question(model_input, analyzer)
+        self.assertTrue(result["ready_to_generate"])
+        self.assertEqual(2, len(analyzer.inputs))
+        self.assertIn("Fallgruppe", analyzer.inputs[1]["abgelehnte_vorschlaege"][0]["grund"])
+
+    def test_duplicate_topic_is_rejected_and_retried(self) -> None:
+        model_input = build_tenor_question_input(
+            context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer falschen Rabattfrist.",
+            fallgruppe="irrefuehrende_werbung",
+            answered_questions=[{
+                "topic_id": "taeuschungstatsache",
+                "question": "Bestand die Rabattfrist tatsächlich?",
+                "answer": "Nein",
+                "answer_type": "yes_no",
+            }],
+        )
+        analyzer = SequenceQuestionAnalyzer(
+            question_value(
+                topic_id="taeuschungstatsache",
+                text="War die Rabattfrist echt?",
+                answer_type="yes_no",
+            ),
+            question_value(
+                topic_id="nicht_umfasster_gegenfall",
+                text="Wann wäre die Fristangabe tatsächlich zutreffend?",
+            ),
+        )
+        result = create_tenor_question(model_input, analyzer)
+        self.assertEqual("nicht_umfasster_gegenfall", result["question"]["topic_id"])
+        self.assertEqual(2, len(analyzer.inputs))
+        self.assertIn("bereits", analyzer.inputs[1]["abgelehnte_vorschlaege"][0]["grund"])
+
+    def test_paraphrased_question_is_rejected_even_under_another_topic(self) -> None:
+        previous = "An welcher Stelle erscheint die beanstandete Werbung?"
+        paraphrase = "Wo genau erscheint die beanstandete Werbung?"
+        self.assertTrue(questions_are_similar(previous, paraphrase))
+        model_input = build_tenor_question_input(
+            context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer falschen Rabattfrist.",
+            fallgruppe="irrefuehrende_werbung",
+            answered_questions=[{
+                "topic_id": "fundstelle_werbung",
+                "question": previous,
+                "answer": "Auf der Produktdetailseite",
+                "answer_type": "text",
+            }],
+        )
+        analyzer = SequenceQuestionAnalyzer(
+            question_value(
+                topic_id="beanstandete_werbeaussage",
+                text=paraphrase,
+            ),
+            question_value(
+                topic_id="beanstandete_werbeaussage",
+                text="Wie lautet die konkrete Rabattbehauptung?",
+            ),
+        )
+        result = create_tenor_question(model_input, analyzer)
+        self.assertEqual("Wie lautet die konkrete Rabattbehauptung?", result["question"]["text"])
+        self.assertEqual(2, len(analyzer.inputs))
+
+    def test_either_or_question_requires_choices_instead_of_yes_no(self) -> None:
+        model_input = build_tenor_question_input(
+            context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer unklaren Rabattfrist.",
+            fallgruppe="irrefuehrende_werbung",
+            answered_questions=[],
+        )
+        analyzer = SequenceQuestionAnalyzer(
+            question_value(
+                topic_id="taeuschungstatsache",
+                text="War die Frist echt oder nur vorgetäuscht?",
+                answer_type="yes_no",
+            ),
+            question_value(
+                topic_id="taeuschungstatsache",
+                text="Welche tatsächliche Situation lag vor?",
+                answer_type="single_choice",
+                options=[
+                    {"value": "echte_frist", "label": "Die Frist bestand tatsächlich"},
+                    {"value": "keine_frist", "label": "Die Frist bestand nicht"},
+                ],
+                placeholder="Andere tatsächliche Situation",
+            ),
+        )
+        result = create_tenor_question(model_input, analyzer)
+        self.assertEqual("single_choice", result["question"]["answer_type"])
+        self.assertEqual(2, len(result["question"]["options"]))
+        self.assertIn("Entweder-oder", analyzer.inputs[1]["abgelehnte_vorschlaege"][0]["grund"])
+
+    def test_slider_is_rejected_for_non_numeric_topic(self) -> None:
+        model_input = build_tenor_question_input(
+            context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer unklaren Rabattfrist.",
+            fallgruppe="irrefuehrende_werbung",
+            answered_questions=[],
+        )
+        raw = question_value(
+            topic_id="adressatenkreis",
+            text="Wie stark ist der Verbraucherbezug?",
+            answer_type="slider",
+            slider={
+                "minimum": 0,
+                "maximum": 10,
+                "step": 1,
+                "minimum_label": "gering",
+                "maximum_label": "hoch",
+                "unit": None,
+            },
+        )
+        with self.assertRaisesRegex(TenorQuestionValidationError, "fachlich nicht zulässig"):
+            validate_tenor_question(raw, model_input=model_input)
+
+    def test_three_invalid_questions_fail_instead_of_marking_ready(self) -> None:
+        model_input = build_tenor_question_input(
+            context="Die Beispiel GmbH verwendet gegenüber Verbrauchern eine unwirksame AGB-Klausel.",
+            fallgruppe="agb_klausel",
+            answered_questions=[],
+        )
+        invalid = question_value(
+            topic_id="fundstelle_werbung",
+            text="Auf welcher Website wurde die Klausel verwendet?",
+        )
+        analyzer = SequenceQuestionAnalyzer(invalid, invalid, invalid)
+        with self.assertRaisesRegex(RuntimeError, "nach drei Versuchen"):
+            create_tenor_question(model_input, analyzer)
+        self.assertEqual(3, len(analyzer.inputs))
+        self.assertEqual(2, len(analyzer.inputs[2]["abgelehnte_vorschlaege"]))
+
+    def test_openai_question_analyzer_uses_separate_structured_prompt(self) -> None:
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.request = None
+
+            def create(self, **kwargs):
+                self.request = kwargs
+                return type(
+                    "Response",
+                    (),
+                    {
+                        "status": "completed",
+                        "output_text": json.dumps(
+                            {"ready_to_generate": True, "question": None}
+                        ),
+                    },
+                )()
+
+        responses = FakeResponses()
+        analyzer = OpenAITenorQuestionAnalyzer(
+            model="test-model",
+            client=type("Client", (), {"responses": responses})(),
+        )
+        analyzer.analyze({"sachverhalt": "Test", "beantwortete_rueckfragen": []})
+        self.assertEqual("tenor_clarification_question", responses.request["text"]["format"]["name"])
+        self.assertIn("genau eine kurze", responses.request["instructions"])
+        self.assertTrue(responses.request["text"]["format"]["strict"])
+        self.assertFalse(responses.request["store"])
 
     def test_proposal_api_explains_exhausted_openai_credit(self) -> None:
         class ExhaustedAnalyzer:

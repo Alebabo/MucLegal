@@ -45,6 +45,11 @@ from muclegal.llm.tenor import (
     create_tenor_proposals,
     validate_tenor_draft,
 )
+from muclegal.llm.tenor_questions import (
+    TenorQuestionAnalyzer,
+    build_tenor_question_input,
+    create_tenor_question,
+)
 
 
 DECISIONS = {"freigegeben", "abgelehnt", "weitere_pruefung"}
@@ -158,6 +163,23 @@ class TenorProposalRequest(BaseModel):
     context: str = Field(min_length=20, max_length=4000)
     fallgruppe: str = Field(min_length=1, max_length=100)
     rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
+
+
+class AnsweredTenorQuestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    topic_id: str = Field(min_length=1, max_length=100)
+    question: str = Field(min_length=1, max_length=500)
+    answer: str = Field(min_length=1, max_length=1000)
+    answer_type: Literal["yes_no", "text", "slider", "single_choice"]
+
+
+class TenorQuestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    context: str = Field(min_length=10, max_length=4000)
+    fallgruppe: str = Field(min_length=1, max_length=100)
+    answered_questions: list[AnsweredTenorQuestionRequest] = Field(
+        default_factory=list, max_length=8
+    )
 
 
 class TenorArchiveRequest(BaseModel):
@@ -960,6 +982,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                asset_directory: str | Path | None = None,
                tenor_analyzer_factory: Callable[[], TenorAnalyzer] = DeterministicTenorAnalyzer,
                tenor_proposal_analyzer_factory: Callable[[], TenorAnalyzer] | None = None,
+               tenor_question_analyzer_factory: Callable[[], TenorQuestionAnalyzer] | None = None,
                allowed_hosts: list[str] | None = None,
                monitoring_cases: MonitoringCaseRepository | None = None,
                domain_monitor: CaseDomainMonitor | None = None) -> FastAPI:
@@ -1136,6 +1159,38 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             reverse=True,
         )
         return {"tenors": entries}
+
+    @app.post("/api/v1/tenor-questions")
+    async def create_tenor_question_api(payload: TenorQuestionRequest):
+        if tenor_question_analyzer_factory is None:
+            raise HTTPException(
+                503,
+                "OpenAI-Rückfragen sind nicht verfügbar; OPENAI_API_KEY fehlt am Server.",
+            )
+        try:
+            model_input = build_tenor_question_input(
+                context=payload.context,
+                fallgruppe=payload.fallgruppe,
+                answered_questions=[
+                    item.model_dump() for item in payload.answered_questions
+                ],
+            )
+            return create_tenor_question(
+                model_input,
+                tenor_question_analyzer_factory(),
+            )
+        except Exception as exc:
+            raw_message = str(exc)
+            if "credit_balance_exhausted" in raw_message or "no credits remaining" in raw_message:
+                safe_message = (
+                    "Das OpenAI-API-Guthaben ist aufgebraucht. Bitte im OpenAI-Projekt "
+                    "Guthaben oder ein Abrechnungslimit hinterlegen und erneut versuchen."
+                )
+            else:
+                safe_message = re.sub(
+                    r"sk-[A-Za-z0-9_-]+", "[API_KEY_REDACTED]", raw_message
+                )
+            raise HTTPException(502, safe_message[:1_000]) from exc
 
     @app.post("/tenor-draft")
     async def create_tenor_form(request: Request):

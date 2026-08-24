@@ -46,18 +46,20 @@ gemeinsame synthetische Datensatz von Archiv und Hinweisen in
 
 ### Inhaltliche Rückfragen
 
-Die Entscheidung basiert nicht mehr auf einer Mindestzeichenanzahl. Die Funktion
-`assessCompleteness` prüft deterministisch vier Inhaltsklassen:
+Die Minimalansicht bietet nach einer ersten Sachverhaltsbeschreibung den Schritt
+`KI-Rückfragen starten`. Der dafür getrennt versionierte OpenAI-Pfad wählt anhand des
+eingegebenen Sachverhalts und aller bisherigen Antworten genau eine passende Form:
 
-1. konkrete Handlung oder Gestaltung,
-2. Kanal oder Fundort,
-3. betroffene Gruppe,
-4. gewünschtes Unterlassen.
+- Ja/Nein für echte binäre Tatsachenfragen,
+- Freitext für offene Sachverhaltsangaben,
+- Slider nur für sinnvoll begrenzbare Zahlen oder Abstufungen.
 
-Fehlt etwas, erscheint unmittelbar unter der gerade geschriebenen Zeile genau
-eine graue Rückfrage. Die Reihenfolge entspricht der Liste oben. Ein kurzer,
-inhaltlich vollständiger Satz kann daher den Generieren-Button freischalten; ein
-langer, aber unvollständiger Text nicht.
+Frage und Antwort bleiben grau eingerückt beziehungsweise als dunkler Antworttext
+direkt im Schreibfluss sichtbar. Nach jeder Antwort wird die nächste Rückfrage aus dem
+gesamten bisherigen Verlauf erzeugt. Sobald keine weitere Frage erforderlich ist,
+werden Sachverhalt, Fragen und Antworten gemeinsam an die unveränderte, eingefrorene
+Tenorgenerierung übergeben. Das Rückfrageschema wird serverseitig strikt validiert;
+der Browser erhält weiterhin keinen API-Schlüssel.
 
 ### Entwurf und Autofill
 
@@ -164,5 +166,9 @@ python -m compileall -q muclegal app.py
 python -m pytest -q
 ```
 
-Der letzte vollständige Python-Testlauf bestand mit `130 passed`. Die Route
-antwortete lokal mit HTTP 200.
+Der fokussierte Tenor-Testlauf besteht mit `14 passed`. Im vollständigen Lauf
+bestanden `143` Tests; ausschließlich der bereits dokumentierte sporadische
+GNU-Wget/warcio-Digest-Test schlug fehl. TypeScript-Prüfung, Frontend-Build und der
+Browserablauf von der Entwurfswahl über die Archivspeicherung bis zur Tenor-Leseansicht
+waren erfolgreich. Die Routen `/tenorhilfe`, `/archiv` und
+`/api/v1/tenor-archive` antworteten lokal erfolgreich.

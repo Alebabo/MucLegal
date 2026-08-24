@@ -16,7 +16,6 @@ import { composeDraft, getBlock, nextAutofillBlock, register } from "@/tenor-eng
 import type { Draft, Profile } from "@/tenor-types";
 import { lottoDemoCases, type DemoCase } from "@/data/lottoDemoCases";
 import {
-  assessCompleteness,
   filterModeCommands,
   inferFallgruppe,
   isTenor,
@@ -31,9 +30,18 @@ import {
 } from "@/lib/dictation";
 import {
   createTenorProposals,
+  createTenorQuestion,
   saveTenorArchiveEntry,
   type TenorProposalResponse,
+  type TenorQuestion,
 } from "@/lib/tenor-api";
+import {
+  answeredQuestions,
+  composeClarifiedContext,
+  formatSliderAnswer,
+  type ClarificationTurn,
+} from "@/lib/tenor-questions";
+import { Slider } from "@/components/ui/slider";
 
 const baseProfile: Profile = {
   profilId: "V-2026-014",
@@ -204,6 +212,14 @@ export function MinimalTenorView() {
   const [generationError, setGenerationError] = useState("");
   const [archiveError, setArchiveError] = useState("");
   const [savingArchive, setSavingArchive] = useState(false);
+  const [clarificationTurns, setClarificationTurns] = useState<ClarificationTurn[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<TenorQuestion | null>(null);
+  const [questionLoading, setQuestionLoading] = useState(false);
+  const [clarificationReady, setClarificationReady] = useState(false);
+  const [questionError, setQuestionError] = useState("");
+  const [textAnswer, setTextAnswer] = useState("");
+  const [customChoiceOpen, setCustomChoiceOpen] = useState(false);
+  const [sliderAnswer, setSliderAnswer] = useState(0);
   const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
   const [suggestion, setSuggestion] = useState<ReturnType<typeof nextAutofillBlock>>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -212,12 +228,17 @@ export function MinimalTenorView() {
   const dictationBase = useRef("");
   const dictationSegments = useRef<DictationSegments>({});
   const dictationSession = useRef(0);
+  const questionSession = useRef(0);
+  const previousContext = useRef(context);
 
-  const profile = useMemo(() => profileFromContext(context), [context]);
+  const clarifiedContext = useMemo(
+    () => composeClarifiedContext(context, clarificationTurns),
+    [clarificationTurns, context],
+  );
+  const profile = useMemo(() => profileFromContext(clarifiedContext), [clarifiedContext]);
   const preciseDraft = useMemo(() => composeDraft(profile, "eng"), [profile]);
   const neutralDraft = useMemo(() => composeDraft(profile, "kerngleich"), [profile]);
   const contextLength = context.trim().length;
-  const completeness = useMemo(() => assessCompleteness(context), [context]);
   const correctionMode = mode === "tenor" || isTenor(context);
   const slashMatch = context.match(/(?:^|\s)\/([^\s]*)$/);
   const slashQuery = slashMatch?.[1]?.toLocaleLowerCase("de") ?? "";
@@ -234,16 +255,13 @@ export function MinimalTenorView() {
           )
           .slice(0, 5)
       : [];
-  const needsMoreContext =
-    mode !== "fälle" &&
-    contextLength > 0 &&
-    !correctionMode &&
-    !completeness.complete &&
-    !showModeMenu;
-  const canGenerate =
+  const canRequestQuestions =
     !showModeMenu &&
-    (Boolean(selectedCase) || (correctionMode ? contextLength >= 20 : completeness.complete));
-  const contextQuestion = completeness.nextQuestion;
+    (mode !== "fälle" || Boolean(selectedCase)) &&
+    contextLength >= 20 &&
+    !clarificationReady;
+  const canGenerate =
+    !showModeMenu && clarificationReady && (Boolean(selectedCase) || clarifiedContext.length >= 20);
 
   useEffect(() => {
     if (!correctionMode || generated || context.trim().length < 4) {
@@ -271,6 +289,19 @@ export function MinimalTenorView() {
     input.style.height = "0px";
     input.style.height = `${Math.max(input.scrollHeight, 36)}px`;
   }, [context, pdf]);
+
+  useEffect(() => {
+    if (previousContext.current === context) return;
+    previousContext.current = context;
+    questionSession.current += 1;
+    setClarificationTurns([]);
+    setCurrentQuestion(null);
+    setQuestionLoading(false);
+    setClarificationReady(false);
+    setQuestionError("");
+    setTextAnswer("");
+    setCustomChoiceOpen(false);
+  }, [context]);
 
   useEffect(
     () => () => {
@@ -367,6 +398,54 @@ export function MinimalTenorView() {
     setSuggestion(null);
   };
 
+  const requestClarificationQuestion = async (turns = clarificationTurns) => {
+    if (context.trim().length < 20 || questionLoading) return;
+    const session = questionSession.current + 1;
+    questionSession.current = session;
+    setQuestionLoading(true);
+    setQuestionError("");
+    setCurrentQuestion(null);
+    try {
+      const response = await createTenorQuestion({
+        context: context.trim(),
+        fallgruppe: profile.fallgruppe,
+        answered_questions: answeredQuestions(turns),
+      });
+      if (questionSession.current !== session) return;
+      if (response.ready_to_generate) {
+        setClarificationReady(true);
+        return;
+      }
+      if (!response.question) throw new Error("Die KI hat keine Rückfrage geliefert.");
+      setCurrentQuestion(response.question);
+      setTextAnswer("");
+      setCustomChoiceOpen(false);
+      if (response.question.slider) {
+        const { minimum, maximum, step } = response.question.slider;
+        const steps = Math.floor((maximum - minimum) / step);
+        setSliderAnswer(minimum + Math.floor(steps / 2) * step);
+      }
+    } catch (error) {
+      if (questionSession.current !== session) return;
+      setQuestionError(
+        error instanceof Error ? error.message : "Die KI-Rückfrage konnte nicht erzeugt werden.",
+      );
+    } finally {
+      if (questionSession.current === session) setQuestionLoading(false);
+    }
+  };
+
+  const answerCurrentQuestion = (answer: string) => {
+    const cleanedAnswer = answer.trim();
+    if (!currentQuestion || !cleanedAnswer || questionLoading) return;
+    const nextTurns = [...clarificationTurns, { question: currentQuestion, answer: cleanedAnswer }];
+    setClarificationTurns(nextTurns);
+    setCurrentQuestion(null);
+    setTextAnswer("");
+    setCustomChoiceOpen(false);
+    void requestClarificationQuestion(nextTurns);
+  };
+
   const generate = async () => {
     if (!canGenerate || generating) return;
     setGenerating(true);
@@ -375,12 +454,12 @@ export function MinimalTenorView() {
     try {
       const response = await createTenorProposals({
         fall_id: selectedCase?.fall_id ?? "TENOR-ENTWURF",
-        schuldner: debtorFromContext(context),
+        schuldner: debtorFromContext(clarifiedContext),
         fundstelle:
           selectedCase?.url ??
-          context.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
+          clarifiedContext.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
           "Vom Nutzer beschriebene Fundstelle",
-        context,
+        context: clarifiedContext,
         fallgruppe: profile.fallgruppe,
         rechtsgrundlagen: legalBasesFor(profile.fallgruppe),
       });
@@ -415,6 +494,14 @@ export function MinimalTenorView() {
     setGenerationError("");
     setArchiveError("");
     setSavingArchive(false);
+    questionSession.current += 1;
+    setClarificationTurns([]);
+    setCurrentQuestion(null);
+    setQuestionLoading(false);
+    setClarificationReady(false);
+    setQuestionError("");
+    setTextAnswer("");
+    setCustomChoiceOpen(false);
     setAcceptedIds([]);
     setSuggestion(null);
   };
@@ -424,7 +511,7 @@ export function MinimalTenorView() {
     const draft = selected === "precise" ? preciseDraft : neutralDraft;
     const text = selected === "precise" ? preciseText : neutralText;
     const proposal = proposalResponse?.proposals.find((item) => item.strategy === selected);
-    const schuldner = debtorFromContext(context);
+    const schuldner = debtorFromContext(clarifiedContext);
     setArchiveError("");
     setSavingArchive(true);
     try {
@@ -433,7 +520,7 @@ export function MinimalTenorView() {
         schuldner,
         title: selectedCase?.title ?? schuldner,
         text,
-        context: context.trim(),
+        context: clarifiedContext.trim(),
         strategy: selected,
         model: proposalResponse?.model ?? "Lokale Bausteinlogik",
         reference_version: proposalResponse?.reference_version ?? "Lokales Tenorregister",
@@ -683,8 +770,185 @@ export function MinimalTenorView() {
                 )}
               </div>
             )}
-            {needsMoreContext && contextQuestion && (
-              <p className="mt-2 text-sm leading-6 text-slate-300">{contextQuestion}</p>
+            {(clarificationTurns.length > 0 || currentQuestion || questionLoading) && (
+              <div
+                className="ml-4 mt-4 space-y-4 border-l border-slate-200 pl-5 sm:ml-8 sm:pl-6"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {clarificationTurns.map((turn, index) => (
+                  <div key={`${turn.question.question_id}-${index}`}>
+                    <p className="text-sm leading-6 text-slate-300">{turn.question.text}</p>
+                    <p className="mt-1 font-serif text-base leading-7 text-slate-700">
+                      {turn.answer}
+                    </p>
+                  </div>
+                ))}
+
+                {currentQuestion && (
+                  <div>
+                    <p className="text-sm leading-6 text-slate-300">{currentQuestion.text}</p>
+
+                    {currentQuestion.answer_type === "yes_no" && (
+                      <div className="mt-3 flex gap-2">
+                        {(["Ja", "Nein"] as const).map((answer) => (
+                          <button
+                            key={answer}
+                            type="button"
+                            onClick={() => answerCurrentQuestion(answer)}
+                            className="min-h-10 rounded-full border border-slate-200 px-5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+                          >
+                            {answer}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {currentQuestion.answer_type === "single_choice" && (
+                      <div className="mt-3 max-w-xl">
+                        <div className="flex flex-wrap gap-2">
+                          {currentQuestion.options.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => answerCurrentQuestion(option.label)}
+                              className="min-h-10 rounded-full border border-slate-200 px-4 text-left text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            aria-expanded={customChoiceOpen}
+                            onClick={() => {
+                              setCustomChoiceOpen(true);
+                              setTextAnswer("");
+                            }}
+                            className="min-h-10 rounded-full border border-dashed border-slate-300 px-4 text-sm text-slate-500 transition hover:border-slate-500 hover:text-slate-900"
+                          >
+                            Andere Angabe …
+                          </button>
+                        </div>
+                        {customChoiceOpen && (
+                          <form
+                            className="mt-3 flex items-end gap-3"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              answerCurrentQuestion(textAnswer);
+                            }}
+                          >
+                            <textarea
+                              autoFocus
+                              value={textAnswer}
+                              maxLength={1_000}
+                              rows={1}
+                              placeholder={currentQuestion.placeholder ?? "Andere Angabe ergänzen …"}
+                              onChange={(event) => setTextAnswer(event.target.value)}
+                              className="min-h-10 flex-1 resize-y border-b border-slate-200 bg-transparent py-2 font-serif text-base leading-7 text-slate-700 outline-none placeholder:text-slate-300 focus:border-slate-500"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!textAnswer.trim()}
+                              className="min-h-10 rounded-full bg-slate-900 px-4 text-xs font-semibold text-white disabled:opacity-30"
+                            >
+                              Weiter
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+
+                    {currentQuestion.answer_type === "text" && (
+                      <form
+                        className="mt-2 flex items-end gap-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          answerCurrentQuestion(textAnswer);
+                        }}
+                      >
+                        <textarea
+                          autoFocus
+                          value={textAnswer}
+                          maxLength={1_000}
+                          rows={1}
+                          placeholder={currentQuestion.placeholder ?? "Antwort ergänzen …"}
+                          onChange={(event) => setTextAnswer(event.target.value)}
+                          className="min-h-10 flex-1 resize-y border-b border-slate-200 bg-transparent py-2 font-serif text-base leading-7 text-slate-700 outline-none placeholder:text-slate-300 focus:border-slate-500"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!textAnswer.trim()}
+                          className="min-h-10 rounded-full bg-slate-900 px-4 text-xs font-semibold text-white disabled:opacity-30"
+                        >
+                          Weiter
+                        </button>
+                      </form>
+                    )}
+
+                    {currentQuestion.answer_type === "slider" && currentQuestion.slider && (
+                      <div className="mt-4 max-w-lg">
+                        <div className="flex items-baseline justify-between gap-4">
+                          <span className="text-[11px] text-slate-300">
+                            {currentQuestion.slider.minimum_label}
+                          </span>
+                          <strong className="text-sm text-slate-700">
+                            {formatSliderAnswer(currentQuestion, sliderAnswer)}
+                          </strong>
+                          <span className="text-right text-[11px] text-slate-300">
+                            {currentQuestion.slider.maximum_label}
+                          </span>
+                        </div>
+                        <Slider
+                          aria-label={currentQuestion.text}
+                          className="mt-3"
+                          min={currentQuestion.slider.minimum}
+                          max={currentQuestion.slider.maximum}
+                          step={currentQuestion.slider.step}
+                          value={[sliderAnswer]}
+                          onValueChange={(values) =>
+                            setSliderAnswer(values[0] ?? currentQuestion.slider!.minimum)
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            answerCurrentQuestion(formatSliderAnswer(currentQuestion, sliderAnswer))
+                          }
+                          className="mt-4 min-h-10 rounded-full bg-slate-900 px-4 text-xs font-semibold text-white"
+                        >
+                          Übernehmen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {questionLoading && (
+                  <p className="flex items-center gap-2 text-sm text-slate-300" aria-live="polite">
+                    <Loader2 className="size-3.5 animate-spin" /> KI liest deine Ergänzung …
+                  </p>
+                )}
+              </div>
+            )}
+            {clarificationReady && clarificationTurns.length > 0 && (
+              <p className="ml-4 mt-4 text-xs text-slate-300 sm:ml-8">
+                Die KI hat vorerst keine weitere tenorbezogene Sachverhaltsfrage.
+              </p>
+            )}
+            {questionError && (
+              <div
+                role="alert"
+                className="ml-4 mt-4 flex flex-wrap items-center gap-3 text-xs text-red-600 sm:ml-8"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span>{questionError}</span>
+                <button
+                  type="button"
+                  onClick={() => void requestClarificationQuestion()}
+                  className="rounded-full border border-red-200 px-3 py-1.5 font-semibold"
+                >
+                  Erneut versuchen
+                </button>
+              </div>
             )}
             {suggestion && (
               <button
@@ -744,6 +1008,20 @@ export function MinimalTenorView() {
                   </span>
                 )}
               </div>
+              {canRequestQuestions &&
+                !currentQuestion &&
+                !questionLoading &&
+                !questionError &&
+                clarificationTurns.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void requestClarificationQuestion()}
+                    className="flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    <Sparkles className="size-4" />
+                    KI-Rückfragen starten
+                  </button>
+                )}
               {canGenerate && (
                 <button
                   type="button"

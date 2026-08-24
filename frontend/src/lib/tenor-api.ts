@@ -78,6 +78,46 @@ export type TenorArchiveRecord = Omit<TenorArchiveRequest, "strategy"> & {
   decided_at: string | null;
 };
 
+export type TenorQuestionAnswerType = "yes_no" | "text" | "slider" | "single_choice";
+
+export type AnsweredTenorQuestion = {
+  topic_id: string;
+  question: string;
+  answer: string;
+  answer_type: TenorQuestionAnswerType;
+};
+
+export type TenorQuestionOption = {
+  value: string;
+  label: string;
+};
+
+export type TenorSliderQuestion = {
+  minimum: number;
+  maximum: number;
+  step: number;
+  minimum_label: string;
+  maximum_label: string;
+  unit: string | null;
+};
+
+export type TenorQuestion = {
+  question_id: string;
+  topic_id: string;
+  text: string;
+  answer_type: TenorQuestionAnswerType;
+  placeholder: string | null;
+  slider: TenorSliderQuestion | null;
+  options: TenorQuestionOption[];
+};
+
+export type TenorQuestionResponse = {
+  mode: "live_openai";
+  model: string;
+  ready_to_generate: boolean;
+  question: TenorQuestion | null;
+};
+
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -118,6 +158,17 @@ export function createTenorDraft(payload: TenorDraftRequest) {
 
 export function createTenorProposals(payload: TenorProposalRequest) {
   return requestJson<TenorProposalResponse>("/api/v1/tenor-proposals", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createTenorQuestion(payload: {
+  context: string;
+  fallgruppe: string;
+  answered_questions: AnsweredTenorQuestion[];
+}) {
+  return requestJson<TenorQuestionResponse>("/api/v1/tenor-questions", {
     method: "POST",
     body: JSON.stringify(payload),
   });

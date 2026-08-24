@@ -13,6 +13,7 @@ from muclegal.llm.tenor import (
     DeterministicTenorAnalyzer,
     OpenAITenorAnalyzer,
 )
+from muclegal.llm.tenor_questions import OpenAITenorQuestionAnalyzer
 from muclegal.llm.clause_analysis import AnthropicClauseAnalyzer, DeterministicClauseAnalyzer
 from muclegal.ui import create_app
 
@@ -56,6 +57,7 @@ app = create_app(
     asset_directory=ROOT / "assets",
     tenor_analyzer_factory=(AnthropicTenorAnalyzer if ANTHROPIC_READY else DeterministicTenorAnalyzer),
     tenor_proposal_analyzer_factory=(OpenAITenorAnalyzer if OPENAI_READY else None),
+    tenor_question_analyzer_factory=(OpenAITenorQuestionAnalyzer if OPENAI_READY else None),
     monitoring_cases=MONITORING_CASES,
     domain_monitor=DOMAIN_MONITOR,
     allowed_hosts=[
