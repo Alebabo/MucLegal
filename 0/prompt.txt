@@ -1,0 +1,1 @@
+ok dann werde ich diese dinge in die unterlsssungserklärungen packen. Du musst also eine tick box implementieren neben der url bei der man anklicken kann ob wir autorisiert sind. du darfst annehemen, dass durch anklicken der box alles andere vorher geklärt wurde und der nötige rechtsrahemen besteht
