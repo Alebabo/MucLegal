@@ -132,24 +132,41 @@ export function MaskTenorView() {
   return (
     <div className="min-h-screen px-6 py-10 sm:px-10 lg:px-14">
       <div className="mx-auto max-w-6xl">
-        <header className="border-b border-foreground pb-8">
-          <span className="text-xs text-muted-foreground">Juristisches Arbeitswerkzeug</span>
-          <h1 className="mt-3 max-w-3xl text-4xl sm:text-5xl">Tenorschreibhilfe</h1>
-          <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
-            Aus einem belegten Erstverstoß einen abgrenzbaren Unterlassungstenor entwerfen. Kein
-            Entwurf wird ohne eine gesonderte menschliche Entscheidung aktiviert.
-          </p>
-        </header>
-
         {submitError && (
-          <div className="mt-6 flex gap-3 border border-danger bg-danger/10 px-4 py-3" role="alert">
+          <div className="mb-8 flex gap-3 border border-danger bg-danger/10 px-4 py-3" role="alert">
             <CircleAlert className="mt-0.5 size-4 shrink-0 text-danger" />
             <p className="text-sm">{submitError}</p>
           </div>
         )}
 
-        <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <form onSubmit={onSubmit} noValidate>
+        {record ? (
+          <section aria-live="polite" className="mx-auto w-full max-w-5xl">
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
+              <div>
+                <span className="text-xs text-muted-foreground">02</span>
+                <h2 className="mt-1 text-xl">Entwurf & Abgrenzung</h2>
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setRecord(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Sachverhalt bearbeiten
+                </button>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RotateCcw className="size-3.5" /> Neu beginnen
+                </button>
+              </div>
+            </div>
+            <DraftResult record={record} reviewing={reviewing} onDecision={decide} />
+          </section>
+        ) : (
+          <form onSubmit={onSubmit} noValidate className="mx-auto w-full max-w-3xl">
             <div className="flex items-end justify-between border-b border-border pb-3">
               <div>
                 <span className="text-xs text-muted-foreground">01</span>
@@ -229,27 +246,7 @@ export function MaskTenorView() {
               </button>
             </div>
           </form>
-
-          <section aria-live="polite">
-            <div className="border-b border-border pb-3">
-              <span className="text-xs text-muted-foreground">02</span>
-              <h2 className="mt-1 text-xl">Entwurf & Abgrenzung</h2>
-            </div>
-
-            {!record ? (
-              <div className="mt-6 grid min-h-80 place-items-center border border-dashed border-border bg-muted/30 px-8 text-center">
-                <div className="max-w-sm">
-                  <p className="text-sm text-muted-foreground">
-                    Der Entwurf erscheint hier zusammen mit dem charakteristischen Kern,
-                    kerngleichen Formen und der besonders wichtigen Negativabgrenzung.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <DraftResult record={record} reviewing={reviewing} onDecision={decide} />
-            )}
-          </section>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -285,9 +282,11 @@ function DraftResult({
         </span>
       </div>
 
-      <div className="space-y-8 px-5 py-6">
+      <div className="space-y-10 px-6 py-8 sm:px-10 lg:px-14">
         <ResultSection title="Tenorentwurf">
-          <p className="text-[15px] text-foreground">{record.draft.entwurf}</p>
+          <p className="max-w-4xl font-serif text-lg leading-8 text-foreground">
+            {record.draft.entwurf}
+          </p>
         </ResultSection>
         <ResultSection title="Charakteristischer Kern">
           <p className="text-sm text-muted-foreground">{record.draft.charakteristischer_kern}</p>

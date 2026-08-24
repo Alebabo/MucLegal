@@ -39,6 +39,12 @@ test("recognizes common advertising word forms", () => {
     "irrefuehrende_werbung",
   );
   assert.equal(inferFallgruppe("Werbung mit falscher Knappheit"), "irrefuehrende_werbung");
+  assert.equal(
+    assessCompleteness(
+      "Die GmbH soll es unterlassen, gegenüber Verbrauchern auf ihrer Website mit einer falschen Frist zu werben.",
+    ).complete,
+    true,
+  );
 });
 
 test("filters slash modes and wraps keyboard selection", () => {

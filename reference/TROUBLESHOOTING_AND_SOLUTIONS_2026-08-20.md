@@ -1223,3 +1223,32 @@ Entwurf` und zeigt die bearbeitbaren Varianten `Präzise` und `Technikneutral` o
 Alert. Bei 390 × 844 Pixeln liegt der Button vollständig im Viewport und besteht den
 Hit-Test. Die Antwortzeit hängt weiterhin von der OpenAI Responses API ab; während
 dieser Zeit bleibt die neue Fortschrittsmeldung sichtbar und ein Doppelklick gesperrt.
+
+# Formulierung „zu werben“ aktiviert den Generierungsbutton nicht
+
+### Symptom
+
+Im Browser-Smoke-Test blieb die Tenorschreibhilfe bei einem inhaltlich vollständigen
+Satz mit der Formulierung `mit einer falschen Frist zu werben` im Rückfragezustand.
+Statt des Generierungsbuttons erschien die Frage nach der konkreten Handlung.
+
+### Ursache und Diagnose
+
+Die Fallgruppenerkennung akzeptierte bereits den Wortstamm `werb`, die getrennte
+semantische Vollständigkeitsprüfung erkannte dagegen nur das Substantiv `Werbung`.
+Der Infinitiv `werben` erfüllte deshalb die Dimension `handlung` nicht. Der Fehler
+wurde mit genau dem im Browser verwendeten vollständigen Satz reproduziert.
+
+### Lösung
+
+Die deterministische Handlungserkennung verwendet nun ebenfalls den Wortstamm
+`werb` und deckt damit `werben`, `wirbt` und `Werbung` ab. Der Frontend-Logiktest
+enthält einen vollständigen Satz mit `zu werben` als Regressionstest.
+
+### Verifikation und verbleibende Grenze
+
+Der ergänzte Test besteht; anschließend erschienen im echten Browser sowohl der
+Generierungsbutton als auch die beiden OpenAI-Entwürfe. Nach Auswahl nutzt der
+Entwurf die breite Einzeldarstellung. Die Vollständigkeitsprüfung bleibt eine
+begrenzte, sichtbare Schlüsselwortlogik und kann weitere bislang unbekannte Synonyme
+übersehen; sie trifft keine juristische Bewertung.

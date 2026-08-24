@@ -369,6 +369,7 @@ export function MinimalTenorView() {
     setContext(selected === "precise" ? preciseText : neutralText);
     setAcceptedIds(draft.blockIds);
     setGenerated(false);
+    setSelected(null);
   };
 
   return (
@@ -680,40 +681,67 @@ export function MinimalTenorView() {
         </main>
       ) : (
         <main className="mx-auto flex max-w-6xl flex-col px-6 py-8 md:h-[calc(100dvh-8rem)] md:min-h-[30rem] md:py-6">
-          <h1 className="text-center font-sans text-sm font-medium text-slate-400">
-            Wähle einen Entwurf
-          </h1>
-          <div className="mt-5 grid md:min-h-0 md:flex-1 md:grid-cols-2 md:divide-x md:divide-slate-100">
-            <DraftChoice
-              title="Präzise"
-              draft={preciseDraft}
-              text={preciseText}
-              selected={selected === "precise"}
-              onSelect={() => setSelected("precise")}
-              onText={setPreciseText}
-              provenance={aiProvenance(proposalResponse, "precise")}
-            />
-            <DraftChoice
-              title="Technikneutral"
-              draft={neutralDraft}
-              text={neutralText}
-              selected={selected === "neutral"}
-              onSelect={() => setSelected("neutral")}
-              onText={setNeutralText}
-              provenance={aiProvenance(proposalResponse, "neutral")}
-            />
-          </div>
-          <div className="mt-4 flex min-h-11 items-center justify-center">
-            {selected && (
-              <button
-                type="button"
-                onClick={adoptSelected}
-                className="rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white"
-              >
-                Entwurf übernehmen
-              </button>
-            )}
-          </div>
+          {selected ? (
+            <>
+              <div className="flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-slate-800"
+                >
+                  <ArrowLeft className="size-4" /> Beide Entwürfe
+                </button>
+                <span className="text-xs text-slate-300">Breite Lese- und Bearbeitungsansicht</span>
+              </div>
+              <div className="mx-auto mt-4 flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+                <DraftChoice
+                  title={selected === "precise" ? "Präzise" : "Technikneutral"}
+                  draft={selected === "precise" ? preciseDraft : neutralDraft}
+                  text={selected === "precise" ? preciseText : neutralText}
+                  selected
+                  onSelect={() => undefined}
+                  onText={selected === "precise" ? setPreciseText : setNeutralText}
+                  provenance={aiProvenance(proposalResponse, selected)}
+                />
+              </div>
+              <div className="mt-4 flex min-h-11 items-center justify-center">
+                <button
+                  type="button"
+                  onClick={adoptSelected}
+                  className="rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white"
+                >
+                  Entwurf übernehmen
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-center font-sans text-sm font-medium text-slate-400">
+                Wähle einen Entwurf
+              </h1>
+              <div className="mt-5 grid md:min-h-0 md:flex-1 md:grid-cols-2 md:divide-x md:divide-slate-100">
+                <DraftChoice
+                  title="Präzise"
+                  draft={preciseDraft}
+                  text={preciseText}
+                  selected={false}
+                  onSelect={() => setSelected("precise")}
+                  onText={setPreciseText}
+                  provenance={aiProvenance(proposalResponse, "precise")}
+                />
+                <DraftChoice
+                  title="Technikneutral"
+                  draft={neutralDraft}
+                  text={neutralText}
+                  selected={false}
+                  onSelect={() => setSelected("neutral")}
+                  onText={setNeutralText}
+                  provenance={aiProvenance(proposalResponse, "neutral")}
+                />
+              </div>
+              <div className="mt-4 min-h-11" />
+            </>
+          )}
         </main>
       )}
     </div>

@@ -73,6 +73,13 @@ Nach `Generieren` werden genau zwei bearbeitbare Entwürfe angezeigt:
 Beide Entwürfe werden deterministisch in `frontend/src/tenor-engine.ts`
 komponiert. Referenz- und Baustein-IDs stehen unter dem Entwurf.
 
+Die beiden Vorschläge bleiben zunächst kompakt vergleichbar. Ein Klick auf eine
+Variante öffnet sie anschließend allein in einer breiten Lese- und
+Bearbeitungsansicht. `Beide Entwürfe` führt zum Vergleich zurück;
+`Entwurf übernehmen` bleibt eine gesonderte Bestätigung. In der Maskenansicht
+verschwindet nach der Erzeugung die Eingabespalte vollständig und der Prüfentwurf
+nutzt die gesamte Inhaltsbreite. Der frühere große Erklärungskopf wurde entfernt.
+
 ## Daten und Build-Sicherung
 
 `scripts/unbundle.py` entpackt das ursprüngliche Register aus

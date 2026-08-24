@@ -73,7 +73,12 @@ im Modellinput erhalten. Einzelheiten stehen in
 - `AppSidebar.tsx`: großes Logo oben links; im eingeklappten Zustand bleibt die
   kompakte Kennzeichnung `MLM` erhalten.
 - `MinimalTenorView.tsx`: kleinere Entwurfsflächen, flexibles Höhenlayout,
-  editierbare Vorschläge, sichtbare API-Fehler und eindeutiger Ladezustand.
+  editierbare Vorschläge, sichtbare API-Fehler und eindeutiger Ladezustand. Nach
+  Auswahl öffnet sich genau ein Vorschlag in einer breiten Lese- und
+  Bearbeitungsansicht; erst ein weiterer Klick übernimmt ihn.
+- `MaskTenorView.tsx`: der redundante große Erklärungskopf ist entfernt. Nach der
+  Erzeugung verschwindet die Eingabespalte und der Prüfentwurf nutzt die gesamte
+  Inhaltsbreite; der Sachverhalt kann über eine eigene Aktion erneut geöffnet werden.
 - `routes/index.tsx`: ein im Router-Loader erzeugter Zeitwert verhindert eine
   SSR-/Client-Hydration-Abweichung.
 

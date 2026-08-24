@@ -51,7 +51,7 @@ export function inferFallgruppe(text: string) {
 export function assessCompleteness(text: string): Completeness {
   const checks = {
     handlung:
-      /(kündig|button|schaltfläche|klausel|cookie|consent|tracking|werbung|rabatt|countdown|preis|vertrag|verlänger|versteckt|fehlt|irreführ)/i.test(
+      /(kündig|button|schaltfläche|klausel|cookie|consent|tracking|werb|rabatt|countdown|preis|vertrag|verlänger|versteckt|fehlt|irreführ)/i.test(
         text,
       ),
     kanal:
