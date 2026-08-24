@@ -1,0 +1,112 @@
+PLEASE IMPLEMENT THIS PLAN:
+# Fallbezogenes Monitoring nach manuell festgestelltem Erstverstoß
+
+## Zusammenfassung
+
+MucLegal erkennt ausdrücklich keine Erstverstöße. Die Verbraucherzentrale eröffnet einen bereits geprüften Fall und übermittelt:
+
+- Domain und konkrete Ausgangs-URL,
+- den bekannten Verstoß über eine Maske oder einen Screenshot mit Kurzangaben,
+- den freigegebenen Tenor beziehungsweise die Unterlassungserklärung.
+
+Erst nach menschlicher Freigabe beginnt das System, die Domain auf Fortbestand, Beseitigung, Wiederkehr oder Verlagerung dieses konkreten Verstoßes zu überwachen.
+
+## Fallerfassung
+
+- Zwei Eingabewege auf dem bestehenden Ein-Screen-UI anbieten:
+
+  1. Vollständige strukturierte Maske.
+  2. Screenshot-Upload mit verkürzter Maske.
+
+- Bei beiden Wegen sind mindestens erforderlich:
+
+  - `fall_id`
+  - Domain und genaue Fundstellen-URL
+  - Verstoßtyp `klausel` oder `element`
+  - kurze Beschreibung der verbotenen Praxis
+  - Tenor beziehungsweise tragendes Tenorelement
+  - was später gefunden oder vermisst werden soll
+  - relevante Seitentypen, etwa AGB, Startseite, PDP oder Vertragsabschluss
+
+- Bei Klauselverstößen zusätzlich den beanstandeten Wortlaut erfassen.
+- Bei Elementverstößen Bezeichnung, Funktion und Fehlerart erfassen, beispielsweise:
+
+  - `fehlt`
+  - `nicht_sichtbar`
+  - `nicht_leicht_zugaenglich`
+  - `falsches_ziel`
+  - `zusaetzliche_huerde`
+
+- Der Screenshot ist Beweismittel, nicht Analysequelle. Es findet keine OCR-, Vision- oder automatische Rechtserkennung statt.
+- Vor Aktivierung bestätigt eine Juristin den Fall. Das System speichert den Ursprung mit `erstverstoss_festgestellt_durch: "verbraucherzentrale"`.
+
+## Monitoring
+
+- Der manuell gemeldete Erstverstoß wird als Referenzzustand gespeichert und niemals als vom System entdeckter Treffer dargestellt.
+- Die erste technische Aufnahme dokumentiert lediglich, ob die angegebene Fundstelle abrufbar ist und der manuell beschriebene Zustand technisch auffindbar bleibt.
+- Folgeläufe unterscheiden:
+
+  - `unveraendert_fortbestehend`
+  - `beseitigt`
+  - `kerngleich_wiederaufgetreten`
+  - `neuer_sachverhalt`
+  - `unsicher`
+  - `pruefung_unvollstaendig`
+
+- Ein unverändert fortbestehender Verstoß wird auch ohne Hash-Änderung sichtbar gehalten; der bisherige Abbruch „Hash unverändert = Ende“ gilt nur für bereits als unauffällig dokumentierte Seiten.
+- Für AGB werden die angegebene AGB-Seite, Sitemaps und priorisierte interne Links nach demselben fallbezogenen Klauseltyp durchsucht.
+- Für Buttons und andere Elemente wird der gerenderte DOM samt Accessibility-Informationen geprüft, nicht das Screenshotbild.
+- Das System prüft nur die im Fall hinterlegten Klauseln und Elemente. Es sucht nicht allgemein nach bislang unbekannten Rechtsverstößen.
+
+## Begrenzte Domain-Suche
+
+- Ausgangspunkt sind die von der Verbraucherzentrale eingegebene Domain und Fundstellen-URL.
+- Sitemaps sowie relevante interne Links zu AGB, Vertrag, Kündigung, Konto und Checkout werden priorisiert.
+- Standardsuchgrenze: 50 öffentliche URLs, Linktiefe 3, maximal 10 Minuten und höchstens ein Abruf je URL und Tag.
+- Nur dieselbe registrierbare Domain und ausdrücklich freigegebene Subdomains werden berücksichtigt.
+- `robots.txt`, Login, Paywall, CAPTCHA oder Blockseiten führen zum Abbruch des betroffenen Pfads.
+- Ein fehlendes Element wird nur als `nicht_gefunden_im_pruefumfang` gemeldet. Bei unvollständiger Suche darf das System nicht behaupten, das Element fehle.
+
+## Sicherer Klickpfad und Nachweis
+
+- Playwright darf nur öffentliche, gleichursprüngliche Navigationsschritte in einem frischen Browserkontext verfolgen.
+- Keine Eingabe personenbezogener Daten, kein Login und kein Vertrags- oder Kündigungsabschluss.
+- Verändernde Requests wie `POST`, `PUT`, `PATCH` und `DELETE` werden blockiert.
+- Vor finalen Bestätigungsaktionen wird gestoppt.
+- Gespeichert werden:
+
+  - ursprünglicher Screenshot der Verbraucherzentrale,
+  - Roh-HTML beziehungsweise Original-PDF,
+  - gerenderter DOM-/Accessibility-Befund,
+  - Screenshots der überwachten Zustände,
+  - besuchte, übersprungene und blockierte URLs,
+  - Hashes, Zeitstempel und Abbruchgründe.
+
+- Jeder Systembefund bleibt bis zur Entscheidung bei `freigabe_durch_mensch: null`.
+
+## Schnittstellen
+
+- Neue Fallerfassung über `POST /api/v1/cases` mit strukturierten Feldern und optionalem Screenshot.
+- Monitoringstart erst nach `POST /api/v1/cases/{case_id}/review` mit menschlicher Freigabe.
+- `POST /api/v1/runs` erhält anschließend nur die freigegebene `case_id`; der Suchraum wird nicht vom System selbst erfunden.
+- Ergebnisse enthalten getrennt:
+
+  - `reported_initial_violation`
+  - `monitoring_findings`
+  - `document_findings`
+  - `element_findings`
+  - `coverage`
+  - `manual_review_reasons`
+
+## Testplan
+
+- Ohne manuell freigegebenen Fall startet keine Domain-Suche.
+- Ein hochgeladener Screenshot allein genügt nicht; fehlende Kurzangaben werden validiert abgelehnt.
+- Der Erstverstoß wird überall als VZ-Angabe und nie als Systemerkennung ausgewiesen.
+- Unverändert fortbestehende Verstöße bleiben nach Folgeprüfungen sichtbar.
+- Beseitigte, verschobene und kerngleich wiederkehrende Klauseln werden unterschieden.
+- Fehlende, versteckte, deaktivierte und falsch verlinkte Buttons werden getrennt behandelt.
+- Überschrittenes Suchbudget, `robots.txt`, CAPTCHA oder Timeout ergeben `pruefung_unvollstaendig`.
+- Unsichere Klicks und verändernde Requests werden nachweisbar blockiert.
+- Bestehende Normalisierungs-, LLM-, Beweis- und Freigabetests bleiben grün.
+- Die eingefrorenen LLM-Prompts werden nicht verändert.
