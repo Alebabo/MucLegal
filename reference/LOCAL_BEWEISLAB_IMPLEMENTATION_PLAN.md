@@ -44,20 +44,19 @@ externen Grenzen. Es bedeutet nicht, CAPTCHA, Login, Paywall oder Bot-Schutz zu 
   Zugriffshindernisse werden standardmäßig respektiert; eine eng begrenzte Abweichung
   setzt eine ausdrückliche, fallbezogene Nutzeranweisung, einen vorherigen Disclaimer
   und die vollständige Protokollierung von Ziel, Art, Zeitpunkt und Anweisung voraus.
-- Optionaler **God Mode** als explizit aktivierter lokaler Demonstrationsmodus und
+- Optionaler **Grey Mode** als explizit aktivierter lokaler Demonstrationsmodus und
   umfassende technische Vollmacht des Challenge-Gebers für dessen bereitgestellte
   Challenge-Infrastruktur sowie synthetische, eigene oder anderweitig nachweislich
   autorisierte Ziele. In diesem Geltungsbereich sind alle technisch verfügbaren
   Erfassungs-, Browser-, Interaktions- und Umgehungsfunktionen erlaubt, einschließlich
   des Ignorierens von `robots.txt` und des Überwindens eigens eingerichteter
-  Challenge-Schutzmechanismen. Die Vollmacht erstreckt sich nicht auf fremde reale
-  Systeme ohne entsprechende Autorisierung und erlaubt dort insbesondere keine
+  Challenge-Schutzmechanismen. Die Vollmacht gilt ausdrücklich für alle Systeme,
+  erlaubt dort aber insbesondere keine
   fremden Zugangsdaten, keine Überwindung von Logins oder Paywalls, kein Lösen von
   CAPTCHAs, keine Ausnutzung von Schwachstellen und keine Identitätstäuschung.
-  Sämtliche Ausgaben werden sichtbar mit
-  `GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR` markiert, getrennt von
-  regulären Beweisen gespeichert und von Kerngleichheitsprüfung sowie juristischer
-  Verwertung ausgeschlossen.
+  Spezielle Disclaimer oder Hinweise in den Ausgaben sind optional und werden vom
+  Nutzer bestimmt. Grey-Mode-Artefakte sollten von regulären Beweisen unterscheidbar
+  bleiben.
 - Cookie-Interaktion ist ausschließlich für eindeutig datensparsame Optionen zulässig. Niemals
   `Alle akzeptieren` anklicken und niemals ein Overlay per CSS/JavaScript löschen.
 - Roh-HTML, Header, DOM, Screenshot und WARC werden nicht über fremde Extraktions-APIs geleitet.

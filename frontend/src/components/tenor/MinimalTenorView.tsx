@@ -24,6 +24,7 @@ import {
   nextWrappedIndex,
   type WritingMode,
 } from "@/lib/minimal-tenor-logic";
+import { createTenorProposals, type TenorProposalResponse } from "@/lib/tenor-api";
 
 const baseProfile: Profile = {
   profilId: "V-2026-014",
@@ -84,6 +85,27 @@ function profileFromContext(context: string): Profile {
   };
 }
 
+function legalBasesFor(fallgruppe: string) {
+  if (fallgruppe === "agb_klausel") return ["§ 1 UKlaG"];
+  if (fallgruppe === "irrefuehrende_werbung") return ["§ 5 UWG", "§ 8 Abs. 1 UWG"];
+  if (fallgruppe === "consent_gestaltung") return ["§ 25 Abs. 1 TDDDG", "§ 2 Abs. 1 UKlaG"];
+  if (fallgruppe === "dark_pattern_dsa") return ["Art. 25 DSA", "§ 2 Abs. 1 UKlaG"];
+  return ["§ 312k Abs. 2 BGB", "§ 2 Abs. 1 UKlaG"];
+}
+
+function debtorFromContext(context: string) {
+  const match = context.match(
+    /\b([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.,' -]{1,100}\s(?:GmbH|AG|UG|SE|KG|e\.\s?K\.))\b/,
+  );
+  return match?.[1]?.trim() ?? "die Antragsgegnerin";
+}
+
+function aiProvenance(response: TenorProposalResponse | null, strategy: "precise" | "neutral") {
+  const proposal = response?.proposals.find((item) => item.strategy === strategy);
+  if (!response || !proposal) return null;
+  return `OpenAI ${response.model} · ${proposal.source_ids.join(" · ")} · nicht juristisch freigegeben`;
+}
+
 function referenceSummary(draft: Draft) {
   const references = [...new Set(draft.blockIds.flatMap((id) => getBlock(id).belegt_in))];
   return `${draft.blockIds.join(" · ")}  —  ${references
@@ -101,6 +123,7 @@ function DraftChoice({
   selected,
   onSelect,
   onText,
+  provenance,
 }: {
   title: string;
   draft: Draft;
@@ -108,9 +131,10 @@ function DraftChoice({
   selected: boolean;
   onSelect: () => void;
   onText: (text: string) => void;
+  provenance?: string | null;
 }) {
   return (
-    <div className="min-w-0 px-1 py-4 md:px-8 md:py-2">
+    <div className="flex min-w-0 flex-col px-1 py-4 md:min-h-0 md:px-6 md:py-1">
       <button type="button" onClick={onSelect} className="flex items-center gap-3 text-left">
         <span
           className={`grid size-5 place-items-center rounded-full border ${selected ? "border-slate-950 bg-slate-950" : "border-slate-300"}`}
@@ -124,10 +148,10 @@ function DraftChoice({
         onFocus={onSelect}
         onChange={(event) => onText(event.target.value)}
         aria-label={`${title} bearbeiten`}
-        className="mt-6 min-h-[360px] w-full resize-none bg-transparent font-serif text-[15px] leading-7 text-slate-700 outline-none"
+        className="mt-3 min-h-48 w-full resize-none overflow-y-auto bg-transparent font-serif text-sm leading-6 text-slate-700 outline-none md:min-h-0 md:flex-1"
       />
-      <p className="mt-5 break-words font-mono text-[9px] leading-4 text-slate-300">
-        {referenceSummary(draft)}
+      <p className="mt-3 break-words font-mono text-[9px] leading-4 text-slate-300">
+        {provenance ?? referenceSummary(draft)}
       </p>
     </div>
   );
@@ -148,6 +172,8 @@ export function MinimalTenorView() {
   const [selected, setSelected] = useState<"precise" | "neutral" | null>(null);
   const [preciseText, setPreciseText] = useState("");
   const [neutralText, setNeutralText] = useState("");
+  const [proposalResponse, setProposalResponse] = useState<TenorProposalResponse | null>(null);
+  const [generationError, setGenerationError] = useState("");
   const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
   const [suggestion, setSuggestion] = useState<ReturnType<typeof nextAutofillBlock>>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -177,16 +203,13 @@ export function MinimalTenorView() {
       : [];
   const needsMoreContext =
     mode !== "fälle" &&
-    !pdf &&
     contextLength > 0 &&
     !correctionMode &&
     !completeness.complete &&
     !showModeMenu;
   const canGenerate =
     !showModeMenu &&
-    (Boolean(pdf) ||
-      Boolean(selectedCase) ||
-      (correctionMode ? contextLength >= 20 : completeness.complete));
+    (Boolean(selectedCase) || (correctionMode ? contextLength >= 20 : completeness.complete));
   const contextQuestion = completeness.nextQuestion;
 
   useEffect(() => {
@@ -221,6 +244,7 @@ export function MinimalTenorView() {
       return;
     setPdf(file);
     setGenerated(false);
+    setGenerationError("");
   };
 
   const selectMode = (nextMode: WritingMode) => {
@@ -232,6 +256,7 @@ export function MinimalTenorView() {
     setCaseIndex(0);
     setGenerated(false);
     setSuggestion(null);
+    setGenerationError("");
     window.requestAnimationFrame(() => contextInput.current?.focus());
   };
 
@@ -242,6 +267,7 @@ export function MinimalTenorView() {
     setContext(caseContext(item));
     setGenerated(false);
     setSuggestion(null);
+    setGenerationError("");
     window.requestAnimationFrame(() => contextInput.current?.focus());
   };
 
@@ -284,16 +310,39 @@ export function MinimalTenorView() {
     setSuggestion(null);
   };
 
-  const generate = () => {
-    if (!canGenerate) return;
+  const generate = async () => {
+    if (!canGenerate || generating) return;
     setGenerating(true);
-    window.setTimeout(() => {
-      setPreciseText(preciseDraft.text);
-      setNeutralText(neutralDraft.text);
+    setGenerationError("");
+    setSuggestion(null);
+    try {
+      const response = await createTenorProposals({
+        fall_id: selectedCase?.fall_id ?? "TENOR-ENTWURF",
+        schuldner: debtorFromContext(context),
+        fundstelle:
+          selectedCase?.url ??
+          context.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
+          "Vom Nutzer beschriebene Fundstelle",
+        context,
+        fallgruppe: profile.fallgruppe,
+        rechtsgrundlagen: legalBasesFor(profile.fallgruppe),
+      });
+      const precise = response.proposals.find((item) => item.strategy === "precise");
+      const neutral = response.proposals.find((item) => item.strategy === "neutral");
+      if (!precise || !neutral) throw new Error("Die KI hat nicht beide Entwürfe geliefert.");
+      setProposalResponse(response);
+      setPreciseText(precise.text);
+      setNeutralText(neutral.text);
       setSelected(null);
       setGenerated(true);
+    } catch (error) {
+      setProposalResponse(null);
+      setGenerationError(
+        error instanceof Error ? error.message : "Die KI-Entwürfe konnten nicht erzeugt werden.",
+      );
+    } finally {
       setGenerating(false);
-    }, 550);
+    }
   };
 
   const reset = () => {
@@ -305,6 +354,8 @@ export function MinimalTenorView() {
     setPdf(null);
     setGenerated(false);
     setSelected(null);
+    setProposalResponse(null);
+    setGenerationError("");
     setAcceptedIds([]);
     setSuggestion(null);
   };
@@ -319,7 +370,7 @@ export function MinimalTenorView() {
 
   return (
     <div
-      className={`min-h-screen bg-white transition-colors ${dragging ? "bg-blue-50/40" : ""}`}
+      className={`min-h-[calc(100dvh-4rem)] bg-white transition-colors ${dragging ? "bg-blue-50/40" : ""}`}
       onDragOver={(event) => {
         event.preventDefault();
         setDragging(true);
@@ -387,6 +438,7 @@ export function MinimalTenorView() {
                 onChange={(event) => {
                   setContext(event.target.value);
                   setGenerated(false);
+                  setGenerationError("");
                 }}
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing) return;
@@ -596,12 +648,18 @@ export function MinimalTenorView() {
                 {dictationNotice && (
                   <span className="ml-2 text-xs text-slate-400">{dictationNotice}</span>
                 )}
+                {generationError && (
+                  <span role="alert" className="ml-2 max-w-md text-xs text-red-600">
+                    {generationError}
+                  </span>
+                )}
               </div>
               {canGenerate && (
                 <button
                   type="button"
                   onClick={generate}
                   disabled={generating}
+                  aria-busy={generating}
                   className="flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                 >
                   {generating ? (
@@ -609,18 +667,20 @@ export function MinimalTenorView() {
                   ) : (
                     <Sparkles className="size-4" />
                   )}
-                  Generieren
+                  <span aria-live="polite">
+                    {generating ? "KI erstellt zwei Entwürfe …" : "Generieren"}
+                  </span>
                 </button>
               )}
             </div>
           </div>
         </main>
       ) : (
-        <main className="mx-auto max-w-6xl px-6 pb-16 pt-12">
+        <main className="mx-auto flex max-w-6xl flex-col px-6 py-8 md:h-[calc(100dvh-8rem)] md:min-h-[30rem] md:py-6">
           <h1 className="text-center font-sans text-sm font-medium text-slate-400">
             Wähle einen Entwurf
           </h1>
-          <div className="mt-12 grid md:grid-cols-2 md:divide-x md:divide-slate-100">
+          <div className="mt-5 grid md:min-h-0 md:flex-1 md:grid-cols-2 md:divide-x md:divide-slate-100">
             <DraftChoice
               title="Präzise"
               draft={preciseDraft}
@@ -628,6 +688,7 @@ export function MinimalTenorView() {
               selected={selected === "precise"}
               onSelect={() => setSelected("precise")}
               onText={setPreciseText}
+              provenance={aiProvenance(proposalResponse, "precise")}
             />
             <DraftChoice
               title="Technikneutral"
@@ -636,19 +697,20 @@ export function MinimalTenorView() {
               selected={selected === "neutral"}
               onSelect={() => setSelected("neutral")}
               onText={setNeutralText}
+              provenance={aiProvenance(proposalResponse, "neutral")}
             />
           </div>
-          {selected && (
-            <div className="mt-10 flex justify-center">
+          <div className="mt-4 flex min-h-11 items-center justify-center">
+            {selected && (
               <button
                 type="button"
                 onClick={adoptSelected}
-                className="rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white"
+                className="rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white"
               >
                 Entwurf übernehmen
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </main>
       )}
     </div>

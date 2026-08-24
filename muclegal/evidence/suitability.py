@@ -46,22 +46,6 @@ def classify_technical_evidence(
 ) -> TechnicalEvidenceOutcome:
     """Return the canonical four-level technical suitability result."""
 
-    if god_mode:
-        return TechnicalEvidenceOutcome(
-            code="hinweis",
-            label="Nicht als Beleg verwendbar – nur Hinweis",
-            tone="danger",
-            what_was_found="Es wurde eine ausdrücklich autorisierte technische Demonstrationsaufnahme erstellt.",
-            meaning=(
-                "God-Mode-Dateien sind von regulären Beweispaketen getrennt und nicht für eine "
-                "juristische Verwendung bestimmt."
-            ),
-            next_action=(
-                "Für einen regulären Nachweis die Seite ohne God Mode erneut erfassen und das "
-                "Ergebnis menschlich prüfen."
-            ),
-        )
-
     if failure_code in _NOT_CAPTURABLE_CODES and not has_screenshot:
         reason = _plain_failure_reason(failure_code, failure_kind)
         return TechnicalEvidenceOutcome(

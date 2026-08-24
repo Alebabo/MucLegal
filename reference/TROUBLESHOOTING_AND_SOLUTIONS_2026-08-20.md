@@ -345,7 +345,7 @@ auslöst und die PDF-Antwort im eingebetteten Viewer geladen wird. Ob ein Browse
 darstellt oder an eine konfigurierte externe Anwendung übergibt, bleibt eine lokale
 Browser-Einstellung; die HTTP-Antwort fordert keinen Download mehr an.
 
-## God-Mode-KI-Textbudget überschritt die konfigurierte Grenze
+## Grey-Mode-KI-Textbudget überschritt die konfigurierte Grenze
 
 ### Symptom
 
@@ -382,7 +382,7 @@ und Trennung zwischen technischer Erfassung und externer Analyse verloren.
 
 ### Lösung
 
-Die Funktion läuft ausschließlich nach aktivierter God-Mode-Autorisierung und ausschließlich in
+Die Funktion läuft ausschließlich nach aktivierter Grey-Mode-Autorisierung und ausschließlich in
 `muclegal/llm/`. Übertragen wird je tatsächlich erfasster Seite nur ein begrenzter Ausschnitt des
 gerenderten Normaltexts; Roh-HTML, Header, WARC, Screenshots und Cookies verlassen die lokale
 Beweisspur nicht. Die schema-validierte Ausgabe liegt getrennt unter `analysis/editorial/` und als
@@ -555,20 +555,20 @@ protokollierte Kachelgrenze und keinen unbehandelten Clip-Fehler. Eine dynamisch
 schrumpfende Seite bleibt möglicherweise unvollständig; sie wird nicht als
 lückenloser Vollbildbeweis bezeichnet.
 
-## God Mode konnte intern die juristische Analysespur erreichen
+## Grey Mode konnte intern die juristische Analysespur erreichen
 
 ### Symptom
 
 Ein direkter Python-Aufruf von `LiveMonitorWorkflow.run(god_mode=True)` ohne
-`capture_baseline=True` konnte nach einer bereits vorhandenen God-Mode-Baseline
+`capture_baseline=True` konnte nach einer bereits vorhandenen Grey-Mode-Baseline
 in die Kerngleichheits- und Modellanalyse verzweigen. Der UI-Pfad setzte zwar
 stets `capture_baseline=True`, die Workflow-Grenze selbst erzwang diese Trennung
 aber nicht. In diesem seltenen Pfad wurde außerdem der reguläre statt des
-separaten God-Mode-Latest-Pfads zurückgegeben.
+separaten Grey-Mode-Latest-Pfads zurückgegeben.
 
 ### Ursache und Diagnose
 
-`RunCoordinator` koppelte God Mode korrekt an die technische BeweisLab-Erfassung.
+`RunCoordinator` koppelte Grey Mode korrekt an die technische BeweisLab-Erfassung.
 `LiveMonitorWorkflow.run` akzeptierte die Parameter jedoch unabhängig voneinander.
 Dadurch beruhte die fachlich zwingende Trennung nur auf dem Verhalten eines
 einzigen Aufrufers; Tests deckten ausschließlich den regulären UI-Aufruf ab.
@@ -577,15 +577,15 @@ einzigen Aufrufers; Tests deckten ausschließlich den regulären UI-Aufruf ab.
 
 Die Workflow-Grenze lehnt `god_mode=True` jetzt ab, wenn nicht zugleich
 `capture_baseline=True` gesetzt ist. Damit kann kein interner Aufrufer
-God-Mode-Artefakte einer juristischen Kerngleichheitsprüfung zuführen. Der
+Grey-Mode-Artefakte einer juristischen Kerngleichheitsprüfung zuführen. Der
 nachgelagerte Rückgabepfad verwendet zusätzlich den bereits berechneten,
 modusabhängigen Latest-Pfad.
 
 ### Verifikation und verbleibende Grenze
 
 Ein Regressionstest bestätigt, dass der unzulässige Parameterverbund vor jedem
-Abruf mit `ValueError` endet und weder ein reguläres noch ein God-Mode-Paket
-erzeugt. Die bestehenden God-Mode-Tests bestätigen weiterhin die getrennte
+Abruf mit `ValueError` endet und weder ein reguläres noch ein Grey-Mode-Paket
+erzeugt. Die bestehenden Grey-Mode-Tests bestätigen weiterhin die getrennte
 Speicherung, sichtbare Kennzeichnung und übersprungene Anthropic-Stufe. Neue
 interne Einstiegspunkte müssen weiterhin `LiveMonitorWorkflow.run` verwenden
 und dürfen keine privaten Workflow-Methoden direkt aufrufen.
@@ -598,7 +598,7 @@ Ein beschädigtes oder nachträglich manipuliertes `case.json` konnte für ein
 Artefakt auf eine Datei in einem anderen Bundle unterhalb derselben lokalen
 Ablage verweisen. Der Vorschau-Endpunkt und die ZIP-Erzeugung akzeptierten den
 Pfad, solange er nur innerhalb des gesamten Store-Verzeichnisses lag. Dadurch
-hätte insbesondere ein God-Mode-Artefakt in ein reguläres Downloadpaket kopiert
+hätte insbesondere ein Grey-Mode-Artefakt in ein reguläres Downloadpaket kopiert
 werden können.
 
 ### Ursache und Diagnose
@@ -617,7 +617,7 @@ aufgelösten absoluten Pfad geprüft.
 
 ### Verifikation und verbleibende Grenze
 
-Ein Regressionstest lässt ein reguläres `case.json` auf eine God-Mode-HTML-Datei
+Ein Regressionstest lässt ein reguläres `case.json` auf eine Grey-Mode-HTML-Datei
 zeigen. Der Artefakt-Endpunkt antwortet mit 404; das reguläre ZIP enthält weder
 den Alias unter `artefakte/` noch den fremden Dateiinhalt. Die lokale Ablage muss
 weiterhin gegen direkte Betriebssystem-Manipulation geschützt werden; absichtlich
@@ -716,7 +716,7 @@ JavaScript-Challenge, einen leeren Browserzustand, Login oder sonstigen
 Seitenschutz, bleibt der Lauf weiterhin ehrlich begrenzt; es wird keine
 Schutzmaßnahme umgangen.
 
-## Rechtstext-Fallback fehlte bei allgemeinen Erfassungsfehlern und im God Mode
+## Rechtstext-Fallback fehlte bei allgemeinen Erfassungsfehlern und im Grey Mode
 
 ### Symptom
 
@@ -725,7 +725,7 @@ geprüft, wenn der Hauptseitenfehler zuvor ausdrücklich als Seitenschutz erkann
 worden war. Endete die Browser-Erfassung dagegen mit leerem Text, einem
 Verbindungsfehler oder einer sonstigen technischen Ausnahme, erzeugte der
 Workflow unmittelbar ein Fehlerpaket. Das galt auch für einen fehlgeschlagenen
-God-Mode-Lauf.
+Grey-Mode-Lauf.
 
 ### Ursache und Diagnose
 
@@ -742,9 +742,9 @@ jetzt derselbe begrenzte Rechtstext-Fallback. Er prüft die bekannten und
 allgemeinen öffentlichen AGB- und Datenschutzpfade; Kindläufe dürfen den
 Fallback nicht erneut starten. Ein bereits vorhandener Browser-Screenshot des
 Fehlerzustands bleibt erhalten. Schutz-, Normalisierungs- und sonstige
-Technikfehler werden im Paket getrennt bezeichnet. Auch God Mode nutzt diesen
-Weg, behält aber seine getrennte Speicherung und den Hinweis
-`GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`.
+Technikfehler werden im Paket getrennt bezeichnet. Auch Grey Mode nutzt diesen
+Weg und bleibt über den Modus von regulären Beweisen unterscheidbar. Ein spezieller
+Disclaimer oder Hinweis ist optional und wird vom Nutzer bestimmt.
 
 Der Fallback startet bewusst nicht bei ungültigen URLs, eingebetteten
 Zugangsdaten, privaten Zielen oder einer ausdrücklichen Ablehnung durch
@@ -755,7 +755,7 @@ Zugangsdaten, privaten Zielen oder einer ausdrücklichen Ablehnung durch
 Regressionstests bestätigen den Fallback nach leerem Direkt- und Browserinhalt,
 die erhaltene Fehleraufnahme, die Temu-Reihenfolge mit
 `/de/terms-of-use.html` und `/de/privacy-policy.html` sowie die Weitergabe des
-God-Mode-Status. Sind auch diese Unterseiten blockiert oder technisch leer,
+Grey-Mode-Status. Sind auch diese Unterseiten blockiert oder technisch leer,
 enthält das Hinweispaket die vollständig geprüfte Pfadliste und die einzelnen
 Fehler. Das ist ein Nachweis des Erfassungsversuchs, kein Beweis für den Inhalt
 oder das Fehlen einer Klausel.
@@ -1046,3 +1046,180 @@ und Produktionsbuild bestehen. Die Erkennung bleibt eine transparente,
 deterministische Prototyp-Heuristik. Nicht erkannte Fallgruppen dürfen weiterhin nur
 lokale Vorschläge erzeugen; eine menschliche Freigabe erfolgt ausschließlich über die
 backendgebundene Maske.
+
+# OpenAI-Tenorvorschläge scheitern trotz gültigem API-Schlüssel mit HTTP 429
+
+### Symptom
+
+Der reale Zwei-Entwurfs-Lauf der Tenorschreibhilfe vom 24.08.2026 erreichte die
+OpenAI Responses API, brach aber vor der ersten schema-validierten Antwort mit
+`429 credit_balance_exhausted` und dem Hinweis auf fehlendes Guthaben ab. Der zuvor
+ausgeführte reine Authentifizierungstest auf `/v1/models` hatte HTTP 200 geliefert.
+
+### Ursache und Diagnose
+
+Der Projekt-API-Schlüssel ist syntaktisch gültig und authentifiziert. Das zugehörige
+OpenAI-Projekt verfügt jedoch über kein verbleibendes API-Guthaben beziehungsweise
+kein ausreichendes Abrechnungslimit. Ein erfolgreicher Aufruf der Modellliste belegt
+nur die Authentifizierung; er belegt nicht, dass kostenpflichtige Generierungen
+freigeschaltet sind.
+
+### Lösung
+
+Es wurde ein Schlüssel eines freigeschalteten OpenAI-Projekts in der von Git
+ausgeschlossenen lokalen `.env` hinterlegt. `app.py` lädt diese Datei vor der
+Bereitschaftsprüfung serverseitig; der Schlüssel gelangt nicht in den Browser. Das
+Backend übersetzt den Fehler eines nicht finanzierten Projekts weiterhin in eine
+kurze deutsche Handlungsanweisung; es gibt keinen stillen oder als KI bezeichneten
+deterministischen Ersatzentwurf aus.
+
+### Verifikation und verbleibende Grenze
+
+Ein realer Responses-API-Lauf mit `gpt-5.6-luna` war anschließend erfolgreich und
+lieferte die Strategien `precise` und `neutral` als zwei unterschiedliche,
+schema-validierte Entwürfe. Beide behielten `human_approval_required: true` und
+`freigabe_durch_mensch: null`. Der fokussierte Testsatz besteht mit neun Tests; ein
+Prozess ohne vorab gesetzte Umgebungsvariable bestätigt zusätzlich, dass die lokale
+`.env` geladen wird. Der im Chat offengelegte Schlüssel ist unabhängig davon nach
+dem Test zu widerrufen und durch einen neuen, nicht im Chat geteilten Server-Schlüssel
+zu ersetzen.
+
+# Temporärer ngrok-Tunnel scheitert an alter Agent-Version oder Host-Header-Schutz
+
+### Symptom
+
+Der am 24.08.2026 ausdrücklich gestartete Demo-Tunnel brach mit
+`ERR_NGROK_121` ab, obwohl der Authtoken gültig war. Nach der Agent-Aktualisierung
+lieferte der authentifizierte Tunnel zunächst `Invalid host header`, während der
+anonyme Zugriff bereits korrekt mit HTTP 401 abgewiesen wurde.
+
+### Ursache und Diagnose
+
+Das über die normale Winget-Quelle angebotene Paket enthielt ngrok 3.3.1; das
+verwendete Konto verlangte mindestens 3.20.0. Der eingebaute Updater installierte
+zwar eine aktuelle Version, deren direkt ersetzte Binärdatei wurde auf diesem
+Windows-System jedoch durch die Anwendungssteuerung wegen fehlender Reputation
+blockiert. Die anschließend erreichbare ngrok-Domain wurde außerdem von der bewusst
+engen `TrustedHostMiddleware` des lokalen Servers abgewiesen.
+
+### Lösung
+
+Das alte Winget-Paket wurde ausschließlich durch die offizielle
+Microsoft-Store-Ausgabe ersetzt. Der temporäre Tunnel leitet weiter auf
+`127.0.0.1:8000` und schreibt den eingehenden Host-Header auf den lokalen Zielhost um.
+Zunächst aktivierte Basisauthentifizierung wurde auf ausdrückliche Nutzeranweisung
+wieder entfernt, weil der eingebettete Browser des Test-Handys den Anmeldedialog nicht
+öffnete. Der Backendprozess verwendet einen isolierten Store unter
+`.muclegal-demo/`; bestehende Beweisartefakte in `.muclegal-ui/` bleiben unberührt.
+Authtoken und frühere Demo-Zugangsdaten werden nicht im Repository gespeichert.
+
+### Verifikation und verbleibende Grenze
+
+Nach der ausdrücklich angeordneten Öffnung erhält ein nicht authentifizierter Abruf
+von `/beweis-labor` HTTP 200 und den erwarteten App-Inhalt. Der Browser-Smoke-Test
+bestätigt sichtbaren Inhalt, interaktive Elemente und keine Framework-Fehleranzeige.
+Der Tunnel ist damit für jeden erreichbar, der die temporäre URL kennt, und muss nach
+der Demo beendet werden. Er ist nur verfügbar, solange der lokale Uvicorn- und
+ngrok-Prozess laufen. Der verwendete ngrok-Schalter für die Host-Umschreibung ist
+inzwischen veraltet; bei einer dauerhaften Wiederholung ist er durch eine äquivalente
+ngrok Traffic Policy zu ersetzen.
+
+# ngrok zeigt das alte FastAPI-Frontend statt des React-Fallmonitors
+
+### Symptom
+
+Der öffentliche Demo-Link war erreichbar, zeigte auf `/` aber die ältere
+FastAPI-/Jinja-Fallmaske statt des Aura-Dashboards und der kompakten React-
+Tenorschreibhilfe.
+
+### Ursache und Diagnose
+
+Der ngrok-Tunnel leitete direkt auf `127.0.0.1:8000`. Dieser Port gehört zum
+FastAPI-Backend und liefert auf der Root-Route weiterhin das Backend-Template aus.
+Das kanonische React-Frontend läuft separat über Vite auf Port 4173 und besitzt dort
+den erforderlichen Proxy für `/api`, `/static`, `/artifact` und `/beweis-labor`.
+
+### Lösung
+
+Das Vite-Frontend wurde mit dem dokumentierten lokalen Port 4173 gestartet. Der
+temporäre ngrok-Tunnel leitet nun auf `127.0.0.1:4173`; Vite reicht Backend- und
+BeweisLab-Anfragen intern an `127.0.0.1:8000` weiter. Dadurch bleibt genau eine
+öffentliche Origin für Navigation und API-Aufrufe erhalten.
+
+### Verifikation und verbleibende Grenze
+
+Der öffentliche Browser-Smoke-Test zeigt auf `/` den Titel
+`Fallmonitor – Muc Legal Monitoring`, das Dashboard und die Aura-Navigation. Unter
+`/tenorhilfe` erscheinen die Tabs `MINIMAL` und `MASKE` sowie das Eingabefeld der
+kompakten Tenorschreibhilfe; ein Fehleroverlay ist auf beiden Routen nicht vorhanden.
+`/api/v1/monitoring-cases` liefert über denselben öffentlichen Ursprung HTTP 200 mit
+`application/json`. Für die Demo müssen Backend, Vite-Frontend und ngrok-Tunnel
+gleichzeitig weiterlaufen.
+
+# Tenorhilfe meldet fehlendes Guthaben trotz funktionierendem `.env`-Schlüssel
+
+### Symptom
+
+Der öffentliche Aufruf von `POST /api/v1/tenor-proposals` endete am 24.08.2026 mit
+HTTP 502 und der UI-Meldung, das OpenAI-Projekt habe kein Guthaben. Der Nutzer sah
+gleichzeitig weiterhin verfügbare Credits im vorgesehenen API-Projekt.
+
+### Ursache und Diagnose
+
+Ein echter Minimalaufruf mit dem ausschließlich aus `.env` geladenen Schlüssel war
+erfolgreich. Der anonymisierte SHA-256-Fingerprint dieses Schlüssels unterschied sich
+jedoch vom Fingerprint des im laufenden Uvicorn-Prozess vorhandenen Schlüssels. Die
+Desktop-Sitzung hatte einen älteren `OPENAI_API_KEY` vererbt; `load_dotenv(...,
+override=False)` ließ diesen Umgebungswert vor der ausdrücklich eingerichteten lokalen
+`.env` gewinnen. Der ältere Schlüssel gehörte zu dem bereits erschöpften Projekt.
+
+### Lösung
+
+Der Backendprozess wurde mit dem Schlüssel aus der lokalen `.env` neu gestartet.
+Für diesen ausschließlich lokalen Hackathon-Prototyp lädt `app.py` die von Git
+ausgeschlossene `.env` nun bewusst mit `override=True`, damit ein veralteter geerbter
+Desktop-Wert den ausgewählten Projektschlüssel bei späteren Neustarts nicht erneut
+überlagert. Der Schlüssel selbst wird weder ausgegeben noch in Git aufgenommen.
+
+### Verifikation und verbleibende Grenze
+
+Nach dem Neustart stimmen die anonymisierten Fingerprints von `.env` und
+Backendprozess überein. Ein echter öffentlicher Tenorlauf mit `gpt-5.6-luna` lieferte
+zwei unterschiedliche, schema-validierte Strategien (`precise`, `neutral`), jeweils
+mit `human_approval_required: true`. Die OpenAI-Projektabrechnung bleibt extern; wenn
+der nun tatsächlich verwendete Projektschlüssel später sein eigenes Limit erreicht,
+ist eine erneute 429-Antwort weiterhin korrekt und wird sichtbar ausgegeben.
+
+# Tenor-Generierungsbutton wirkt auf dem Handy ohne Funktion
+
+### Symptom
+
+Der Nutzer meldete am 24.08.2026, dass der Generierungsbutton der minimalen
+Tenorschreibhilfe nicht funktioniere. Parallel protokollierte Vite einen React-
+Hydrationfehler auf dem Dashboard, weil Server und Browser zwei unterschiedliche
+Minutenwerte renderten.
+
+### Ursache und Diagnose
+
+Ein reproduzierter öffentlicher Klick erreichte `POST /api/v1/tenor-proposals`, erhielt
+HTTP 200 und zeigte nach rund 15 Sekunden beide Entwürfe. Die mobile Trefferfläche war
+sichtbar, nicht deaktiviert, vollständig im Viewport und tatsächlich anklickbar.
+Während der Wartezeit änderte sich jedoch nur das kleine Spinner-Symbol; der Text
+`Generieren` blieb unverändert und vermittelte auf dem Handy keinen ausreichenden
+Fortschritt. Unabhängig davon erzeugte `new Date()` direkt beim Rendern der Startseite
+unterschiedliche SSR- und Clientwerte an einer Minutengrenze.
+
+### Lösung
+
+Der Button trägt während der Anfrage nun `aria-busy=true` und den sichtbaren,
+barrierearmen Statustext `KI erstellt zwei Entwürfe …`. Die Dashboard-Route liefert
+den Referenzzeitpunkt einmalig über ihren Loader; Server- und Client-Render verwenden
+dadurch denselben Zeitwert.
+
+### Verifikation und verbleibende Grenze
+
+Der öffentliche Browserlauf wechselt nach dem Klick erfolgreich zu `Wähle einen
+Entwurf` und zeigt die bearbeitbaren Varianten `Präzise` und `Technikneutral` ohne
+Alert. Bei 390 × 844 Pixeln liegt der Button vollständig im Viewport und besteht den
+Hit-Test. Die Antwortzeit hängt weiterhin von der OpenAI Responses API ab; während
+dieser Zeit bleibt die neue Fortschrittsmeldung sichtbar und ein Doppelklick gesperrt.

@@ -53,26 +53,27 @@ JavaScript-Hülle oder einem Schutzbefund kein Browser-Abruf gestartet.
 Öffentlich erreichbare Rechtstext-Unterseiten können weiterhin direkt geprüft
 werden. Die nicht erfasste Hauptseite wird als technische Grenze dokumentiert.
 
-### God Mode
+### Grey Mode
 
-Der God Mode ist ausschließlich für ausdrücklich autorisierte Test-, Demo- oder
-Challenge-Systeme vorgesehen. Aktivierung, Berechtigungsgrundlage, Ziel und
-verwendete Funktionen werden protokolliert.
+Der Grey Mode gilt nach ausdrücklicher Aktivierung für alle Systeme. Aktivierung,
+Berechtigungsgrundlage, Ziel und verwendete Funktionen werden protokolliert.
 
-Alle Ergebnisse werden getrennt gespeichert und deutlich gekennzeichnet:
+Spezielle Disclaimer oder Hinweise sind optional und werden vom Nutzer bestimmt.
+Grey-Mode-Artefakte sollten von regulären Beweisen unterscheidbar bleiben.
 
-> GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR
+Auch im Grey Mode bleiben die Nutzung fremder Zugangsdaten, die Überwindung von
+Logins oder Paywalls, das Lösen von CAPTCHAs, die Ausnutzung von Schwachstellen
+und Identitätstäuschung ausgeschlossen.
 
-Für reale fremde Webseiten erlaubt der God Mode insbesondere keine Umgehung
-von Logins, Paywalls oder CAPTCHAs und keine Nutzung fremder Zugangsdaten.
-
-## Beispielpaket: Ankerkraut im God Mode
+## Beispielpaket: Ankerkraut im Grey Mode
 
 Das folgende reale Demopaket wurde am 21.08.2026 für
 `https://www.ankerkraut.de/` erzeugt. Es zeigt, welche technischen Unterlagen
 das BeweisLab grundsätzlich zusammenstellen kann.
 
-> **GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR**
+Das Beispielpaket entstand vor der Umbenennung und kann deshalb noch die frühere
+Kennzeichnung enthalten. Nach aktueller Vorgabe sind solche Hinweise optional
+und werden vom Nutzer bestimmt.
 
 Der Gesamtstatus des Beispielpakets lautet **teilweise erfasst**. Eine
 gefundene Rechtstextübersicht konnte nicht in jedem Punkt eindeutig einer
@@ -96,15 +97,15 @@ Das Paket enthält unter anderem:
 Die rote Kennzeichnung ist Bestandteil der Demonstrationsaufnahme und macht
 den Sonderstatus unmittelbar sichtbar.
 
-![Ankerkraut-Hauptseite im God Mode](BEWEISLAB_GOD_MODE_ANKERKRAUT_HAUPTSEITE.webp)
+![Ankerkraut-Hauptseite im Grey Mode mit früherer Kennzeichnung](BEWEISLAB_GOD_MODE_ANKERKRAUT_HAUPTSEITE.webp)
 
 ### AGB-Ansicht
 
-Die AGB wurden als eigene Rolle aufgenommen. Auch dieses Bild trägt die
-God-Mode-Kennzeichnung und darf nicht mit einer regulären Beweisaufnahme
-verwechselt werden.
+Die AGB wurden als eigene Rolle aufgenommen. Dieses ältere Bild trägt noch die
+frühere Kennzeichnung; der Grey-Mode-Status sollte von einer regulären
+Beweisaufnahme unterscheidbar bleiben.
 
-![Ankerkraut-AGB im God Mode](BEWEISLAB_GOD_MODE_ANKERKRAUT_AGB.webp)
+![Ankerkraut-AGB im Grey Mode mit früherer Kennzeichnung](BEWEISLAB_GOD_MODE_ANKERKRAUT_AGB.webp)
 
 Für die Weitergabe in Google Drive müssen die Markdown-Datei und die beiden
 WebP-Bilder gemeinsam in denselben Ordner hochgeladen werden. Dann bleiben die
@@ -124,7 +125,7 @@ relativen Bildverweise erhalten.
                 ├─ Ja: einmalig im normalen Browser laden
                 └─ Nein: Grenze dokumentieren
 → öffentliche AGB- und Datenschutzseiten immer berücksichtigen
-  (auch wenn Hauptseite, Browser oder God Mode scheitern)
+  (auch wenn Hauptseite, Browser oder Grey Mode scheitern)
 → Text normalisieren und SHA-256-Prüfwert bilden
 → Screenshots und technische Begleitdaten sichern
 → Ergebnis und verbleibende Grenzen ausgeben
@@ -170,8 +171,12 @@ nicht über eine fremde Extraktions-API geleitet.
 |---|---|
 | **Als technischer Beleg verwendbar** | Die öffentliche Seite und die wesentlichen technischen Dateien wurden regulär erfasst. Eine rechtliche Verwertbarkeit wird damit nicht garantiert. |
 | **Nur eingeschränkt verwendbar** | Teile der Erfassung sind vorhanden, aber einzelne Ansichten oder Prüfungen fehlen. |
-| **Nicht als Beleg verwendbar – nur Hinweis** | Erfasst wurde nur ein Schutz-, Fehler- oder God-Mode-Zustand. |
+| **Nicht als Beleg verwendbar – nur Hinweis** | Erfasst wurde nur ein Schutz- oder Fehlerzustand. |
 | **URL nicht erfassbar** | Es konnte kein regulärer öffentlicher Seiteninhalt aufgenommen werden. |
+
+Ein Grey-Mode-Lauf ist nicht allein wegen des Modus als unverwertbarer Hinweis
+einzustufen. Seine Einordnung richtet sich nach dem konkret erfassten Zustand; der
+Modus sollte für Nutzer weiterhin von einer regulären Erfassung unterscheidbar sein.
 
 ## Wichtigste Grenzen
 

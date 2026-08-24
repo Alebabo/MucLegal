@@ -31,6 +31,32 @@ export type TenorDraftRecord = {
   decided_at: string | null;
 };
 
+export type TenorProposalRequest = {
+  fall_id: string;
+  schuldner: string;
+  fundstelle: string;
+  context: string;
+  fallgruppe: string;
+  rechtsgrundlagen: string[];
+};
+
+export type TenorProposal = {
+  strategy: "precise" | "neutral";
+  title: string;
+  text: string;
+  source_ids: string[];
+  warnings: string[];
+  human_approval_required: true;
+  freigabe_durch_mensch: null;
+};
+
+export type TenorProposalResponse = {
+  mode: "live_openai";
+  model: string;
+  reference_version: string;
+  proposals: [TenorProposal, TenorProposal];
+};
+
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -64,6 +90,13 @@ async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
 
 export function createTenorDraft(payload: TenorDraftRequest) {
   return requestJson<TenorDraftRecord>("/api/v1/tenor-drafts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createTenorProposals(payload: TenorProposalRequest) {
+  return requestJson<TenorProposalResponse>("/api/v1/tenor-proposals", {
     method: "POST",
     body: JSON.stringify(payload),
   });

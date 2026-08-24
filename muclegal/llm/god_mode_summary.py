@@ -12,10 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
-GOD_MODE_AI_NOTICE = (
-    "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR – "
-    "REDAKTIONELLE KI-ZUSAMMENFASSUNG, KEINE WORTGETREUE ARCHIVKOPIE"
-)
+GOD_MODE_AI_NOTICE = "GREY MODE – REDAKTIONELLE KI-ZUSAMMENFASSUNG"
 EDITORIAL_PROMPT_VERSION = "god-mode-editorial-v1"
 DEFAULT_MODEL = "gpt-5.6-luna"
 DEFAULT_MAX_INPUT_CHARS = 24_000
@@ -74,7 +71,7 @@ class EditorialAnalysisRun:
 
 
 class GodModeEditorialSummarizer:
-    """Cost-bounded OpenAI text analysis for the separate God-Mode analysis track."""
+    """Cost-bounded OpenAI text analysis for the separate Grey-Mode analysis track."""
 
     def __init__(
         self,
@@ -350,7 +347,7 @@ def create_god_mode_editorial_analysis(
         artifacts[f"god_mode_editorial_{_safe_role(role)}"] = role_output
         summaries.append((role, url, str(captured_at) if captured_at else None, page))
 
-    summary_path = output_directory.parent / "god-mode-editorial-summary.md"
+    summary_path = output_directory.parent / "grey-mode-editorial-summary.md"
     if summaries:
         summary_path.write_text(
             _render_markdown(summaries), encoding="utf-8", newline="\n"
@@ -359,7 +356,7 @@ def create_god_mode_editorial_analysis(
     total_cost = round(
         sum(float(record.get("estimated_cost_usd", 0.0)) for record in records), 8
     )
-    usage_path = output_directory.parent / "god-mode-ai-usage.json"
+    usage_path = output_directory.parent / "grey-mode-ai-usage.json"
     usage_path.write_text(
         json.dumps(
             {

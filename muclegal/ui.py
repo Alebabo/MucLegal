@@ -42,6 +42,7 @@ from muclegal.llm.tenor import (
     TenorDraft,
     build_tenor_input,
     create_tenor_draft,
+    create_tenor_proposals,
     validate_tenor_draft,
 )
 
@@ -65,7 +66,7 @@ CAPTURE_ROLE_TITLES = {
 }
 ARTIFACT_DEFINITIONS = {
     "evidence_suitability": ("Hinweis", "Beweiseignung", "text"),
-    "god_mode_authorization": ("Hinweis", "God-Mode-Autorisierung", "text"),
+    "god_mode_authorization": ("Abruf", "Grey-Mode-Autorisierung", "text"),
     "god_mode_editorial_summary": (
         "Analyse", "Redaktionelle KI-Zusammenfassung", "text"
     ),
@@ -149,6 +150,16 @@ class TenorDraftRequest(BaseModel):
     rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
 
 
+class TenorProposalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    fall_id: str = Field(min_length=1, max_length=200)
+    schuldner: str = Field(min_length=1, max_length=500)
+    fundstelle: str = Field(min_length=1, max_length=2048)
+    context: str = Field(min_length=20, max_length=4000)
+    fallgruppe: str = Field(min_length=1, max_length=100)
+    rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
+
+
 @dataclass
 class RunState:
     run_id: str
@@ -224,9 +235,8 @@ class RunCoordinator:
                 "step": "queued",
                 "state": "queued",
                 "message": (
-                    "God Mode als getrennte Demonstration aktiviert: nicht juristisch verwertbar. "
-                    "Die Checkbox dokumentiert nur die bestätigte Autorisierung; sie garantiert "
-                    "weder eine rechtliche Verwertbarkeit noch die Überwindung von Schutzmaßnahmen."
+                    "Grey Mode aktiviert. Die Checkbox dokumentiert die bestätigte "
+                    "Berechtigungsgrundlage; der Lauf bleibt technisch getrennt gespeichert."
                     if run.god_mode_authorized else
                     "Prüflauf angelegt; der Überprüfungsmodus wird bei tatsächlichem Seitenschutz automatisch aktiviert."
                     if run.verification_mode
@@ -582,7 +592,7 @@ class CaseArchive:
     def build_download(self, case_id: str) -> Path:
         case_path = self._case_path(case_id)
         record = self._read(case_path)
-        prefix = "god-mode-demopaket" if record.get("god_mode") else "beweispaket"
+        prefix = "grey-mode-beweispaket" if record.get("god_mode") else "beweispaket"
         archive_path = case_path.parent / f"{prefix}-{case_id}.zip"
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
             for path in sorted(case_path.parent.rglob("*")):
@@ -841,6 +851,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                workflow: LiveMonitorWorkflow | None = None, anthropic_ready: bool = True,
                asset_directory: str | Path | None = None,
                tenor_analyzer_factory: Callable[[], TenorAnalyzer] = DeterministicTenorAnalyzer,
+               tenor_proposal_analyzer_factory: Callable[[], TenorAnalyzer] | None = None,
                allowed_hosts: list[str] | None = None,
                monitoring_cases: MonitoringCaseRepository | None = None,
                domain_monitor: CaseDomainMonitor | None = None) -> FastAPI:
@@ -948,6 +959,39 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             return JSONResponse(generate_tenor(payload), status_code=201)
         except (ValueError, RuntimeError) as exc:
             raise HTTPException(422, str(exc)) from exc
+
+    @app.post("/api/v1/tenor-proposals")
+    async def create_tenor_proposals_api(payload: TenorProposalRequest):
+        if tenor_proposal_analyzer_factory is None:
+            raise HTTPException(
+                503,
+                "OpenAI-Tenorhilfe ist nicht verfügbar; OPENAI_API_KEY fehlt am Server.",
+            )
+        model_input = build_tenor_input(
+            fall_id=payload.fall_id,
+            schuldner=payload.schuldner,
+            fundstelle=payload.fundstelle,
+            beschreibung=payload.context,
+            rechtsgrundlagen=payload.rechtsgrundlagen,
+        )
+        try:
+            return create_tenor_proposals(
+                model_input,
+                tenor_proposal_analyzer_factory(),
+                fallgruppe=payload.fallgruppe,
+            )
+        except Exception as exc:
+            raw_message = str(exc)
+            if "credit_balance_exhausted" in raw_message or "no credits remaining" in raw_message:
+                safe_message = (
+                    "Das OpenAI-API-Guthaben ist aufgebraucht. Bitte im OpenAI-Projekt "
+                    "Guthaben oder ein Abrechnungslimit hinterlegen und erneut generieren."
+                )
+            else:
+                safe_message = re.sub(
+                    r"sk-[A-Za-z0-9_-]+", "[API_KEY_REDACTED]", raw_message
+                )
+            raise HTTPException(502, safe_message[:1_000]) from exc
 
     @app.post("/tenor-draft")
     async def create_tenor_form(request: Request):

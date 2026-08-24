@@ -59,10 +59,7 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
     story = [
         Paragraph("MucLegal Prüfbericht", styles["TitleCustom"]),
         *([] if not god_mode else [
-            paragraph(
-                "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR",
-                "Warning",
-            ),
+            paragraph("Erfassungsmodus: GREY MODE", "SmallCustom"),
             Spacer(1, 3 * mm),
         ]),
         *([] if evidence_suitable or god_mode else [
@@ -201,7 +198,7 @@ def build_pdf_report(report: dict[str, Any], output_path: str | Path) -> str:
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(colors.HexColor("#4B5563"))
         footer_label = (
-            "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR"
+            "GREY MODE · MucLegal Prüfbericht"
             if god_mode else "NICHT BEWEISGEEIGNET – robots.txt ungeprüft"
             if not evidence_suitable else
             "MucLegal - Prüfentwurf zur menschlichen Freigabe"

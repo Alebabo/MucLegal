@@ -76,42 +76,43 @@ Die Codepfade und Regressionstests müssen auf dieses Sollverhalten umgestellt w
 bis zu deren erfolgreicher Verifikation darf der Abschnitt nicht als „bestanden“
 bewertet werden.
 
-### 4a. God Mode — ausschließlich lokale Demonstration — umgesetzt am 21.08.2026
+### 4a. Grey Mode — aktualisierte Sollvorgabe am 24.08.2026
 
-Ein ausdrücklich aktivierter God Mode erteilt die umfassende technische Vollmacht des
+Ein ausdrücklich aktivierter Grey Mode erteilt die umfassende technische Vollmacht des
 Challenge-Gebers für dessen bereitgestellte Challenge-Infrastruktur sowie für
 synthetische, eigene oder anderweitig nachweislich autorisierte Ziele. Innerhalb
 dieses Geltungsbereichs sind sämtliche technisch verfügbaren Erfassungs-, Browser-,
 Interaktions- und Umgehungsfunktionen erlaubt, einschließlich des Ignorierens von
 `robots.txt` und des Überwindens eigens eingerichteter Challenge-Schutzmechanismen.
 
-Die Vollmacht gilt nicht für fremde reale Systeme, für die der Challenge-Geber keine
-Verfügungs- oder Autorisierungsbefugnis besitzt. Dort erlaubt sie insbesondere keine
+Die Vollmacht gilt ausdrücklich für alle Systeme. Sie erlaubt dort insbesondere keine
 fremden Zugangsdaten, keine Überwindung von Logins oder Paywalls, kein Lösen von
 CAPTCHAs, keine Ausnutzung von Schwachstellen und keine Identitätstäuschung.
 Aktivierung, Vollmachtsgrundlage, Ziel, freigeschaltete Funktionen und Zeitpunkt
 müssen vollständig protokolliert werden.
 
-Alle erzeugten Ansichten und Artefakte tragen sichtbar
-`GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`, werden getrennt von der
-regulären Beweisspur gespeichert und dürfen weder als Beweis ausgegeben noch einer
-juristischen Kerngleichheitsprüfung zugeführt werden.
+Spezielle Disclaimer oder Hinweise sind optional und werden vom Nutzer bestimmt.
+Grey-Mode-Artefakte sollten von regulären Beweisen unterscheidbar bleiben.
 
-Die Implementierung verlangt die ausdrückliche Checkbox `Autorisiert (God Mode)` neben
+Die Solloberfläche verwendet die ausdrückliche Checkbox `Autorisiert (Grey Mode)` neben
 der URL. Das Anklicken protokolliert die Nutzerbestätigung, dass Vollmacht und Rechtsrahmen
-vorab geklärt sind, und erzwingt den Browsermodus. Snapshots liegen unter
+vorab geklärt sind, und erzwingt den Browsermodus. Die bestehende Implementierung nutzt
+bis zu einer gesonderten Codemigration weiterhin die internen Legacy-Bezeichner
+`god_mode`, `god_mode_authorized` und `god_mode_notice`. Snapshots liegen unter
 `god-mode-snapshots/`, Pakete unter `god-mode-bundles/god-*`; reguläre Falllisten enthalten
 sie nicht. `god_mode_authorization.json` hält Zeitpunkt, Ziel, Vollmachtsgrundlage und
-freigeschaltete Funktionen vor der Manifestbildung fest. Bilder erhalten einen roten
-Banner, normalisierte Texte eine Kopfzeile, das Manifest ein Notice-Feld und PDF sowie ZIP
-eine durchgehende Demonstrationskennzeichnung. Der Modus löst weiterhin keine fremden
+freigeschaltete Funktionen vor der Manifestbildung fest. Optional gewählte Hinweise können
+als Banner, Kopfzeile, Manifest-Notice sowie in PDF und ZIP erscheinen. Der Modus löst
+weiterhin keine fremden
 Logins, Paywalls oder CAPTCHAs und fügt keine Stealth- oder Identitätstäuschung hinzu.
 
-Regressionstests belegen die Trennung, das Ignorieren einer synthetisch untersagenden
-robots.txt, die sichtbaren Markierungen und die Checkbox-Weitergabe bis zum Workflow.
+Die bisherigen Regressionstests belegen die getrennte technische Ablage, das Ignorieren
+einer synthetisch untersagenden robots.txt, die Legacy-Markierungen und die
+Checkbox-Weitergabe bis zum Workflow. Sie müssen bei der späteren Codemigration an die
+optionalen nutzerbestimmten Hinweise angepasst werden.
 
 Eine optionale OpenAI-Auswertung ist ausschließlich eine getrennte Analysespur im
-God Mode. Übertragen wird nur der auf eine feste Zeichenzahl begrenzte gerenderte
+Grey Mode. Übertragen wird nur der auf eine feste Zeichenzahl begrenzte gerenderte
 Seitentext. Screenshots, Roh-HTML, Header, WARC und andere Primärartefakte verlassen
 die lokale Beweisspur nicht. Die Ausgabe ist eine paraphrasierte, klar als nicht
 beweisgeeignet markierte Arbeitshilfe und ersetzt weder den normalisierten Volltext

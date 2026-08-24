@@ -48,7 +48,7 @@ ROBOTS_UNCHECKED_NOTICE = (
     "Berechtigung, Nutzungsbedingungen und rechtliche Zulässigkeit sind "
     "eigenverantwortlich zu prüfen."
 )
-GOD_MODE_NOTICE = "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR"
+GOD_MODE_NOTICE = "GREY MODE"
 KNOWN_SITE_LEGAL_PATHS: dict[str, dict[str, tuple[str, ...]]] = {
     "temu.com": {
         "agb": ("/de/terms-of-use.html",),
@@ -168,7 +168,7 @@ class LiveMonitorWorkflow:
     ) -> LiveWorkflowResult:
         if god_mode and not capture_baseline:
             raise ValueError(
-                "God Mode ist ausschließlich für die technische BeweisLab-Erfassung zulässig."
+                "Grey Mode ist ausschließlich für die technische BeweisLab-Erfassung zulässig."
             )
         progress = progress or (lambda _step, _message: None)
         session = nullcontext()
@@ -975,7 +975,6 @@ class LiveMonitorWorkflow:
         bundled_artifacts["capture_transparency"] = transparency_path
         robots_unchecked = capture_transparency["robots_txt"] == "ungeprueft"
         evidence_suitability = (
-            "nicht_juristisch_verwertbar" if god_mode else
             "nicht_beweisgeeignet" if robots_unchecked else "regulaer"
         )
         evidence_suitability_notice = (
@@ -989,7 +988,7 @@ class LiveMonitorWorkflow:
         _write_simple_yaml(transparency_path, capture_transparency)
         if robots_unchecked or god_mode:
             suitability_path = artifacts_dir / (
-                "GOD_MODE_NICHT_JURISTISCH_VERWERTBAR.txt"
+                "GREY_MODE.txt"
                 if god_mode else "NICHT_BEWEISGEEIGNET.txt"
             )
             suitability_path.write_text(
@@ -1069,8 +1068,6 @@ class LiveMonitorWorkflow:
         bundled_artifacts["result_assessment"] = result_assessment_path
 
         warnings: list[str] = []
-        if god_mode:
-            warnings.append(GOD_MODE_NOTICE)
         if robots_unchecked:
             warnings.append(ROBOTS_UNCHECKED_NOTICE)
         if screenshot_error:
@@ -1348,7 +1345,7 @@ class LiveMonitorWorkflow:
         status = "completed_with_warnings" if warnings else "completed"
         message = "Technische Beweiserfassung abgeschlossen."
         if god_mode:
-            message = GOD_MODE_NOTICE + " Technische Demonstrationserfassung abgeschlossen."
+            message = GOD_MODE_NOTICE + " · Technische Erfassung abgeschlossen."
         if robots_unchecked:
             message = ROBOTS_UNCHECKED_NOTICE
         if warnings:
@@ -1357,7 +1354,7 @@ class LiveMonitorWorkflow:
                 warnings[0],
             )
             message = (
-                GOD_MODE_NOTICE + " Hinweis: " + visible_warning
+                GOD_MODE_NOTICE + " · Hinweis: " + visible_warning
                 if god_mode else ROBOTS_UNCHECKED_NOTICE if robots_unchecked else
                 "Beweiserfassung abgeschlossen; einzelne Beweiselemente sind offen."
             )
@@ -1561,7 +1558,6 @@ class LiveMonitorWorkflow:
         robots_metadata = self.fetcher.robots_metadata()
         robots_unchecked = robots_metadata.get("robots_txt") == "ungeprueft"
         evidence_suitability = (
-            "nicht_juristisch_verwertbar" if god_mode else
             "nicht_beweisgeeignet" if robots_unchecked else "regulaer"
         )
         evidence_suitability_notice = (
@@ -1608,7 +1604,7 @@ class LiveMonitorWorkflow:
         bundled_artifacts["capture_transparency"] = transparency_path
         if robots_unchecked or god_mode:
             suitability_path = artifacts_dir / (
-                "GOD_MODE_NICHT_JURISTISCH_VERWERTBAR.txt"
+                "GREY_MODE.txt"
                 if god_mode else "NICHT_BEWEISGEEIGNET.txt"
             )
             suitability_path.write_text(
@@ -1767,8 +1763,6 @@ class LiveMonitorWorkflow:
         ]
         if robots_unchecked:
             warnings.insert(0, ROBOTS_UNCHECKED_NOTICE)
-        if god_mode:
-            warnings.insert(0, GOD_MODE_NOTICE)
         if timestamp.status != "verified":
             warnings.append("RFC-3161-Zeitstempel ist noch offen.")
         case_record = {
@@ -1839,7 +1833,7 @@ class LiveMonitorWorkflow:
         return LiveWorkflowResult(
             "completed_with_warnings",
             (
-                GOD_MODE_NOTICE + " " if god_mode else ""
+                GOD_MODE_NOTICE + " · " if god_mode else ""
             )
             + "Nicht als Beleg verwendbar – nur Hinweis. Der sichtbare Schutz- oder "
             "Fehlerzustand wurde gespeichert; der dahinterliegende Seiteninhalt wurde nicht "
@@ -2061,7 +2055,6 @@ class LiveMonitorWorkflow:
             )
 
         evidence_suitability = (
-            "nicht_juristisch_verwertbar" if god_mode else
             "nicht_erfassbar" if result_assessment.code == "nicht_erfassbar" else
             "nicht_beweisgeeignet"
         )
@@ -2259,7 +2252,7 @@ def _write_simple_yaml(path: Path, values: dict[str, Any]) -> None:
 
 
 def _mark_god_mode_bundle(bundle: Path) -> None:
-    """Make derived God-Mode images and normalized texts unmistakably non-evidentiary."""
+    """Mark derived Grey-Mode images and normalized texts with their capture mode."""
     from PIL import Image, ImageDraw, ImageFont
 
     for path in sorted(bundle.rglob("*")):
@@ -2281,7 +2274,7 @@ def _mark_god_mode_bundle(bundle: Path) -> None:
             image = source.convert("RGB")
         banner_height = max(56, min(110, image.height // 8))
         draw = ImageDraw.Draw(image)
-        draw.rectangle((0, 0, image.width, banner_height), fill="#8b0000")
+        draw.rectangle((0, 0, image.width, banner_height), fill="#4b5563")
         font_size = max(12, min(24, banner_height // 3))
         font = _god_mode_banner_font(ImageFont, font_size)
         draw.text((18, banner_height // 3), GOD_MODE_NOTICE, fill="white", font=font)
@@ -2332,7 +2325,7 @@ def _mark_god_mode_bundle(bundle: Path) -> None:
 
 
 def _prepend_god_mode_pdf_notice(path: Path) -> None:
-    """Add an unmistakable first page to derived God-Mode legal print PDFs."""
+    """Add a neutral Grey-Mode identification page to derived legal print PDFs."""
     from reportlab.pdfgen import canvas
 
     reader = PdfReader(str(path))
@@ -2342,13 +2335,12 @@ def _prepend_god_mode_pdf_notice(path: Path) -> None:
     height = float(reader.pages[0].mediabox.height)
     notice_buffer = io.BytesIO()
     document = canvas.Canvas(notice_buffer, pagesize=(width, height))
-    document.setFillColorRGB(0.55, 0, 0)
+    document.setFillColorRGB(0.29, 0.33, 0.39)
     document.rect(0, 0, width, height, fill=1, stroke=0)
     document.setFillColorRGB(1, 1, 1)
     document.setFont("Helvetica-Bold", 20)
     lines = (
-        "GOD MODE – NUR DEMONSTRATION –",
-        "NICHT JURISTISCH VERWERTBAR",
+        "GREY MODE",
         "Browsergenerierte Druckfassung des expandierten DOM",
     )
     y = height * 0.6
@@ -2369,7 +2361,7 @@ def _prepend_god_mode_pdf_notice(path: Path) -> None:
 
 
 def _god_mode_banner_font(image_font: Any, size: int) -> Any:
-    """Load a Unicode font so the mandatory en dashes stay readable in images."""
+    """Load a Unicode font for the Grey-Mode image label."""
     candidates = (
         "DejaVuSans.ttf",
         "arial.ttf",

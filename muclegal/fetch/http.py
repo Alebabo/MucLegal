@@ -137,7 +137,6 @@ class HttpFetcher:
             ),
             "robots_checks": [dict(item) for item in self._robots_checks],
             "evidence_suitability": (
-                "nicht_juristisch_verwertbar" if self._god_mode else
                 "nicht_beweisgeeignet" if status == "ungeprueft" else "regulaer"
             ),
         }
@@ -256,11 +255,11 @@ class HttpFetcher:
                     target.fetch_result.final_url,
                     artifact_root / "screenshot-full-page.png",
                     protection=(
-                        "Autorisierter God-Mode-Zielzustand mit aktivem Seitenschutz."
+                        "Autorisierter Grey-Mode-Zielzustand mit aktivem Seitenschutz."
                         if self._god_mode and protection else protection
                     ),
                     fallback_reason=(
-                        f"{'God Mode: ' if self._god_mode else ''}Der Browserzustand wurde "
+                        f"{'Grey Mode: ' if self._god_mode else ''}Der Browserzustand wurde "
                         "gesichert, aber die reguläre Screenshotphase "
                         f"{target.failure_phase or 'unbekannt'} blieb ohne Bild."
                     ),

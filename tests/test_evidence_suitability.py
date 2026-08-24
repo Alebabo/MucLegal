@@ -15,6 +15,20 @@ def test_complete_capture_is_only_described_as_technical_evidence() -> None:
     assert "rechtliche Verwertbarkeit" in result.meaning
 
 
+def test_grey_mode_uses_the_same_capture_quality_classification() -> None:
+    result = classify_technical_evidence(
+        capture_completeness="vollstaendig_erfasst",
+        has_screenshot=True,
+        has_normalized_text=True,
+        has_raw_capture=True,
+        robots_status="god_mode_ausdruecklich_ignoriert",
+        god_mode=True,
+    )
+
+    assert result.code == "technisch_verwendbar"
+    assert result.label == "Als technischer Beleg verwendbar"
+
+
 def test_unchecked_robots_downgrades_to_limited() -> None:
     result = classify_technical_evidence(
         capture_completeness="vollstaendig_erfasst",

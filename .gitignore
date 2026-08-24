@@ -40,3 +40,4 @@ reference/*/
 !reference/tenore/
 !reference/tenore/*.yaml
 .env*
+!.env.example

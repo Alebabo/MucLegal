@@ -1,7 +1,8 @@
 # MucLegal-Frontend
 
-Lokales TanStack-Start-Frontend im Aura-Design für Fallmonitor und BeweisLab.
-Die Oberfläche ist ein Hackathon-Prototyp und wird nicht öffentlich bereitgestellt.
+TanStack-Start-Frontend im Aura-Design für Fallmonitor und BeweisLab. Die Oberfläche
+läuft standardmäßig lokal; auf ausdrückliche Nutzeranweisung darf sie entsprechend
+den Projektvorgaben zeitlich begrenzt über einen ngrok-Tunnel demonstriert werden.
 
 ## Lokal starten
 
@@ -50,7 +51,13 @@ POST /api/v1/runs
 GET  /api/v1/runs/{run_id}
 POST /api/v1/tenor-drafts
 POST /api/v1/tenor-drafts/{draft_id}/review
+POST /api/v1/tenor-proposals
 ```
+
+`POST /api/v1/tenor-proposals` erzeugt zwei fallbezogene, schema-validierte
+OpenAI-Entwürfe (`precise` und `neutral`). Beide bleiben bis zur menschlichen
+Prüfung ausdrücklich nicht freigegeben. Der API-Schlüssel liegt nur in der lokalen
+Server-`.env` und wird weder an das Frontend noch an einen ngrok-Link übergeben.
 
 Ohne gespeicherte Monitoringfälle bleiben die fünf klar synthetischen Lotto-Fälle
 als Demo sichtbar. Sobald das Backend Fälle liefert, zeigt die Oberfläche diese

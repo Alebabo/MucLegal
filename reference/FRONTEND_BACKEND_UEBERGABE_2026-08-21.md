@@ -259,7 +259,7 @@ Ein abgeschlossener BeweisLab-Run enthält derzeit nicht direkt die `case_id` de
 erzeugten Beweispakets. Das bestehende Frontend verwendet daher diesen Workaround:
 
 1. `GET /api/v1/cases`
-2. neuesten regulären beziehungsweise God-Mode-Eintrag mit derselben URL suchen
+2. neuesten regulären beziehungsweise Grey-Mode-Eintrag mit derselben URL suchen
 3. `GET /api/v1/cases/{case_id}`
 
 Vor einer größeren Frontend-Implementierung sollte das Backend dem Run ein Feld wie
@@ -285,7 +285,7 @@ Antwort:
 ```
 
 - `cases`: reguläre BeweisLab- und Golden-Path-Pakete
-- `god_mode_cases`: getrennte God-Mode-Demonstrationspakete
+- `god_mode_cases`: Grey-Mode-Pakete unter dem technischen Legacy-Bezeichner
 - `monitoring_cases`: manuell angelegte Fallprofile
 
 `GET /api/v1/cases` ist damit ein zusammengesetzter Listenendpunkt. Für eine reine
@@ -346,7 +346,7 @@ einzelnen Artefakten abzuleiten.
 |---|---|
 | `technisch_verwendbar` | regulär und vollständig technisch erfasst |
 | `eingeschraenkt` | erfasst, aber mit unvollständigen oder ungeprüften Teilen |
-| `hinweis` | nur Hinweis, insbesondere Schutz-/Fehlerzustand oder God Mode |
+| `hinweis` | nur Hinweis, insbesondere Schutz- oder Fehlerzustand |
 | `nicht_erfassbar` | kein regulärer öffentlicher Seiteninhalt aufgenommen |
 
 ### 7.2 `technical_result.tone`
@@ -780,9 +780,10 @@ Der freigegebene Entwurf wird derzeit global als `approved-tenor.json` aktiviert
 Er ist noch nicht als unveränderliche vollständige Tenorversion an jeden einzelnen
 Monitoringfall gebunden.
 
-## 12. God Mode
+## 12. Grey Mode
 
-God Mode ist ausschließlich im BeweisLab verfügbar:
+Grey Mode ist im BeweisLab verfügbar. Die API verwendet bis zu einer gesonderten
+Codemigration weiterhin den technischen Legacy-Bezeichner `god_mode_authorized`:
 
 ```json
 {
@@ -792,17 +793,16 @@ God Mode ist ausschließlich im BeweisLab verfügbar:
 }
 ```
 
-Das Backend setzt bei aktivem God Mode automatisch auch den Browsermodus.
+Das Backend setzt bei aktivem Grey Mode automatisch auch den Browsermodus.
 
-Frontend-Pflichten:
+Frontend-Vorgaben:
 
-- Durchgehende sichtbare Kennzeichnung:
-  `GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`.
-- Gefahr-/Warnfarbe, nicht nur ein unauffälliger Badge.
-- Getrennte Liste `god_mode_cases`.
-- Keine Vermischung mit regulären Beweisen.
-- Keine Weitergabe an eine juristische Kerngleichheitsprüfung.
-- Downloadtext als Demonstrationspaket, nicht als reguläres Beweispaket.
+- Spezielle Disclaimer, Hinweise und deren Gestaltung sind optional und werden vom
+  Nutzer bestimmt.
+- Die bestehende Liste `god_mode_cases` kann als technischer Legacy-Pfad weitergeführt
+  werden, damit Grey-Mode-Pakete von regulären Beweisen unterscheidbar bleiben.
+- Die Einordnung eines Downloads richtet sich nach dem konkret erfassten Zustand und
+  nicht allein nach dem aktivierten Modus.
 
 Eine optionale OpenAI-Zusammenfassung ist nur eine getrennte, nicht beweisgeeignete
 Arbeitshilfe. Primärartefakte bleiben lokal.

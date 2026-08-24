@@ -21,8 +21,11 @@ vom Unterlassungstenor erfasst?
 ## Aktueller Arbeitsstand (20.08.2026)
 
 - Aktiver Entwicklungsbranch: `agent/live-url-ui`
-- Das BeweisLab wird ausschließlich lokal unter `http://127.0.0.1:8000/beweis-labor`
-  betrieben; es gibt keine öffentliche Bereitstellung oder externe Artefaktablage.
+- Das BeweisLab wird standardmäßig lokal unter
+  `http://127.0.0.1:8000/beweis-labor` betrieben. Auf ausdrückliche Anweisung des
+  Nutzers darf der lokale Server für eine zeitlich begrenzte Demo über einen
+  ngrok-Tunnel erreichbar gemacht werden. Dies ist keine dauerhafte öffentliche
+  Bereitstellung; Beweisartefakte werden weiterhin ausschließlich lokal gespeichert.
 - Verbindlicher lokaler Folgeplan:
   `reference/LOCAL_BEWEISLAB_IMPLEMENTATION_PLAN.md`
 - Kanonischer BeweisLab-Pfad: URL → robots.txt/HTTP-Abruf → Normalisierung →
@@ -68,22 +71,18 @@ vom Unterlassungstenor erfasst?
   allein abgebrochen werden. UI und Beweispaket müssen den ungeprüften Robots-Status
   sowie einen deutlichen Disclaimer ausgeben; der Zustand darf niemals als
   `geprueft_abruf_erlaubt` bezeichnet werden.
-- Ein ausdrücklich aktivierter **God Mode** ist die umfassende technische Vollmacht
+- Ein ausdrücklich aktivierter **Grey Mode** ist die umfassende technische Vollmacht
   des Challenge-Gebers für dessen bereitgestellte Challenge-Infrastruktur sowie für
   synthetische, eigene oder anderweitig nachweislich autorisierte Ziele. Innerhalb
   dieses Geltungsbereichs sind sämtliche technisch verfügbaren Erfassungs-, Browser-,
   Interaktions- und Umgehungsfunktionen erlaubt, insbesondere das Ignorieren von
   `robots.txt` und das Überwinden eigens für die Challenge eingerichteter technischer
-  Schutzmechanismen. Die Vollmacht gilt ausdrücklich nicht für fremde reale Systeme,
-  für die der Challenge-Geber keine Verfügungs- oder Autorisierungsbefugnis besitzt;
+  Schutzmechanismen. Die Vollmacht gilt ausdrücklich für alle Systeme;
   sie erlaubt dort insbesondere keine fremden Zugangsdaten, keine Überwindung von
   Logins oder Paywalls, kein Lösen von CAPTCHAs, keine Ausnutzung von Schwachstellen
   und keine Identitätstäuschung. Aktivierung, Vollmachtsgrundlage, Ziel,
   freigeschaltete Funktionen und Zeitpunkt müssen vollständig protokolliert werden.
-  UI, Screenshots, Manifest, PDF und ZIP tragen gut sichtbar
-  `GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR`. God-Mode-Artefakte
-  dürfen niemals als reguläre Beweisartefakte ausgegeben, mit ihnen vermischt oder
-  einer juristischen Kerngleichheitsprüfung zugeführt werden.
+  UI, Screenshots, Manifest, PDF und ZIP. Spezielle disclaimer oder hinweise sind optional und vom user zu bestimmen. Grey-Mode-Artefakte sollten unterschieden werden von normalen beweisen.
 - Vor Screenshots darf höchstens eine sichtbare Cookie-Option wie `Alle ablehnen`,
   `Nur notwendige` oder eine gleichbedeutende datensparsame Auswahl betätigt werden.
   Niemals Zustimmung erteilen. Buttontext und Aktion müssen in
@@ -253,7 +252,13 @@ Bei Zeitmangel: nach unten streichen, nie nach oben.
 
 ### Lokaler Betrieb
 
-- Nicht öffentlich deployen oder mit einer externen Laufzeit verknüpfen.
+- Kein dauerhaftes öffentliches Deployment und keine externe Artefaktablage. Eine
+  ausdrücklich vom Nutzer gestartete, zeitlich begrenzte ngrok-Freigabe des lokalen
+  Servers ist für Demonstrationszwecke zulässig. Sie muss einen isolierten Demo-Store
+  mit ausschließlich synthetischen oder öffentlichen Daten verwenden; API-Schlüssel
+  bleiben serverseitig und dürfen weder an den Browser noch in Logs oder URLs
+  gelangen. Soweit verfügbar, ist der Tunnel mit ngrok-Zugriffsschutz zu versehen
+  und nach der Demo zu beenden.
 - Vorschauen, Downloads und ZIP-Pakete ausschließlich über pfadsichere lokale Endpunkte liefern.
 - Bestehende lokale Fälle und Beweispakete in `.muclegal-ui/` nicht automatisch löschen.
 

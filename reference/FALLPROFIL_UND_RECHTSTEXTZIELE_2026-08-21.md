@@ -235,12 +235,12 @@ von einem juristischen Befund getrennt:
 |---|---|---|
 | `technisch_verwendbar` | Als technischer Beleg verwendbar | Öffentliche Seite und wesentliche Artefakte wurden regulär erfasst. Das garantiert keine rechtliche Verwertbarkeit. |
 | `eingeschraenkt` | Nur eingeschränkt verwendbar | Es liegen verwertbare Teile vor, aber etwa Screenshot, Text, Vollständigkeit oder Robots-Prüfung ist eingeschränkt. |
-| `hinweis` | Nicht als Beleg verwendbar – nur Hinweis | Gesichert wurde nur ein Schutz-, Fehler- oder ausdrücklich demonstrativer God-Mode-Zustand. |
+| `hinweis` | Nicht als Beleg verwendbar – nur Hinweis | Gesichert wurde nur ein Schutz- oder Fehlerzustand. |
 | `nicht_erfassbar` | URL nicht erfassbar | Es konnte kein regulärer öffentlicher Seiteninhalt aufgenommen werden. |
 
-God-Mode-Aufnahmen bleiben immer Demonstrationshinweise und werden weder mit
-regulären Beweispaketen vermischt noch einer juristischen
-Kerngleichheitsprüfung zugeführt.
+Grey-Mode-Aufnahmen sind nicht allein wegen des Modus als Demonstrationshinweise
+einzustufen. Ihre Einordnung richtet sich nach dem konkret erfassten Zustand;
+Grey-Mode-Artefakte sollten von regulären Beweispaketen unterscheidbar bleiben.
 
 Eine Browserseite, deren Höhe während der Kachelerfassung schrumpft, führt
 nicht mehr automatisch zum Verlust aller Bilder. Vor jeder Kachel werden Höhe

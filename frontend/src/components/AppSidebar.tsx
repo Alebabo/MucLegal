@@ -28,21 +28,25 @@ export function AppSidebar() {
         collapsed ? "w-[72px]" : "w-[248px]"
       }`}
     >
-      <div className="flex h-16 items-center gap-3 px-4">
-        <span className="grid size-9 shrink-0 place-items-center border border-foreground bg-foreground text-background">
-          <span className="text-[11px] font-extrabold uppercase leading-none tracking-[0.06em]">
-            MLM
-          </span>
-        </span>
-        {!collapsed && (
-          <span className="flex flex-col leading-none">
-            <span className="text-sm font-extrabold uppercase tracking-[-0.02em]">Muc Legal</span>
-            <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Monitoring
+      <Link
+        to="/"
+        aria-label="Muc Legal – zum Dashboard"
+        className={`flex h-20 items-center ${collapsed ? "justify-center px-3" : "px-4"}`}
+      >
+        {collapsed ? (
+          <span className="grid size-9 shrink-0 place-items-center border border-foreground bg-foreground text-background">
+            <span className="text-[11px] font-extrabold uppercase leading-none tracking-[0.06em]">
+              MLM
             </span>
           </span>
+        ) : (
+          <img
+            src="/muclegal-logo.png"
+            alt="Muc Legal"
+            className="h-16 w-full object-contain object-left"
+          />
         )}
-      </div>
+      </Link>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
         {items.map((item) => (

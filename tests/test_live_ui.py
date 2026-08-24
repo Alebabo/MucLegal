@@ -528,10 +528,10 @@ class LiveWorkflowTests(unittest.TestCase):
         def fake_editorial_builder(**kwargs):
             output_directory = Path(kwargs["output_directory"])
             output_directory.mkdir(parents=True, exist_ok=True)
-            summary = output_directory.parent / "god-mode-editorial-summary.md"
-            usage = output_directory.parent / "god-mode-ai-usage.json"
+            summary = output_directory.parent / "grey-mode-editorial-summary.md"
+            usage = output_directory.parent / "grey-mode-ai-usage.json"
             summary.write_text(
-                "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR\n\n"
+                "GREY MODE – REDAKTIONELLE KI-ZUSAMMENFASSUNG\n\n"
                 "Redaktionelle Testzusammenfassung",
                 encoding="utf-8",
             )
@@ -607,11 +607,13 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn("god-mode-bundles", str(bundle_path))
         self.assertTrue(bundle_path.name.startswith("god-"))
         self.assertTrue(case["god_mode"])
-        self.assertEqual("nicht_juristisch_verwertbar", case["evidence_suitability"])
+        self.assertEqual("regulaer", case["evidence_suitability"])
         self.assertEqual("god_mode_ausdruecklich_ignoriert", case["capture_transparency"]["robots_txt"])
-        self.assertTrue(normalized.startswith("GOD MODE"))
-        self.assertIn("GOD MODE", manifest["notice"])
+        self.assertTrue(normalized.startswith("GREY MODE"))
+        self.assertEqual("GREY MODE", manifest["notice"])
+        self.assertNotIn("NICHT JURISTISCH VERWERTBAR", normalized)
         self.assertTrue(authorization["activated"])
+        self.assertEqual("GREY MODE", authorization["notice"])
         self.assertIn("optionale_openai_redaktionelle_textanalyse", authorization["enabled_functions"])
         self.assertEqual(0, ai_usage["total_api_calls"])
         self.assertIn("Redaktionelle Testzusammenfassung", editorial_summary)
@@ -621,7 +623,7 @@ class LiveWorkflowTests(unittest.TestCase):
                 for item in manifest["artifacts"]
             )
         )
-        self.assertLess(banner_pixel[1], 40)
+        self.assertEqual((75, 85, 99), banner_pixel)
         self.assertEqual([], regular_cases)
         self.assertEqual(1, len(god_cases))
         self.assertFalse(regular_latest_exists)
@@ -883,7 +885,7 @@ class LiveWorkflowTests(unittest.TestCase):
 
         self.assertIs(captured, fallback_capture)
         self.assertEqual("<html><main>Schutzseite</main></html>", fallback.call_args.args[0])
-        self.assertIn("God Mode", fallback.call_args.kwargs["fallback_reason"])
+        self.assertIn("Grey Mode", fallback.call_args.kwargs["fallback_reason"])
         self.assertEqual(target_root, fallback.call_args.args[2].parent)
         self.assertEqual(target_root, fallback.call_args.kwargs["artifact_directory"])
 
@@ -1176,7 +1178,8 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(page["normalized_text_files"])
         self.assertTrue(page["screenshot_files"])
         self.assertTrue(page["document_files"])
-        self.assertIn("GOD MODE", god_pdf_text)
+        self.assertIn("GREY MODE", god_pdf_text)
+        self.assertNotIn("NICHT JURISTISCH VERWERTBAR", god_pdf_text)
         self.assertEqual("https://shop.test/agb-online", page["captured_url"])
         self.assertTrue(galleries["agb"]["page_artifacts_complete"])
 
@@ -1340,8 +1343,8 @@ class LiveUiTests(unittest.TestCase):
                 self, url, progress, *, capture_baseline=False, browser_mode=False, god_mode=False
             ):
                 self.received = (url, capture_baseline, browser_mode, god_mode)
-                progress("fetch", "God Mode protokolliert")
-                return LiveWorkflowResult("protected", "GOD MODE – NUR DEMONSTRATION")
+                progress("fetch", "Grey Mode protokolliert")
+                return LiveWorkflowResult("protected", "GREY MODE")
 
         with tempfile.TemporaryDirectory() as output:
             workflow = GodModeWorkflow()
@@ -1364,14 +1367,25 @@ class LiveUiTests(unittest.TestCase):
                 ).json()
                 completed = poll(client, started["run_id"])
 
-        self.assertIn('id="god-mode-authorized" type="checkbox"', page.text)
-        self.assertIn("Autorisiert (God Mode)", page.text)
+        self.assertIn('id="grey-mode" type="checkbox"', page.text)
+        self.assertIn("Grey Mode", page.text)
+        self.assertNotIn('id="god-mode-authorized"', page.text)
+        self.assertNotIn('id="verification-mode"', page.text)
+        self.assertIn(
+            "verification_mode:greyMode.checked,god_mode_authorized:greyMode.checked",
+            page.text,
+        )
+        self.assertNotIn("NICHT JURISTISCH VERWERTBAR", page.text)
+        self.assertNotIn("NUR DEMONSTRATION", page.text)
+        self.assertNotIn("Was wurde festgestellt?", page.text)
+        self.assertNotIn("Was bedeutet das?", page.text)
+        self.assertNotIn("Was sollte ein Mensch jetzt tun?", page.text)
         self.assertTrue(started["god_mode_authorized"])
         self.assertTrue(started["verification_mode"])
         self.assertEqual(
             ("https://authorized.example/", True, True, True), workflow.received
         )
-        self.assertIn("GOD MODE", completed["message"])
+        self.assertIn("GREY MODE", completed["message"])
 
     def test_evidence_lab_groups_primary_artifacts_and_exposes_text_per_page(self) -> None:
         with tempfile.TemporaryDirectory() as output:
@@ -1527,7 +1541,7 @@ class LiveUiTests(unittest.TestCase):
             page.text,
         )
 
-    def test_automatic_verification_is_enabled_by_default_in_lab_and_can_be_disabled(self) -> None:
+    def test_verification_api_flag_still_controls_browser_fallback(self) -> None:
         class VerificationWorkflow:
             tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
 
@@ -1570,10 +1584,9 @@ class LiveUiTests(unittest.TestCase):
                         break
                     time.sleep(0.01)
 
-        self.assertIn('id="verification-mode" type="checkbox" checked', page.text)
-        self.assertIn("Automatische Überprüfung", page.text)
-        self.assertNotIn("Grau-Modus", page.text)
-        self.assertIn("keine Tarntechniken", page.text)
+        self.assertIn('id="grey-mode" type="checkbox"', page.text)
+        self.assertIn("Grey Mode", page.text)
+        self.assertNotIn("Automatische Überprüfung", page.text)
         self.assertTrue(started["verification_mode"])
         self.assertFalse(disabled["verification_mode"])
         self.assertEqual([True, False], workflow.browser_modes)

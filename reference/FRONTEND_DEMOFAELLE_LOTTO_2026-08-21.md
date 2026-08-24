@@ -516,26 +516,26 @@ export const lottoEvidenceDemoResults = [
     url: "https://challenge-lotto-demo.test",
     status: "completed_with_warnings",
     capture_completeness: "vollstaendig_erfasst",
-    evidence_suitability: "nicht_juristisch_verwertbar",
+    evidence_suitability: "eingeschraenkt",
     evidence_suitability_notice:
-      "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR",
+      "Grey Mode aktiviert; Einordnung anhand des konkret erfassten Zustands.",
     robots_txt_status: "geprueft_abruf_untersagt",
     god_mode: true,
     god_mode_notice:
-      "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR",
+      "Grey Mode aktiviert; optionaler nutzerbestimmter Hinweis.",
     technical_result: {
-      code: "hinweis",
-      label: "Nicht als Beleg verwendbar – nur Hinweis",
-      tone: "danger",
+      code: "eingeschraenkt",
+      label: "Nur eingeschränkt verwendbar",
+      tone: "warning",
       what_was_found:
         "Eine ausdrücklich autorisierte technische Demonstrationsaufnahme der synthetischen Lotto-Challenge wurde erstellt.",
       meaning:
-        "Das Paket ist strikt von regulären Beweisen getrennt und nicht für eine juristische Verwendung bestimmt.",
+        "Die Einordnung richtet sich nach dem erfassten Zustand; der Grey-Mode-Status bleibt von regulären Beweisen unterscheidbar.",
       next_action:
-        "Für einen regulären Nachweis das Ziel ohne God Mode erneut erfassen."
+        "Paketinhalt und Berechtigungsgrundlage vor einer weiteren Verwendung prüfen."
     },
     warnings: [
-      "GOD MODE – NUR DEMONSTRATION – NICHT JURISTISCH VERWERTBAR"
+      "Grey Mode aktiviert"
     ]
   }
 ];

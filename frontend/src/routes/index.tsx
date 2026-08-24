@@ -15,6 +15,7 @@ import { useCaseViews } from "../data/caseViews";
 import type { Tone } from "../data/lottoDemoCases";
 
 export const Route = createFileRoute("/")({
+  loader: () => ({ now: Date.now() }),
   head: () => ({
     meta: [
       { title: "Fallmonitor – Muc Legal Monitoring" },
@@ -77,7 +78,8 @@ function formatDateTime(date: Date) {
 
 function Index() {
   const { cases, demoMode, isError } = useCaseViews();
-  const now = new Date();
+  const { now: nowTimestamp } = Route.useLoaderData();
+  const now = new Date(nowTimestamp);
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const newCount = cases.filter(
     (item) => item.found_at && new Date(item.found_at) > oneDayAgo,

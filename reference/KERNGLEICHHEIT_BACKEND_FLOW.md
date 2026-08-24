@@ -325,8 +325,9 @@ Das Paket enthält mindestens:
 - PDF-Bericht und lokales ZIP.
 
 Für eine zeitliche Serie sollte jedes reguläre Manifest den Hash des vorherigen regulären
-Manifests desselben Falls als `previous_manifest_sha256` enthalten. God-Mode-Pakete und technisch
-ungeeignete Hinweispakete werden niemals in diese reguläre Kette aufgenommen.
+Manifests desselben Falls als `previous_manifest_sha256` enthalten. Technisch ungeeignete
+Hinweispakete werden nicht in diese reguläre Kette aufgenommen. Grey-Mode-Pakete sollten
+innerhalb der Kette von regulären Paketen unterscheidbar bleiben.
 
 ## 13. Empfohlene Zustandsmaschine
 
@@ -396,7 +397,7 @@ Priorisierte Änderungen:
 5. Klauselpaarung von URL-lokal auf fallweit erweitern und URL-Wanderung dokumentieren.
 6. `nicht_umfasst` tatsächlich in jeden Modellinput und jede Aggregation einbeziehen.
 7. Stufe 4 erst nach menschlicher Bestätigung oder ausdrücklicher Paketanforderung ausführen.
-8. Manifestketten pro Fall verbinden; God Mode strikt getrennt halten.
+8. Manifestketten pro Fall verbinden; Grey Mode innerhalb der Kette unterscheidbar halten.
 
 ## 16. Mindesttests vor dem Feature-Freeze
 
@@ -411,8 +412,8 @@ Priorisierte Änderungen:
 - `freigabe_durch_mensch` bleibt in jedem Modelloutput `null`.
 - Bestätigter Treffer erzeugt WARC aus exakt den gespeicherten Bytes.
 - Manifestprüfung und RFC-3161-Verifikation bestehen; vorheriger Manifest-Hash ist verkettet.
-- God-Mode- oder Schutzbefundpakete gelangen weder in die Kerngleichheitsprüfung noch in die
-  reguläre Manifestkette.
+- Schutzbefundpakete gelangen weder in die Kerngleichheitsprüfung noch in die reguläre
+  Manifestkette; Grey-Mode-Pakete bleiben anhand ihres Modus unterscheidbar.
 
 ## 17. Abnahmeregel
 

@@ -1,21 +1,31 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from muclegal.live import LiveMonitorWorkflow
 from muclegal.fetch import FetchPolicy, HttpFetcher, inspect_expected_element
 from muclegal.domain_monitor import CaseDomainMonitor
 from muclegal.monitoring_cases import MonitoringCaseRepository
 from muclegal.evidence.wayback import WaybackClient
-from muclegal.llm.tenor import AnthropicTenorAnalyzer, DeterministicTenorAnalyzer
+from muclegal.llm.tenor import (
+    AnthropicTenorAnalyzer,
+    DeterministicTenorAnalyzer,
+    OpenAITenorAnalyzer,
+)
 from muclegal.llm.clause_analysis import AnthropicClauseAnalyzer, DeterministicClauseAnalyzer
 from muclegal.ui import create_app
 
 
 ROOT = Path(__file__).resolve().parent
+# Die lokale Demo-.env ist absichtlich maßgeblich: Desktop-Sitzungen können noch
+# einen älteren OPENAI_API_KEY geerbt haben, der sonst den Projektschlüssel überlagert.
+load_dotenv(ROOT / ".env", override=True)
 STORE = Path(
     os.environ.get("MUCLEGAL_STORE", str(ROOT / ".muclegal-ui"))
 ).resolve()
 ANTHROPIC_READY = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+OPENAI_READY = bool(os.environ.get("OPENAI_API_KEY", "").strip())
 FETCHER = HttpFetcher(
     FetchPolicy(timeout_seconds=10, max_attempts=2, require_public_network=True)
 )
@@ -45,6 +55,7 @@ app = create_app(
     anthropic_ready=ANTHROPIC_READY,
     asset_directory=ROOT / "assets",
     tenor_analyzer_factory=(AnthropicTenorAnalyzer if ANTHROPIC_READY else DeterministicTenorAnalyzer),
+    tenor_proposal_analyzer_factory=(OpenAITenorAnalyzer if OPENAI_READY else None),
     monitoring_cases=MONITORING_CASES,
     domain_monitor=DOMAIN_MONITOR,
     allowed_hosts=[
