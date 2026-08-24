@@ -142,6 +142,9 @@ class CaseDomainMonitor:
                             artifact_directory = getattr(capture, "artifact_directory", None)
                             if artifact_directory:
                                 browser_artifact_directories.append(str(artifact_directory))
+                            screenshot_path, screenshot_error = _ensure_browser_fallback_screenshot(
+                                self.fetcher, url, capture
+                            )
                             browser_fallbacks.append({
                                 "url": url,
                                 "direct_failure": str(exc),
@@ -152,12 +155,17 @@ class CaseDomainMonitor:
                                     capture, "capture_completeness", None
                                 ),
                                 "artifact_directory": artifact_directory,
+                                "screenshot_path": screenshot_path,
+                                "screenshot_error": screenshot_error,
                             })
                         except Exception as browser_exc:
                             capture = getattr(self.fetcher, "last_browser_capture", None)
                             artifact_directory = getattr(capture, "artifact_directory", None)
                             if artifact_directory:
                                 browser_artifact_directories.append(str(artifact_directory))
+                            screenshot_path, screenshot_error = _ensure_browser_fallback_screenshot(
+                                self.fetcher, url, capture
+                            )
                             failure = {
                                 "url": url,
                                 "reason": exc.code,
@@ -169,6 +177,8 @@ class CaseDomainMonitor:
                                     "status": "failed",
                                     "message": str(browser_exc),
                                     "artifact_directory": artifact_directory,
+                                    "screenshot_path": screenshot_path,
+                                    "screenshot_error": screenshot_error,
                                 },
                             }
                             browser_fallbacks.append({
@@ -178,6 +188,8 @@ class CaseDomainMonitor:
                                 "browser_status": "failed",
                                 "browser_failure": str(browser_exc),
                                 "artifact_directory": artifact_directory,
+                                "screenshot_path": screenshot_path,
+                                "screenshot_error": screenshot_error,
                             })
                             blocked.append(failure)
                             continue
@@ -544,6 +556,24 @@ def _monitoring_status(
     if violation_persists:
         return "referenzzustand_dokumentiert" if not has_history else "unveraendert_fortbestehend"
     return "beseitigt"
+
+
+def _ensure_browser_fallback_screenshot(fetcher, url: str, capture) -> tuple[str | None, str | None]:  # noqa: ANN001
+    if capture is None:
+        return None, None
+    existing = getattr(capture, "screenshot", None)
+    if existing is not None and getattr(existing, "path", None):
+        return str(existing.path), None
+    artifact_directory = getattr(capture, "artifact_directory", None)
+    if not artifact_directory:
+        return None, "Browser-Fallback lieferte kein Artefaktverzeichnis."
+    try:
+        screenshot = fetcher.capture_screenshot(
+            url, Path(artifact_directory) / "screenshot-full-page.png"
+        )
+    except Exception as exc:
+        return None, f"Schutzbild konnte nicht erzeugt werden: {exc}"
+    return str(getattr(screenshot, "path", "") or "") or None, None
 
 
 def _baseline_clause_candidate(case: MonitoringCase, target: str) -> str | None:

@@ -84,7 +84,7 @@ class BrowserFallbackFetcher(FakeFetcher):
 
     def fetch_in_browser(self, url: str) -> FetchResult:
         body = self.browser_pages.get(url)
-        if body is None or self._capture_root is None:
+        if self._capture_root is None:
             raise FetchFailure(
                 "protected_or_login_page",
                 "Browser-Prüfversuch blieb geschützt.",
@@ -93,11 +93,29 @@ class BrowserFallbackFetcher(FakeFetcher):
             )
         artifact_root = self._capture_root / f"{len(list(self._capture_root.iterdir())) + 1:02d}-main"
         artifact_root.mkdir()
+        if body is None:
+            challenge = (
+                b'<html><body><iframe src="https://geo.captcha-delivery.com/interstitial/" '
+                b'title="DataDome Device Check"></iframe></body></html>'
+            )
+            (artifact_root / "raw.html").write_bytes(challenge)
+            self.last_browser_capture = SimpleNamespace(
+                artifact_directory=str(artifact_root),
+                capture_completeness="durch_seitenschutz_begrenzt",
+                screenshot=None,
+            )
+            raise FetchFailure(
+                "protected_or_login_page",
+                "Browser-Prüfversuch blieb durch CAPTCHA geschützt.",
+                status_code=200,
+                manual_review=True,
+            )
         (artifact_root / "raw.html").write_bytes(body)
         (artifact_root / "screenshot-full-page.png").write_bytes(b"synthetic-png")
         self.last_browser_capture = SimpleNamespace(
             artifact_directory=str(artifact_root),
             capture_completeness="vollstaendig_erfasst",
+            screenshot=SimpleNamespace(path=str(artifact_root / "screenshot-full-page.png")),
         )
         return FetchResult(
             requested_url=url,
@@ -110,6 +128,12 @@ class BrowserFallbackFetcher(FakeFetcher):
             decoded_html=body.decode("utf-8"),
             fetch_mode="browser_review",
         )
+
+    def capture_screenshot(self, url: str, destination: str | Path):
+        del url
+        destination = Path(destination)
+        destination.write_bytes(b"synthetic-protection-png")
+        return SimpleNamespace(path=str(destination))
 
 
 def clause_payload() -> dict:
@@ -362,6 +386,44 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertFalse(result.coverage["complete_within_scope"])
         self.assertEqual([event_url], result.coverage["missing_dom_target_urls"])
         self.assertTrue(result.coverage["dom_inspection_incomplete"])
+
+    def test_failed_browser_fallback_manifests_a_protection_image(self) -> None:
+        event_url = "https://example.test/event"
+        pages = {"https://example.test/sitemap.xml": b"<urlset/>"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.review(
+                repository.create({
+                    **element_payload(),
+                    "source_url": event_url,
+                    "target_urls": [event_url],
+                }).case_id,
+                "freigegeben",
+            )
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=BrowserFallbackFetcher(
+                    pages,
+                    protected={event_url},
+                    browser_pages={},
+                ),
+                dom_inspector=lambda *args, **kwargs: None,
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+            manifest = json.loads(Path(result.artifacts["manifest"]).read_text(encoding="utf-8"))
+
+        self.assertEqual("pruefung_unvollstaendig", result.status)
+        fallback = result.coverage["browser_fallbacks"][0]
+        self.assertEqual("failed", fallback["browser_status"])
+        self.assertIsNone(fallback["screenshot_error"])
+        self.assertTrue(str(fallback["screenshot_path"]).endswith("screenshot-full-page.png"))
+        self.assertTrue(
+            any(
+                item["path"].endswith("screenshot-full-page.png")
+                for item in manifest["artifacts"]
+            )
+        )
 
     def test_button_label_variants_are_forwarded_to_dom_inspection(self) -> None:
         pages = {

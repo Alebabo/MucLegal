@@ -1189,16 +1189,23 @@ Die konservative Komponentenerkennung umfasst jetzt in sichtbarem Markup auch
 durch die bestehende Entfernung inaktiver Scriptblöcke ausdrücklich unbeachtlich.
 Der transparente Browser-Fallback gibt einen solchen Stand damit als
 `protected_or_login_page` zurück; das CAPTCHA wird weder bedient noch umgangen.
+Endet Chromium bei einem Schutzstand vor der regulären Screenshotphase, verwendet
+der Domainmonitor zusätzlich denselben beschrifteten HTML-Bildfallback wie das
+BeweisLab. Der Pfad beziehungsweise ein verbleibender Bildfehler wird im
+Browser-Fallback-Eintrag dokumentiert und das erzeugte PNG in das Manifest
+aufgenommen.
 
 ### Verifikation und verbleibende Grenze
 
 Ein Regressionstest verwendet denselben DataDome-Aufbau aus Script und sichtbarem
 Interstitial-Iframe und erwartet den Schutztyp `CAPTCHA oder Bot-Challenge`. Der
-bestehende Test für inaktiven Shopify-CAPTCHA-Code bleibt grün. Ein erneuter
-Hetzner-Lauf muss das DataDome-Ziel unter `blocked_urls` mit Browser-Fallback-
-Schutzbefund führen und darf dessen HTML nicht mehr als Ticketseiteninhalt in
-`document_findings` aufnehmen. Der Schutz wird weiterhin nicht überwunden; ohne
-eine frei zugängliche Seite bleibt die inhaltliche Prüfung unvollständig.
+bestehende Test für inaktiven Shopify-CAPTCHA-Code bleibt grün. Ein weiterer
+Regressionstest beendet den Browser-Fallback geschützt vor der Screenshotphase
+und bestätigt das manifestierte Schutzbild. Ein erneuter Hetzner-Lauf muss das
+DataDome-Ziel unter `blocked_urls` mit Browser-Fallback-Schutzbefund führen, darf
+dessen HTML nicht mehr als Ticketseiteninhalt in `document_findings` aufnehmen
+und muss das Ersatzbild manifestieren. Der Schutz wird weiterhin nicht überwunden;
+ohne eine frei zugängliche Seite bleibt die inhaltliche Prüfung unvollständig.
 
 # OpenAI-Tenorvorschläge scheitern trotz gültigem API-Schlüssel mit HTTP 429
 
