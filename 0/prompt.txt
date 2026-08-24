@@ -1,0 +1,1 @@
+Öffne das Repository https://github.com/Alebabo/MucLegal. Lies zuerst AGENTS.md, anschließend PLAN.md, und beginne mit „Vorbereitung“ und „Bautag 1“. Halte dich an die Abnahmekriterien und committe noch nichts ohne meine Zustimmung.
