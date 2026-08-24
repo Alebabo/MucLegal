@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import sqlite3
 import tempfile
 import time
@@ -10,6 +12,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from muclegal.domain_monitor import CaseDomainMonitor, ScanPolicy
+from muclegal.evidence import create_manifest
 from muclegal.fetch import DomInspectionCapture, FetchFailure, FetchResult
 from muclegal.live import LiveMonitorWorkflow
 from muclegal.monitoring_cases import MonitoringCaseError, MonitoringCaseRepository
@@ -81,6 +84,45 @@ def element_payload() -> dict:
 
 
 class MonitoringCaseTests(unittest.TestCase):
+    def test_manually_attached_baseline_turns_first_run_into_comparison(self) -> None:
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/agb": (
+                f"<html><body><main><h1>AGB</h1><p>{CLAUSE}</p></main></body></html>"
+            ).encode(),
+        }
+        baseline_text = f"Allgemeine Geschäftsbedingungen\n{CLAUSE}"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.create(clause_payload())
+            case = repository.attach_baseline_evidence(case.case_id, {
+                "evidence_case_id": "evidence-baseline-1",
+                "requested_url": "https://example.test/agb",
+                "captured_url": "https://example.test/agb",
+                "captured_at": "2026-08-24T10:00:00+00:00",
+                "manifest_sha256": "a" * 64,
+                "documents": [{
+                    "role": "agb",
+                    "text": baseline_text,
+                    "sha256": hashlib.sha256(baseline_text.encode()).hexdigest(),
+                }],
+            })
+            case = repository.review(case.case_id, "freigegeben")
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=FakeFetcher(pages),
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+
+        self.assertEqual("unveraendert_fortbestehend", result.status)
+        self.assertEqual(
+            "evidence-baseline-1",
+            result.reported_initial_violation["baseline_evidence"]["evidence_case_id"],
+        )
+        self.assertTrue(any(item["baseline_similarity"] == 1.0 for item in result.document_findings))
+        self.assertNotIn("documents", case.to_dict()["baseline_evidence"])
+
     def test_legacy_case_rows_get_source_url_as_default_profile_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "cases.sqlite3"
@@ -294,6 +336,41 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual("success", second["steps"]["manifest"])
         self.assertEqual("skipped", second["steps"]["timestamp"])
 
+    def test_api_attaches_only_regular_manifest_valid_same_domain_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            live_root = root / "live"
+            cases = MonitoringCaseRepository(root / "reviews.sqlite3", root / "intake")
+            workflow = LiveMonitorWorkflow(
+                live_root, ROOT / "fixtures" / "tenor.json", fetcher=FakeFetcher({})
+            )
+            app = create_app(
+                workflow.latest_case_path,
+                root / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                monitoring_cases=cases,
+            )
+            regular_id = _write_baseline_bundle(live_root, "evidence-regular", god_mode=False)
+            grey_id = _write_baseline_bundle(live_root, "god-evidence-grey", god_mode=True)
+            with TestClient(app) as client:
+                created = client.post(
+                    "/api/v1/cases", json={**clause_payload(), "screenshot": None}
+                ).json()
+                regular = client.post(
+                    f"/api/v1/cases/{created['case_id']}/baseline-evidence",
+                    json={"evidence_case_id": regular_id},
+                )
+                grey = client.post(
+                    f"/api/v1/cases/{created['case_id']}/baseline-evidence",
+                    json={"evidence_case_id": grey_id},
+                )
+
+        self.assertEqual(201, regular.status_code)
+        self.assertEqual(regular_id, regular.json()["baseline_evidence"]["evidence_case_id"])
+        self.assertEqual(422, grey.status_code)
+        self.assertIn("Grey-Mode", grey.json()["detail"])
+
     def test_missing_element_is_only_reported_with_complete_coverage(self) -> None:
         pages = {
             "https://example.test/sitemap.xml": b"<urlset/>",
@@ -363,6 +440,43 @@ def _poll(client: TestClient, run_id: str) -> dict:
             return response
         time.sleep(0.01)
     raise AssertionError("Fallbezogener Lauf wurde nicht rechtzeitig beendet.")
+
+
+def _write_baseline_bundle(root: Path, case_id: str, *, god_mode: bool) -> str:
+    bundle_parent = root / ("god-mode-bundles" if god_mode else "bundles")
+    bundle = bundle_parent / case_id
+    role = bundle / "capture" / "agb"
+    role.mkdir(parents=True)
+    text = f"Allgemeine Geschäftsbedingungen\n{CLAUSE}"
+    normalized = role / "normalized-text.txt"
+    normalized.write_text(text, encoding="utf-8")
+    index = role / "index.json"
+    index.write_text("{}", encoding="utf-8")
+    manifest = create_manifest(
+        {"normalized_text": normalized, "capture_index": index}, bundle
+    )
+    record = {
+        "url": "https://example.test/agb",
+        "requested_url": "https://example.test/agb",
+        "captured_url": "https://example.test/agb",
+        "erkannt_am": "2026-08-24T10:00:00+00:00",
+        "god_mode": god_mode,
+        "evidence_suitability": "regulaer",
+        "snapshot_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        "capture_completeness": "vollstaendig_erfasst",
+        "warnings": [],
+        "assessment": {},
+        "evidence": {"manifest_sha256": manifest.manifest_sha256},
+        "artifacts": {
+            "manifest": manifest.manifest_path,
+            "normalized_text": str(normalized),
+        },
+        "capture_galleries": {"agb": {"index": "capture/agb/index.json"}},
+    }
+    (bundle / "case.json").write_text(
+        json.dumps(record, ensure_ascii=False), encoding="utf-8"
+    )
+    return case_id
 
 
 if __name__ == "__main__":

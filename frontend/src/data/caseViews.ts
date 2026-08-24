@@ -4,6 +4,7 @@ import { useMonitoringCases, type MonitoringCase } from "../lib/monitoring-api";
 export type CaseView = DemoCase & {
   source: "backend" | "demo";
   decision: MonitoringCase["decision"] | null;
+  baselineEvidence: MonitoringCase["baseline_evidence"];
 };
 
 const decisionPresentation: Record<
@@ -59,17 +60,27 @@ function toCaseView(item: MonitoringCase): CaseView {
     evidence: {
       fundstelle: item.source_url,
       erfassung: `${item.violation_type === "klausel" ? "Klausel" : "Seitenelement"} · Prüfumfang: ${scope}`,
-      kette: targets.map((target) => `Vorgesehenes technisches Prüfziel: ${target}`),
+      kette: [
+        ...(item.baseline_evidence
+          ? [
+              `Manuell zugeordneter Ausgangsbeweis: ${item.baseline_evidence.evidence_case_id} · Manifest ${item.baseline_evidence.manifest_sha256.slice(0, 12)}…`,
+            ]
+          : []),
+        ...targets.map((target) => `Vorgesehenes technisches Prüfziel: ${target}`),
+      ],
       einordnung: item.monitoring_target,
       offen:
         item.decision === "weitere_pruefung"
           ? "Menschliche Freigabe des Falls steht aus."
           : item.decision === "freigegeben"
-            ? "Technischer Monitoringlauf kann manuell gestartet werden."
+            ? item.baseline_evidence
+              ? "Der nächste manuell gestartete Lauf wird mit dem zugeordneten Ausgangsbeweis verglichen."
+              : "Technischer Erstlauf kann manuell als systeminterne Referenz gestartet werden."
             : "Fall wurde nicht für das Monitoring freigegeben.",
     },
     source: "backend",
     decision: item.decision,
+    baselineEvidence: item.baseline_evidence,
   };
 }
 
@@ -77,6 +88,7 @@ const demoViews: CaseView[] = lottoDemoCases.map((item) => ({
   ...item,
   source: "demo",
   decision: null,
+  baselineEvidence: null,
 }));
 
 export function useCaseViews() {

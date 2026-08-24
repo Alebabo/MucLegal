@@ -3,6 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 export type CaseDecision = "freigegeben" | "abgelehnt" | "weitere_pruefung";
 export type ViolationType = "klausel" | "element";
 
+export type BaselineEvidence = {
+  evidence_case_id: string;
+  requested_url: string;
+  captured_url: string;
+  captured_at: string;
+  manifest_sha256: string;
+  attached_at: string;
+  attached_by: "menschliche_zuordnung_im_beweislab";
+};
+
 export type MonitoringCase = {
   case_id: string;
   fall_id: string;
@@ -24,11 +34,12 @@ export type MonitoringCase = {
   decision: CaseDecision;
   created_at: string;
   decided_at: string | null;
+  baseline_evidence: BaselineEvidence | null;
 };
 
 export type MonitoringCaseCreate = Omit<
   MonitoringCase,
-  "case_id" | "decision" | "created_at" | "decided_at"
+  "case_id" | "decision" | "created_at" | "decided_at" | "baseline_evidence"
 >;
 
 export type MonitoringRun = {

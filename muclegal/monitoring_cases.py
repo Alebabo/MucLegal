@@ -24,6 +24,9 @@ ELEMENT_ERRORS = {
 }
 CASE_DECISIONS = {"freigegeben", "abgelehnt", "weitere_pruefung"}
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+BASELINE_EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+MAX_BASELINE_TEXT_BYTES = 2 * 1024 * 1024
 
 
 class MonitoringCaseError(ValueError):
@@ -55,13 +58,20 @@ class MonitoringCase:
     decision: str
     created_at: str
     decided_at: str | None
+    baseline_evidence: dict | None
 
     @property
     def approved(self) -> bool:
         return self.decision == "freigegeben"
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        value = asdict(self)
+        baseline = value.get("baseline_evidence")
+        if isinstance(baseline, dict):
+            value["baseline_evidence"] = {
+                key: item for key, item in baseline.items() if key != "documents"
+            }
+        return value
 
 
 class MonitoringCaseRepository:
@@ -191,6 +201,34 @@ class MonitoringCaseRepository:
             )
         if cursor.rowcount != 1:
             raise KeyError(case_id)
+        return self.get(case_id)
+
+    def attach_baseline_evidence(self, case_id: str, evidence: dict) -> MonitoringCase:
+        """Link a human-selected technical capture as the case comparison baseline."""
+        self.get(case_id)
+        cleaned = _validate_baseline_evidence(evidence)
+        cleaned["attached_at"] = datetime.now(timezone.utc).isoformat()
+        cleaned["attached_by"] = "menschliche_zuordnung_im_beweislab"
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT relevant_page_types_json FROM monitoring_cases WHERE case_id = ?",
+                (case_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(case_id)
+            stored_profile = json.loads(row["relevant_page_types_json"])
+            if isinstance(stored_profile, list):
+                stored_profile = {
+                    "page_types": stored_profile,
+                    "target_urls": [],
+                    "nicht_umfasst": [],
+                    "element_labels": [],
+                }
+            stored_profile["baseline_evidence"] = cleaned
+            connection.execute(
+                "UPDATE monitoring_cases SET relevant_page_types_json = ? WHERE case_id = ?",
+                (json.dumps(stored_profile, ensure_ascii=False), case_id),
+            )
         return self.get(case_id)
 
     def _save_screenshot(self, case_id: str, screenshot: dict) -> tuple[str, str]:
@@ -369,6 +407,55 @@ def _source_url(value: str) -> tuple[str, str]:
     return candidate, parsed.hostname.lower().rstrip(".")
 
 
+def _validate_baseline_evidence(value: dict) -> dict:
+    if not isinstance(value, dict):
+        raise MonitoringCaseError("Ausgangsbeweis ist unvollständig.")
+    required_strings = (
+        "evidence_case_id",
+        "requested_url",
+        "captured_url",
+        "captured_at",
+        "manifest_sha256",
+    )
+    cleaned: dict = {}
+    for field in required_strings:
+        item = value.get(field)
+        if not isinstance(item, str) or not item.strip():
+            raise MonitoringCaseError(f"Ausgangsbeweis benötigt {field!r}.")
+        cleaned[field] = item.strip()
+    if not BASELINE_EVIDENCE_ID_PATTERN.fullmatch(cleaned["evidence_case_id"]):
+        raise MonitoringCaseError("Beweislauf-ID ist ungültig.")
+    if not SHA256_PATTERN.fullmatch(cleaned["manifest_sha256"].lower()):
+        raise MonitoringCaseError("Manifest-Prüfwert des Ausgangsbeweises ist ungültig.")
+    cleaned["manifest_sha256"] = cleaned["manifest_sha256"].lower()
+    documents = value.get("documents")
+    if not isinstance(documents, list) or not documents:
+        raise MonitoringCaseError("Ausgangsbeweis enthält keinen normalisierten Seitentext.")
+    cleaned_documents: list[dict[str, str]] = []
+    total_size = 0
+    seen_roles: set[str] = set()
+    for document in documents:
+        if not isinstance(document, dict):
+            raise MonitoringCaseError("Seitentext des Ausgangsbeweises ist ungültig.")
+        role = str(document.get("role") or "").strip()
+        text = str(document.get("text") or "").strip()
+        digest = str(document.get("sha256") or "").strip().lower()
+        if not role or not text or role in seen_roles:
+            raise MonitoringCaseError("Seitentexte des Ausgangsbeweises sind unvollständig.")
+        if not SHA256_PATTERN.fullmatch(digest):
+            raise MonitoringCaseError("Seitentext-Prüfwert des Ausgangsbeweises ist ungültig.")
+        encoded = text.encode("utf-8")
+        total_size += len(encoded)
+        if total_size > MAX_BASELINE_TEXT_BYTES:
+            raise MonitoringCaseError("Ausgangsbeweis enthält mehr als 2 MiB Vergleichstext.")
+        if hashlib.sha256(encoded).hexdigest() != digest:
+            raise MonitoringCaseError("Seitentext des Ausgangsbeweises stimmt nicht mit seinem Prüfwert überein.")
+        seen_roles.add(role)
+        cleaned_documents.append({"role": role, "text": text, "sha256": digest})
+    cleaned["documents"] = cleaned_documents
+    return cleaned
+
+
 def _row_to_case(row: sqlite3.Row) -> MonitoringCase:
     stored_profile = json.loads(row["relevant_page_types_json"])
     if isinstance(stored_profile, list):
@@ -405,4 +492,9 @@ def _row_to_case(row: sqlite3.Row) -> MonitoringCase:
         decision=row["decision"],
         created_at=row["created_at"],
         decided_at=row["decided_at"],
+        baseline_evidence=(
+            stored_profile.get("baseline_evidence")
+            if isinstance(stored_profile.get("baseline_evidence"), dict)
+            else None
+        ),
     )

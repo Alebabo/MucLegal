@@ -111,19 +111,10 @@ einer synthetisch untersagenden robots.txt, die Legacy-Markierungen und die
 Checkbox-Weitergabe bis zum Workflow. Sie müssen bei der späteren Codemigration an die
 optionalen nutzerbestimmten Hinweise angepasst werden.
 
-Eine optionale OpenAI-Auswertung ist ausschließlich eine getrennte Analysespur im
-Grey Mode. Übertragen wird nur der auf eine feste Zeichenzahl begrenzte gerenderte
-Seitentext. Screenshots, Roh-HTML, Header, WARC und andere Primärartefakte verlassen
-die lokale Beweisspur nicht. Die Ausgabe ist eine paraphrasierte, klar als nicht
-beweisgeeignet markierte Arbeitshilfe und ersetzt weder den normalisierten Volltext
-noch ein anderes Primärartefakt. Ein lokaler Hash-Cache verhindert Wiederholungsaufrufe;
-Modell, Grenzen, Tokenverbrauch und geschätzte Kosten werden ohne API-Schlüssel und
-ohne übertragenen Text in `god-mode-ai-usage.json` protokolliert. Fehlt der Schlüssel
-oder fällt die API aus, bleibt die lokale Erfassung vollständig nutzbar und der
-Ausfall wird sichtbar als übersprungene optionale Analyse dokumentiert.
-Die Auswertung ist als `stichprobenartig` klassifiziert und wird je URL und Seitenrolle
-höchstens einmal innerhalb von sieben Tagen kostenpflichtig aufgerufen. Exakte
-Inhaltswiederholungen werden unabhängig davon aus dem lokalen Hash-Cache bedient.
+Der Grey Mode ist ausschließlich eine technische Erfassung. Er startet keine KI-Analyse,
+überträgt keinen Seitentext an ein Modell und erzeugt keine KI-Zusammenfassungs- oder
+Kostenartefakte. Juristische Modellprüfungen bleiben der getrennten, menschlich
+freigegebenen Fallmonitor-Spur vorbehalten.
 
 ### 5. Cookie- und Session-Persistenz — bestanden
 

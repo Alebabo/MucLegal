@@ -183,7 +183,10 @@ class CaseDomainMonitor:
             and not dom_incomplete
             and not missing_required_targets
         )
-        monitoring_status = _monitoring_status(case, document_findings, element_findings, complete, self._has_history(case.case_id))
+        has_reference = self._has_history(case.case_id) or case.baseline_evidence is not None
+        monitoring_status = _monitoring_status(
+            case, document_findings, element_findings, complete, has_reference
+        )
         coverage = {
             "strategy": "menschliches_fallprofil+bekannte_rechtstextpfade+sitemap+priorisierte_interne_links",
             "allowed_hosts": sorted(allowed_hosts),
@@ -221,6 +224,7 @@ class CaseDomainMonitor:
             "system_detected": False,
             "screenshot_path": case.screenshot_path,
             "screenshot_sha256": case.screenshot_sha256,
+            "baseline_evidence": _public_baseline_evidence(case.baseline_evidence),
         }
         progress("compare", f"Fallbezogener Befund: {monitoring_status}.")
         coverage_path = run_root / "coverage.json"
@@ -240,6 +244,16 @@ class CaseDomainMonitor:
             "coverage": coverage_path,
             "monitoring_findings": findings_path,
         }
+        if case.baseline_evidence:
+            baseline_reference_path = run_root / "manually-attached-baseline.json"
+            baseline_reference = _public_baseline_evidence(case.baseline_evidence) or {}
+            baseline_reference["documents"] = [
+                {"role": item.get("role"), "sha256": item.get("sha256")}
+                for item in case.baseline_evidence.get("documents", [])
+                if isinstance(item, dict)
+            ]
+            _write_json(baseline_reference_path, baseline_reference)
+            evidence_files["manually_attached_baseline"] = baseline_reference_path
         for index, page in enumerate(pages, start=1):
             evidence_files[f"page_{index:03d}"] = page["artifact_path"]
             evidence_files[f"page_{index:03d}_headers"] = page["headers_path"]
@@ -317,6 +331,7 @@ class CaseDomainMonitor:
 
     def _document_findings(self, case: MonitoringCase, pages: list[dict]) -> list[dict]:
         target = normalize_plain_text(case.clause_text or case.monitoring_target).strip()
+        baseline_candidate = _baseline_clause_candidate(case, target)
         profile_targets = {canonical_url(url) for url in case.target_urls}
         findings: list[dict] = []
         for page in pages:
@@ -333,6 +348,14 @@ class CaseDomainMonitor:
                     score = SequenceMatcher(None, target.casefold(), clause.text.casefold()).ratio()
                     if score > similarity:
                         similarity, best_quote = score, clause.text
+            current_candidate = target if exact else best_quote
+            baseline_similarity = 0.0
+            if baseline_candidate and current_candidate:
+                baseline_similarity = SequenceMatcher(
+                    None,
+                    baseline_candidate.casefold(),
+                    current_candidate.casefold(),
+                ).ratio()
             findings.append(
                 {
                     "url": page["url"],
@@ -340,6 +363,12 @@ class CaseDomainMonitor:
                     "reported_clause_exact": exact,
                     "similarity": round(1.0 if exact else similarity, 3),
                     "candidate_quote": target if exact else best_quote,
+                    "baseline_candidate_quote": baseline_candidate,
+                    "baseline_similarity": round(baseline_similarity, 3),
+                    "baseline_evidence_case_id": (
+                        case.baseline_evidence.get("evidence_case_id")
+                        if case.baseline_evidence else None
+                    ),
                     "artifact_path": page["artifact_path"],
                     "sha256": page["sha256"],
                 }
@@ -430,6 +459,34 @@ def _monitoring_status(
     if violation_persists:
         return "referenzzustand_dokumentiert" if not has_history else "unveraendert_fortbestehend"
     return "beseitigt"
+
+
+def _baseline_clause_candidate(case: MonitoringCase, target: str) -> str | None:
+    baseline = case.baseline_evidence
+    if not baseline or not target:
+        return None
+    best_quote: str | None = None
+    best_score = 0.0
+    for document in baseline.get("documents", []):
+        if not isinstance(document, dict):
+            continue
+        text = normalize_plain_text(str(document.get("text") or "")).strip()
+        if not text:
+            continue
+        if target.casefold() in text.casefold():
+            return target
+        for clause in split_clauses(text):
+            score = SequenceMatcher(None, target.casefold(), clause.text.casefold()).ratio()
+            if score > best_score:
+                best_score = score
+                best_quote = clause.text
+    return best_quote
+
+
+def _public_baseline_evidence(value: dict | None) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    return {key: item for key, item in value.items() if key != "documents"}
 
 
 def _element_state(

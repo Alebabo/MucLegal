@@ -419,8 +419,6 @@ Wichtige Labels:
 ```text
 evidence_suitability
 god_mode_authorization
-god_mode_editorial_summary
-god_mode_ai_usage
 raw_html
 response_headers
 normalized_text

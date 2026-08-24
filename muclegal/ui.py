@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 import sqlite3
@@ -30,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from muclegal.live import PIPELINE_STEPS, LiveMonitorWorkflow
+from muclegal.evidence import verify_manifest
 from muclegal.evidence.suitability import classify_technical_evidence
 from muclegal.domain_monitor import CaseDomainMonitor
 from muclegal.monitoring_cases import (
@@ -78,10 +80,6 @@ CAPTURE_ROLE_TITLES = {
 ARTIFACT_DEFINITIONS = {
     "evidence_suitability": ("Hinweis", "Beweiseignung", "text"),
     "god_mode_authorization": ("Abruf", "Grey-Mode-Autorisierung", "text"),
-    "god_mode_editorial_summary": (
-        "Analyse", "Redaktionelle KI-Zusammenfassung", "text"
-    ),
-    "god_mode_ai_usage": ("Analyse", "OpenAI-Kosten- und Aufrufprotokoll", "text"),
     "raw_html": ("Abruf", "Roh-HTML", "text"),
     "response_headers": ("Abruf", "Header", "text"),
     "normalized_text": ("Abruf", "Normalisierter Text", "text"),
@@ -122,6 +120,11 @@ class RunRequest(BaseModel):
     case_id: str | None = Field(default=None, max_length=128)
     verification_mode: bool = False
     god_mode_authorized: bool = False
+
+
+class BaselineEvidenceAttachRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    evidence_case_id: str = Field(min_length=1, max_length=128)
 
 
 class ScreenshotInput(BaseModel):
@@ -1324,6 +1327,98 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             return monitoring_cases.get(case_id).to_dict()
         except KeyError as exc:
             raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
+
+    @app.post("/api/v1/cases/{case_id}/baseline-evidence", status_code=201)
+    async def attach_case_baseline_evidence(
+        case_id: str, payload: BaselineEvidenceAttachRequest
+    ):
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallaufnahme ist nicht konfiguriert.")
+        try:
+            monitoring_case = monitoring_cases.get(case_id)
+        except KeyError as exc:
+            raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
+        try:
+            evidence_detail = archive.detail(payload.evidence_case_id)
+        except HTTPException as exc:
+            raise HTTPException(404, "BeweisLab-Lauf nicht gefunden.") from exc
+        if evidence_detail.get("god_mode"):
+            raise HTTPException(
+                422,
+                "Grey-Mode-Pakete bleiben von der juristischen Monitoringstrecke getrennt.",
+            )
+        if evidence_detail.get("evidence_suitability") != "regulaer":
+            raise HTTPException(
+                422,
+                "Nur ein regulär geeignetes Beweispaket kann als Ausgangsbeweis dienen.",
+            )
+        allowed_hosts = {monitoring_case.domain, *monitoring_case.allowed_subdomains}
+        evidence_hosts = {
+            urlsplit(str(evidence_detail.get(field) or "")).hostname
+            for field in ("requested_url", "captured_url")
+        }
+        if not evidence_hosts or None in evidence_hosts or not evidence_hosts.issubset(allowed_hosts):
+            raise HTTPException(
+                422,
+                "Ausgangsbeweis und Monitoringfall müssen dieselbe freigegebene Domain betreffen.",
+            )
+        try:
+            manifest_path = archive.artifact_path(payload.evidence_case_id, "manifest")
+        except HTTPException as exc:
+            raise HTTPException(422, "Beweispaket enthält kein prüfbares Manifest.") from exc
+        verification = verify_manifest(manifest_path)
+        if (
+            not verification.valid
+            or verification.manifest_sha256 != evidence_detail.get("manifest_sha256")
+        ):
+            raise HTTPException(422, "Hash-Manifest des Ausgangsbeweises ist nicht gültig.")
+
+        documents: list[dict[str, str]] = []
+        baseline_text_bytes = 0
+        for role in evidence_detail.get("capture_galleries", {}):
+            try:
+                text_path = archive.capture_normalized_text_path(payload.evidence_case_id, role)
+            except HTTPException:
+                continue
+            baseline_text_bytes += text_path.stat().st_size
+            if baseline_text_bytes > 2 * 1024 * 1024:
+                raise HTTPException(422, "Ausgangsbeweis enthält mehr als 2 MiB Vergleichstext.")
+            text = text_path.read_text(encoding="utf-8").strip()
+            if not text:
+                continue
+            documents.append({
+                "role": role,
+                "text": text,
+                "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            })
+        if not documents:
+            try:
+                text_path = archive.artifact_path(payload.evidence_case_id, "normalized_text")
+            except HTTPException as exc:
+                raise HTTPException(
+                    422, "Beweispaket enthält keinen normalisierten Vergleichstext."
+                ) from exc
+            if text_path.stat().st_size > 2 * 1024 * 1024:
+                raise HTTPException(422, "Ausgangsbeweis enthält mehr als 2 MiB Vergleichstext.")
+            text = text_path.read_text(encoding="utf-8").strip()
+            if text:
+                documents.append({
+                    "role": "main",
+                    "text": text,
+                    "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                })
+        try:
+            updated = monitoring_cases.attach_baseline_evidence(case_id, {
+                "evidence_case_id": payload.evidence_case_id,
+                "requested_url": evidence_detail["requested_url"],
+                "captured_url": evidence_detail["captured_url"],
+                "captured_at": evidence_detail["erkannt_am"],
+                "manifest_sha256": verification.manifest_sha256,
+                "documents": documents,
+            })
+        except MonitoringCaseError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return updated.to_dict()
 
     @app.post("/api/v1/cases/{case_id}/review")
     async def review_monitoring_case(case_id: str, request: Request):
