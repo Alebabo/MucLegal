@@ -1,0 +1,71 @@
+PLEASE IMPLEMENT THIS PLAN:
+# Minimale URL-zu-Anthropic-Prüfoberfläche
+
+## Zusammenfassung
+
+Die bestehende FastAPI-Seite wird um ein URL-Formular und eine sichtbare Schrittanzeige erweitert. Der erste Abruf einer URL speichert ausschließlich eine Baseline. Erst bei einem späteren, tatsächlich veränderten Seitenstand startet die Anthropic-Vorprüfung und anschließend der vollständige Beweisablauf.
+
+Die Anwendung bleibt eine lokale Ein-Nutzer-Demo ohne Login, Dashboard oder Job-Queue.
+
+## Umsetzung
+
+### Prüfworkflow
+
+- Einen wiederverwendbaren Live-Workflow ergänzen, der `check_url`, `AnthropicAnalyzer` und die vorhandenen Beweiskomponenten verbindet.
+- Den vorhandenen synthetischen Tenor aus `fixtures/tenor.json` verwenden.
+- Eine konservative Normalisierung ohne zwingenden `main`-Selektor verwenden, damit beliebige öffentliche Seiten verarbeitet werden können.
+- Erster Abruf: Baseline speichern, Anthropic und Beweiskette überspringen.
+- Identischer Folgeabruf: als unverändert beenden, ohne Anthropic-Kosten.
+- Geänderter Folgeabruf:
+  1. relevante Vorher-/Nachher-Passagen aus dem Diff bilden,
+  2. ausschließlich Tenor, Textausschnitte und erlaubte Metadaten an Anthropic senden,
+  3. Output strikt validieren,
+  4. WARC/CDX, Manifest, RFC-3161-Zeitstempel und PDF erzeugen,
+  5. Ergebnis zur menschlichen Freigabe bereitstellen.
+- Ungültige oder fehlende Modellantworten speichern, aber weder als Bewertung noch als Treffer anzeigen.
+- freeTSA- oder Wayback-Ausfälle als offenen Status behandeln; lokale Snapshots und Hashes bleiben erhalten.
+- WARC-Fehler als `completed_with_warnings` anzeigen und im Bericht offen ausweisen, statt eine vollständige Beweiskette vorzutäuschen.
+
+### Minimale UI und Statusmodell
+
+- Auf `/` ein URL-Feld, einen Startknopf, den festen Demo-Tenor und einen deutlichen Hinweis auf den Zwei-Abruf-Ablauf zeigen.
+- Fortschritt per JavaScript-Polling darstellen: `Abruf → Vergleich → Anthropic → Beweissicherung → menschliche Prüfung`.
+- Terminalzustände: `baseline_created`, `unchanged`, `completed`, `completed_with_warnings`, `failed`.
+- Nach erfolgreicher Analyse die bestehende Ergebnisansicht mit Diff, Confidence, Begründung, Gegenargument, Unsicherheit, Beweisstatus, Artefaktlinks und Freigabeknöpfen verwenden.
+- Das vorhandene MucLegal-Logo in den Kopfbereich integrieren.
+- Während eines aktiven Laufs keine zweite Prüfung zulassen; serverseitig gilt ebenfalls maximal ein aktiver Lauf.
+- Laufstatus nur im Arbeitsspeicher halten; Snapshots, Modellartefakte, Beweispakete, PDF und menschliche Entscheidungen bleiben lokal persistent.
+
+### Schnittstellen und Sicherheit
+
+- `POST /api/runs` akzeptiert `{"url": "https://…"}` und liefert `202` mit `run_id`.
+- `GET /api/runs/{run_id}` liefert Status, aktuellen Schritt, Meldung und bei Abschluss den Ergebnisverweis.
+- Bestehende Review- und Artefaktrouten bleiben kompatibel.
+- `ANTHROPIC_API_KEY` ausschließlich beim Serverstart aus der Umgebungsvariable lesen; Wert niemals an Browser, Logs, Dateien oder API-Antworten geben.
+- Bei fehlendem Key den Startknopf deaktivieren und serverseitig mit verständlichem `503` ablehnen.
+- Nur öffentliche HTTP(S)-Ziele erlauben: Zugangsdaten in URLs sowie Loopback-, private, Link-Local- und interne Adressen blockieren; jeden Redirect erneut prüfen.
+- Login-, Paywall-, CAPTCHA- und Blockseiten weiterhin abbrechen und als manuell zu prüfen anzeigen.
+- Den eingefrorenen juristischen System-Prompt nicht verändern.
+
+## Tests und Abnahme
+
+- Neue URL erzeugt eine Baseline; Anthropic wird nicht aufgerufen.
+- Unveränderte URL bleibt ohne Anthropic-Aufruf und ohne neues Beweispaket.
+- Geänderte URL durchläuft alle sichtbaren Schritte und liefert eine schema-valide Live-Vorprüfung.
+- Nur erlaubte Textausschnitte und Metadaten erreichen den Analyzer; rohes HTML bleibt lokal.
+- Fehlender Key, Anthropic-Fehler und ungültiger Output erscheinen verständlich und erzeugen keine Bewertung.
+- CAPTCHA, Login, `robots.txt`-Verbot und interne Zieladresse werden sicher abgewiesen.
+- TSA-/Wayback-Ausfall erhält die lokale Beweiskette mit offenem Status.
+- WARC-Ausfall zeigt eine unvollständige Beweiskette ausdrücklich an.
+- Polling-API, Ein-Lauf-Sperre, Artefaktzugriff und menschliche Freigabe werden automatisiert getestet.
+- Gesamte bestehende Testsuite bleibt grün; abschließend Browserprüfung des Formular-, Baseline-, Änderungs- und Freigabeablaufs.
+- README erhält den Startbefehl und erklärt, dass für einen Anthropic-Lauf zwei zeitlich getrennte Abrufe mit einer tatsächlichen Änderung erforderlich sind.
+
+## Annahmen
+
+- Die UI läuft lokal auf `127.0.0.1` und ist nicht öffentlich gehostet.
+- Es gibt genau einen festen synthetischen Tenor und keinen Tenor-Upload.
+- Der erste Abruf ist immer nur die Baseline.
+- Jeder valide Anthropic-Lauf nach einer Änderung versucht den vollständigen Beweisablauf.
+- Es werden keine Logins automatisiert und keine CAPTCHAs oder Schutzmaßnahmen umgangen.
+- Vor Verwendung wird ein neuer, nicht im Chat veröffentlichter Anthropic-Key als `ANTHROPIC_API_KEY` gesetzt.
