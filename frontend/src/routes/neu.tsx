@@ -8,6 +8,7 @@ import {
   monitoringCasesQueryKey,
   type MonitoringCaseCreate,
 } from "../lib/monitoring-api";
+import { splitAlternativeLabels, splitLineValues } from "../lib/monitoring-form";
 
 export const Route = createFileRoute("/neu")({
   head: () => ({
@@ -95,13 +96,6 @@ const fieldClass =
 const labelClass =
   "block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
 
-function splitValues(value: string) {
-  return value
-    .split(/[\r\n,]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function toPayload(values: FormValues): MonitoringCaseCreate {
   const clause = values.violation_type === "klausel";
   return {
@@ -112,15 +106,17 @@ function toPayload(values: FormValues): MonitoringCaseCreate {
     description: values.description,
     tenor_element: values.tenor_element,
     monitoring_target: values.monitoring_target,
-    relevant_page_types: splitValues(values.relevant_page_types),
-    target_urls: splitValues(values.target_urls),
-    nicht_umfasst: splitValues(values.nicht_umfasst),
+    relevant_page_types: splitLineValues(values.relevant_page_types),
+    target_urls: splitLineValues(values.target_urls),
+    nicht_umfasst: splitLineValues(values.nicht_umfasst),
     clause_text: clause ? values.clause_text : null,
     element_label: clause ? null : values.element_label,
-    element_labels: clause ? [] : splitValues(values.element_labels || values.element_label),
+    element_labels: clause
+      ? []
+      : splitAlternativeLabels(values.element_labels || values.element_label),
     element_function: clause ? null : values.element_function,
     element_error: clause ? null : values.element_error,
-    allowed_subdomains: splitValues(values.allowed_subdomains),
+    allowed_subdomains: splitLineValues(values.allowed_subdomains),
   };
 }
 

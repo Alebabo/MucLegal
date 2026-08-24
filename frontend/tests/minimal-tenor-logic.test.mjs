@@ -13,6 +13,7 @@ import {
   nextWrappedIndex,
 } from "../src/lib/minimal-tenor-logic.ts";
 import { composeDictationText, mergeDictationSegments } from "../src/lib/dictation.ts";
+import { splitAlternativeLabels, splitLineValues } from "../src/lib/monitoring-form.ts";
 import {
   answeredQuestions,
   composeClarifiedContext,
@@ -29,6 +30,23 @@ test("asks for the first missing semantic fact", () => {
   const partial = assessCompleteness("Die Werbung auf der Website richtet sich an Verbraucher.");
   assert.deepEqual(partial.missing, ["ziel"]);
   assert.match(partial.nextQuestion, /unterlassen/);
+});
+
+test("keeps commas inside line-based legal qualifications", () => {
+  assert.deepEqual(
+    splitLineValues(
+      "Freistellung nur bei schuldhafter Rechtsverletzung, einschließlich der Entfernung nach Hinweis.\nKeine verschuldensunabhängige Haftung.",
+    ),
+    [
+      "Freistellung nur bei schuldhafter Rechtsverletzung, einschließlich der Entfernung nach Hinweis.",
+      "Keine verschuldensunabhängige Haftung.",
+    ],
+  );
+  assert.deepEqual(splitAlternativeLabels("Widerruf, Rückgabe\nRücktritt"), [
+    "Widerruf",
+    "Rückgabe",
+    "Rücktritt",
+  ]);
 });
 
 test("accepts a short semantically complete description", () => {

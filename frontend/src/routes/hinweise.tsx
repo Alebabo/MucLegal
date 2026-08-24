@@ -55,6 +55,11 @@ const toneLabel: Record<Tone, string> = {
   neutral: "Ausstehend",
 };
 
+const MONITORING_POLL_INTERVAL_MS = 500;
+// The backend domain scan may legitimately use its full ten-minute budget.
+// Keep the UI attached for one additional minute so artifact creation can finish.
+const MONITORING_POLL_ATTEMPTS = (11 * 60 * 1_000) / MONITORING_POLL_INTERVAL_MS;
+
 function relativeTime(iso: string | null) {
   if (!iso) return "geplant";
   const now = Date.now();
@@ -115,10 +120,22 @@ function HinweisePage() {
         "pruefung_unvollstaendig",
         "failed",
       ]);
-      for (let attempt = 0; attempt < 240 && !terminal.has(run.status); attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      for (
+        let attempt = 0;
+        attempt < MONITORING_POLL_ATTEMPTS && !terminal.has(run.status);
+        attempt += 1
+      ) {
+        await new Promise((resolve) => window.setTimeout(resolve, MONITORING_POLL_INTERVAL_MS));
         run = await getMonitoringRun(run.run_id);
         setActionState((state) => ({ ...state, [caseId]: run.message }));
+      }
+      if (terminal.has(run.status)) {
+        await queryClient.invalidateQueries({ queryKey: monitoringCasesQueryKey });
+      } else {
+        setActionState((state) => ({
+          ...state,
+          [caseId]: "Der Lauf arbeitet serverseitig weiter. Bitte die Hinweise später neu laden.",
+        }));
       }
     } catch (error) {
       setActionState((state) => ({

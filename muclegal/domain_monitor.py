@@ -98,7 +98,7 @@ class CaseDomainMonitor:
         for sitemap_url in self._sitemap_urls(case.source_url):
             for candidate in self._read_sitemap(sitemap_url):
                 if _allowed(candidate, allowed_hosts):
-                    queue.append((canonical_url(candidate), 1, "sitemap", True))
+                    queue.append((canonical_url(candidate), 1, "sitemap", False))
 
         visited: list[str] = []
         skipped: list[dict] = []
@@ -163,7 +163,7 @@ class CaseDomainMonitor:
                 discovered.sort(key=lambda item: (_priority(item[0], item[1]), item[0]), reverse=True)
                 for link, label in discovered:
                     if link not in seen and _allowed(link, allowed_hosts):
-                        queue.append((link, depth + 1, f"link:{label[:100]}", True))
+                        queue.append((link, depth + 1, f"link:{label[:100]}", False))
 
         progress("normalize", "AGB- und Seitentexte wurden ausschließlich gegen den gemeldeten Verstoß geprüft.")
         document_findings = self._document_findings(case, pages)

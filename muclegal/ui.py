@@ -127,6 +127,25 @@ class BaselineEvidenceAttachRequest(BaseModel):
     evidence_case_id: str = Field(min_length=1, max_length=128)
 
 
+def _evidence_subject_host(value: str) -> str | None:
+    """Return the website represented by a direct URL or a Wayback replay URL."""
+
+    parsed = urlsplit(str(value or "").strip())
+    host = parsed.hostname.lower().rstrip(".") if parsed.hostname else None
+    if host != "web.archive.org":
+        return host
+    match = re.match(r"^/web/[^/]+/(.+)$", parsed.path, flags=re.IGNORECASE)
+    if not match:
+        return host
+    embedded = unquote(match.group(1))
+    if not re.match(r"^https?://", embedded, flags=re.IGNORECASE):
+        return host
+    original_url = urlsplit(embedded)
+    if original_url.username or original_url.password or not original_url.hostname:
+        return host
+    return original_url.hostname.lower().rstrip(".")
+
+
 class ScreenshotInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     filename: str = Field(min_length=1, max_length=255)
@@ -1354,7 +1373,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             )
         allowed_hosts = {monitoring_case.domain, *monitoring_case.allowed_subdomains}
         evidence_hosts = {
-            urlsplit(str(evidence_detail.get(field) or "")).hostname
+            _evidence_subject_host(str(evidence_detail.get(field) or ""))
             for field in ("requested_url", "captured_url")
         }
         if not evidence_hosts or None in evidence_hosts or not evidence_hosts.issubset(allowed_hosts):

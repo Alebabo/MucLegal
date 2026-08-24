@@ -353,6 +353,24 @@ class MonitoringCaseTests(unittest.TestCase):
             )
             regular_id = _write_baseline_bundle(live_root, "evidence-regular", god_mode=False)
             grey_id = _write_baseline_bundle(live_root, "god-evidence-grey", god_mode=True)
+            wayback_id = _write_baseline_bundle(
+                live_root,
+                "evidence-wayback",
+                god_mode=False,
+                url=(
+                    "https://web.archive.org/web/20241008191055/"
+                    "https://www.decathlon.de/AGB_lp-P7ELHE"
+                ),
+            )
+            spoofed_wayback_id = _write_baseline_bundle(
+                live_root,
+                "evidence-wayback-userinfo",
+                god_mode=False,
+                url=(
+                    "https://web.archive.org/web/20241008191055/"
+                    "https://attacker.test@www.decathlon.de/AGB_lp-P7ELHE"
+                ),
+            )
             with TestClient(app) as client:
                 created = client.post(
                     "/api/v1/cases", json={**clause_payload(), "screenshot": None}
@@ -365,11 +383,35 @@ class MonitoringCaseTests(unittest.TestCase):
                     f"/api/v1/cases/{created['case_id']}/baseline-evidence",
                     json={"evidence_case_id": grey_id},
                 )
+                decathlon = client.post(
+                    "/api/v1/cases",
+                    json={
+                        **clause_payload(),
+                        "fall_id": "VZ-DECATHLON-WAYBACK",
+                        "domain": "www.decathlon.de",
+                        "source_url": "https://www.decathlon.de/AGB_lp-P7ELHE",
+                        "screenshot": None,
+                    },
+                ).json()
+                wayback = client.post(
+                    f"/api/v1/cases/{decathlon['case_id']}/baseline-evidence",
+                    json={"evidence_case_id": wayback_id},
+                )
+                spoofed_wayback = client.post(
+                    f"/api/v1/cases/{decathlon['case_id']}/baseline-evidence",
+                    json={"evidence_case_id": spoofed_wayback_id},
+                )
 
         self.assertEqual(201, regular.status_code)
         self.assertEqual(regular_id, regular.json()["baseline_evidence"]["evidence_case_id"])
         self.assertEqual(422, grey.status_code)
         self.assertIn("Grey-Mode", grey.json()["detail"])
+        self.assertEqual(201, wayback.status_code)
+        self.assertEqual(
+            wayback_id, wayback.json()["baseline_evidence"]["evidence_case_id"]
+        )
+        self.assertEqual(422, spoofed_wayback.status_code)
+        self.assertIn("Domain", spoofed_wayback.json()["detail"])
 
     def test_missing_element_is_only_reported_with_complete_coverage(self) -> None:
         pages = {
@@ -398,18 +440,54 @@ class MonitoringCaseTests(unittest.TestCase):
                 root / "complete", fetcher=FakeFetcher(pages), dom_inspector=no_match,
                 policy=ScanPolicy(max_urls=5, max_seconds=5),
             ).run(case)
+            required_case = repository.review(
+                repository.create({
+                    **element_payload(),
+                    "fall_id": "VZ-TEST-2-REQUIRED",
+                    "target_urls": ["https://example.test/agb"],
+                }).case_id,
+                "freigegeben",
+            )
             incomplete = CaseDomainMonitor(
                 root / "incomplete",
                 fetcher=FakeFetcher(pages, blocked={"https://example.test/agb"}),
                 dom_inspector=no_match,
                 policy=ScanPolicy(max_urls=5, max_seconds=5),
-            ).run(case)
+            ).run(required_case)
 
         self.assertEqual("referenzzustand_dokumentiert", complete.status)
         self.assertTrue(complete.coverage["complete_within_scope"])
         self.assertEqual("nicht_gefunden_im_pruefumfang", complete.element_findings[0]["state"])
         self.assertEqual("pruefung_unvollstaendig", incomplete.status)
         self.assertFalse(incomplete.coverage["complete_within_scope"])
+
+    def test_blocked_optional_discovery_does_not_invalidate_required_profile(self) -> None:
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/agb": (
+                f"<html><body><p>{CLAUSE}</p><a href='/shop'>Shop</a></body></html>"
+            ).encode(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.review(
+                repository.create(clause_payload()).case_id,
+                "freigegeben",
+            )
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=FakeFetcher(pages, blocked={"https://example.test/shop"}),
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            ).run(case)
+
+        self.assertEqual("referenzzustand_dokumentiert", result.status)
+        self.assertTrue(result.coverage["complete_within_scope"])
+        optional_failure = next(
+            item for item in result.coverage["skipped_urls"]
+            if item["url"] == "https://example.test/shop"
+        )
+        self.assertFalse(optional_failure["required_by_case_profile"])
 
     def test_missing_dom_inspector_makes_element_coverage_incomplete(self) -> None:
         pages = {
@@ -442,7 +520,9 @@ def _poll(client: TestClient, run_id: str) -> dict:
     raise AssertionError("Fallbezogener Lauf wurde nicht rechtzeitig beendet.")
 
 
-def _write_baseline_bundle(root: Path, case_id: str, *, god_mode: bool) -> str:
+def _write_baseline_bundle(
+    root: Path, case_id: str, *, god_mode: bool, url: str = "https://example.test/agb"
+) -> str:
     bundle_parent = root / ("god-mode-bundles" if god_mode else "bundles")
     bundle = bundle_parent / case_id
     role = bundle / "capture" / "agb"
@@ -456,9 +536,9 @@ def _write_baseline_bundle(root: Path, case_id: str, *, god_mode: bool) -> str:
         {"normalized_text": normalized, "capture_index": index}, bundle
     )
     record = {
-        "url": "https://example.test/agb",
-        "requested_url": "https://example.test/agb",
-        "captured_url": "https://example.test/agb",
+        "url": url,
+        "requested_url": url,
+        "captured_url": url,
         "erkannt_am": "2026-08-24T10:00:00+00:00",
         "god_mode": god_mode,
         "evidence_suitability": "regulaer",

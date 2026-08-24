@@ -1449,3 +1449,142 @@ erfolgreich. Die Node-Laufzeit wird nicht automatisch durch `apt upgrade`
 aktualisiert. Vor einem späteren Versionswechsel müssen Archiv, SHA-256-Prüfung,
 Frontend-Build und Browser-Smoke-Test erneut durchgeführt werden; nicht ungeprüft auf
 die jeweils neueste Hauptversion springen.
+
+# Wayback-Ausgangsbeweis lässt sich keinem Fall der archivierten Originaldomain zuordnen
+
+### Symptom
+
+Der regulär erzeugte Beweis für die archivierte Decathlon-AGB unter
+`web.archive.org/web/.../https://www.decathlon.de/...` war vollständig und
+manifestvalid. Das BeweisLab bot dennoch keinen passenden Decathlon-Fall zur
+Zuordnung an; ein direkter API-Versuch wurde mit einer abweichenden Domain
+zurückgewiesen.
+
+### Ursache und Diagnose
+
+Frontend und Backend verglichen ausschließlich den äußeren Host
+`web.archive.org` mit `www.decathlon.de`. Bei einem Wayback-Replay bezeichnet der
+eingebettete HTTP(S)-URL-Teil jedoch die tatsächlich archivierte Website. Manifest,
+Eignungsstatus und Grey-Mode-Trennung des Pakets waren korrekt; nur die
+Hostzuordnung war falsch.
+
+### Lösung
+
+Nur für den exakten Host `web.archive.org` wird nun das bekannte
+`/web/<Zeitstempel>/<HTTP(S)-Original-URL>`-Format ausgewertet. Client und Server
+verwenden den Host der eingebetteten Original-URL; das Backend bleibt maßgeblich.
+Andere Archivhosts, unvollständige Replaypfade und eingebettete Nicht-HTTP(S)-Werte
+bleiben beim äußeren Host und bestehen die Gleichheitsprüfung nicht. Dasselbe gilt
+für eingebettete URLs mit Benutzername oder Passwort. Alle bisherigen
+Manifest-, Eignungs- und Grey-Mode-Prüfungen bleiben unverändert.
+
+### Verifikation und verbleibende Grenze
+
+Der echte Beweis `20260824T200541463233Z-4a1d3218` ließ sich anschließend im
+Browser beiden Decathlon-Fällen zuordnen. Der API-Regressionstest prüft zusätzlich
+einen synthetischen Wayback-Beweis; die gemeinsame Backend-/UI-Testsuite bestand.
+Unterstützt wird bewusst nur das exakte Wayback-Replayformat, nicht jeder beliebige
+Archiv- oder Redirectdienst. Berechtigung und rechtliche Zulässigkeit des Abrufs
+bleiben vom Nutzer zu prüfen.
+
+# Kommas zerlegen juristische „Nicht umfasst“-Abgrenzungen in Satzfragmente
+
+### Symptom
+
+Der im Formular als eine Zeile eingegebene Satz
+`Freistellung nur für Ansprüche, die ... beruhen, einschließlich ...` erschien in
+der Fallansicht als drei mit Semikolon verbundene Fragmente. Gleiches geschah bei der
+Teillieferungsabgrenzung. Dadurch verlor das wichtigste Feld gegen Fehlalarme seinen
+syntaktischen Zusammenhang.
+
+### Ursache und Diagnose
+
+Eine gemeinsame Hilfsfunktion trennte sämtliche Mehrfachfelder sowohl an
+Zeilenumbrüchen als auch an Kommas. Die Beschriftung der Textfelder verlangte dagegen
+ausdrücklich eine Angabe pro Zeile. Nur das einzeilige Feld für alternative
+Buttonbezeichnungen war tatsächlich als kommagetrennte Kurzliste gestaltet.
+
+### Lösung
+
+Relevante Seitentypen, Prüf-URLs, `nicht_umfasst` und erlaubte Subdomains werden nur
+noch an Zeilenumbrüchen getrennt. Eine eigene Funktion erhält die bisherige
+Komma-Unterstützung ausschließlich für alternative kurze Elementbezeichnungen. Die
+beiden bereits angelegten isolierten Decathlon-Demoprofile wurden nach einer lokalen
+Datenbanksicherung auf die ungeteilten Sätze korrigiert.
+
+### Verifikation und verbleibende Grenze
+
+Ein Frontend-Regressionstest prüft einen juristischen Satz mit zwei Kommas und eine
+mehrzeilige Abgrenzung. Typprüfung und Produktions-Build bestanden; der Browser zeigte
+beide Decathlon-Abgrenzungen danach wieder als vollständige Sätze. Mehrere wirklich
+eigenständige Abgrenzungen müssen weiterhin jeweils in eine neue Zeile geschrieben
+werden.
+
+# Langer Domainlauf bleibt nach 120 Sekunden mit einer Fortschrittsmeldung stehen
+
+### Symptom
+
+Der erste echte Decathlon-Domainlauf arbeitete im Backend 294,071 Sekunden und wurde
+mit `result.json` sowie verifiziertem Manifest abgeschlossen. Die Hinweise-Seite
+zeigte nach zwei Minuten weiterhin nur
+`Die freigegebene Domain wird fallbezogen und begrenzt durchsucht.` und übernahm den
+späteren Endstatus nicht mehr.
+
+### Ursache und Diagnose
+
+Das Frontend beendete sein Polling nach 240 Abfragen zu je 500 Millisekunden, also
+nach 120 Sekunden. Die serverseitige `ScanPolicy` erlaubt einem Domainlauf dagegen
+bis zu 600 Sekunden; anschließend kann noch die lokale WARC- und Manifestbildung
+folgen. Der Browser hatte damit vor dem zulässigen Backendbudget aufgegeben.
+
+### Lösung
+
+Das Polling bleibt nun elf Minuten mit dem gestarteten Lauf verbunden: zehn Minuten
+Backendbudget plus eine Minute für die lokale Artefaktbildung. Bei einem trotzdem
+nicht terminalen Lauf nennt die UI ausdrücklich, dass der Server weiterarbeitet und
+die Hinweise später neu geladen werden sollen. Nach einem terminalen Ergebnis wird
+der Fall-Query invalidiert.
+
+### Verifikation und verbleibende Grenze
+
+Der reale 294-Sekunden-Lauf belegt die zuvor zu kurze Grenze; die neue Konstante deckt
+ihn mit deutlichem Abstand ab. Frontend-Test, Typprüfung und Produktions-Build
+bestanden. Ein Browserfenster, das geschlossen oder neu geladen wird, kann den
+laufenden In-Memory-Poll nicht fortsetzen; der Backendlauf und seine lokalen
+Artefakte laufen davon unabhängig weiter.
+
+# Optional entdeckte Shoplinks machen einen vollständig erfassten Pflichtumfang unvollständig
+
+### Symptom
+
+Im ersten Decathlon-Vergleich war die einzige verbindliche Prüf-URL erfolgreich als
+Seite 001 erfasst. Der Lauf endete dennoch mit `pruefung_unvollstaendig`, weil unter
+anderem automatisch entdeckte Produkt-, Warenkorb- und Hilfe-Links Cloudflare-,
+CAPTCHA- oder robots-Hinweise lieferten.
+
+### Ursache und Diagnose
+
+Die Warteschlange kennzeichnete jeden Sitemap- und Navigationsfund als
+`required_by_case_profile=True`. Damit wurden automatisch gefundene Pfade so streng
+behandelt wie die vom Menschen ausdrücklich gespeicherten Prüf-URLs. Die Coverage des
+realen Laufs zeigte 45 erfasste Seiten, die vollständig erfasste Pflicht-URL und
+zahlreiche blockierte, aber nicht vom Fallprofil gewählte Shopseiten.
+
+### Lösung
+
+Nur `source_url` und die ausdrücklich gespeicherten `target_urls` bleiben
+Pflichtziele. Sitemap- und Linkfunde sind weiterhin Bestandteil der begrenzten
+Wanderungssuche und werden mit URL, Quelle und Fehlergrund in `skipped_urls`
+dokumentiert; ihr einzelner Ausfall entwertet den ausdrücklich definierten
+Prüfumfang aber nicht mehr. Ein unerreichbares Pflichtziel bleibt unverändert ein
+unvollständiger Lauf.
+
+### Verifikation und verbleibende Grenze
+
+Backendtests prüfen nun beide Seiten: Ein blockierter optionaler Shoplink lässt ein
+vollständig erfasstes Profil erfolgreich, ein blockierter ausdrücklich eingetragener
+AGB-Pfad bleibt `pruefung_unvollstaendig`. Alle zwölf Domainmonitor-Tests bestanden.
+Beim unmittelbaren Live-Wiederholungslauf blockierte Cloudflare inzwischen gerade die
+verbindliche Decathlon-Fundstelle; dieser Lauf wurde deshalb korrekt in 2,186 Sekunden
+als unvollständig dokumentiert und nicht umgangen. Eine spätere Wiederholung nach
+Abkühlung oder eine manuelle Prüfung bleibt für diesen externen Schutz erforderlich.

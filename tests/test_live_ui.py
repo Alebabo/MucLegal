@@ -1803,6 +1803,8 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn("Beweispaket herunterladen", page.text)
         self.assertIn("Als Ausgangsbeweis verwenden", page.text)
         self.assertIn("/baseline-evidence", page.text)
+        self.assertIn("evidenceSubjectHost", page.text)
+        self.assertIn("web.archive.org", page.text)
         self.assertIn("Fall freigeben und Vergleichsscan starten", page.text)
         self.assertIn("SEITENSCHUTZ ERKANNT", page.text)
         self.assertEqual(202, started.status_code)
