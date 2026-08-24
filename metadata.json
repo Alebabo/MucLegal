@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0TVFJA1XW4MFXDTQ1VKXE39",
+  "strategy": "manual-commit",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "muclegal/domain_monitor.py",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_case_monitoring.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 623918,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 36196864,
+    "output_tokens": 104621,
+    "api_call_count": 669
+  }
+}

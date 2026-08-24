@@ -1,0 +1,102 @@
+Wenn ich links im beweislab bin dann sieht das desgn der seite anders aus als auf den anderen seiten
+
+---
+
+Warum kann er bei mirageperfum.de nciht die agb screenshoten wenn der api key fehlt
+
+---
+
+bereits archivierte tenore soll man anpassen können und man soll wenn man den tenor ausgewählt hat un er im textfeld ist die möglichkeit haben darunter wie in einem chatfenster einzugeben, ob und wie er verändert werden soll. Zudem musst du nochmal bei der maske schauen, da die erzeugten tenore dort nicht so gut sind wie beim freitext. Beim freitext soll außerdem die möglichkeit bestehen, bzw. es soll. bei bedarf gefragt werden, welche spezisfischen Gesetzte betroffen sind und wo genau der verstoß legt wie in der maske
+
+---
+
+[https://mirageperfume.com/](https://mirageperfume.com/) da werden die datenschutzerklörungen und die agbs nichtausgegeben, **GREY MODE · Hinweis: AGB-Screenshot nicht erzeugt: TTFError: Can't open file "C:/Windows/Fonts/ar** &#x20;
+
+---
+
+push, deploy und entire
+
+---
+
+wie genau ist es auf hetzer deployed und wie genau fondet die aktualisierung statt
+
+---
+
+was genau ist FAstApi
+
+---
+
+ok und wie sieht fastApi auf code eben aus
+
+---
+
+wie kann ich einen demo durchlauf machen. ich will es mit decathlon und ihren zwei klauseln. Die alten agb sind hier:  [https://web.archive.org/web/20241008191055/https://www.decathlon.de/AGB\_lp-P7ELHE](https://web.archive.org/web/20241008191055/https://www.decathlon.de/AGB_lp-P7ELHE)
+
+---
+
+vielleicht kann man für dmo zwecke im beweislab einen beweis mit einem button zu einem Fall manuell hinzufügen um dann noch einen weiteren scan zu machen, der dann damit verglichen wird. So kann ich auch eigene seiten nutzen un d manipulieren zum test.
+
+---
+
+push und deploy
+
+---
+
+ok Teste es mit dem decathlon Beispiel von Anfang bis Ende durch, fixe alle Fehler. Benutze dabei den Link zur Webex-Meeting, den ich dir gegeben habe und scanne den neuen und richte vorher noch einen neuen Beweis an und verfasse meinen Mentor. Dokumentiere wie gesagt den Fehler.
+
+---
+
+weiter
+
+---
+
+was bedeutet das: Das Frontend wartet nun passend zum zehnminütigen Scanbudget.
+
+---
+
+kannst du einen weiteren fll im browser dokumentieren sodass ich ihn verfolgen kann
+
+---
+
+einer von diesen: [https://www.verbraucherzentrale.bayern/pressemitteilungen/statement-tatjana-halm-zum-erfolg-gegen-die-ticketplattform-viagogo-105798](https://www.verbraucherzentrale.bayern/pressemitteilungen/statement-tatjana-halm-zum-erfolg-gegen-die-ticketplattform-viagogo-105798)
+
+- [https://www.vzhh.de/presse/landgericht-muenchen-setzt-ordnungsgeld-gegen-vodafone-fest](https://www.vzhh.de/presse/landgericht-muenchen-setzt-ordnungsgeld-gegen-vodafone-fest)
+- [https://www.verbraucherzentrale.de/urteile/untergeschobene-versicherungsvertraege-71803](https://www.verbraucherzentrale.de/urteile/untergeschobene-versicherungsvertraege-71803)
+- [https://www.vzbv.de/sites/default/files/downloads/IContent-GmbH-LG-Frankfurt-Main-Ordnungsgeld-Verfahren.pdf](https://www.vzbv.de/sites/default/files/downloads/IContent-GmbH-LG-Frankfurt-Main-Ordnungsgeld-Verfahren.pdf)
+- [https://www.verbraucherzentrale.nrw/pressemitteilungen/klarmobil-und-freenet-muessen-zahlen-92873](https://www.verbraucherzentrale.nrw/pressemitteilungen/klarmobil-und-freenet-muessen-zahlen-92873)
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 1 tab.
+- Current URL: http://127.0.0.1:8000/beweis-labor
+</in-app-browser-context>
+
+## My request:
+kannst du ihn bitte über die hetzner seite scannen statt über die lokale demo
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 1 tab.
+- Current URL: https://5.75.146.212/
+</in-app-browser-context>
+
+## My request:
+[https://static.212.146.75.5.clients.your-server.de/](https://static.212.146.75.5.clients.your-server.de/)
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 2 tabs.
+- Current URL: http://127.0.0.1:14173/hinweise
+</in-app-browser-context>
+
+## My request:
+fixe die aufgetretenen fehler auch auf der hetzner demo
