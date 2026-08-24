@@ -1,0 +1,38 @@
+PLEASE IMPLEMENT THIS PLAN:
+# Fachlich relevante, wiederholungsfreie Tenor-Rückfragen
+
+## Zusammenfassung
+
+Die KI-Rückfragen werden von einer freien Gesprächslogik auf einen fallgruppenabhängigen Tenor-Faktenkatalog umgestellt. Jede Tatsache darf höchstens einmal abgefragt werden. Entweder-oder-Fragen erhalten auswählbare Antworten und eine zusätzliche Freitextoption.
+
+## Implementierung
+
+- Jede Frage erhält eine serverseitig validierte `topic_id`. Bereits beantwortete oder gestellte Themen werden aus den zulässigen Folgethemen entfernt.
+- Zusätzlich verhindert ein normalisierter Ähnlichkeitsvergleich Wiederholungen, falls dieselbe Frage unter einem falschen Thema paraphrasiert wird.
+- Liefert das Modell eine doppelte, irrelevante oder falsch typisierte Frage, wird sie verworfen und höchstens zweimal neu angefordert. Danach erscheint ein Fehler; der Sachverhalt wird nicht stillschweigend als vollständig markiert.
+- `answer_type` wird um `single_choice` erweitert. Die KI liefert zwei bis fünf konkrete Optionen; die Oberfläche ergänzt immer `Andere Angabe …` mit Freitextfeld.
+- `yes_no` bleibt ausschließlich echten binären Tatsachenfragen vorbehalten. Fragen mit „A oder B“, „welche Variante“ oder mehreren angebotenen Alternativen werden serverseitig als Ja/Nein-Frage abgelehnt.
+- Slider bleiben auf tatsächlich quantifizierbare Angaben wie Dauer oder Anzahl beschränkt. Bewertungen, rechtliche Reichweite oder subjektive Sicherheit dürfen nicht per Slider abgefragt werden.
+
+## Fachliche Relevanz
+
+- Der Server übergibt der KI nur noch die für die erkannte Fallgruppe zulässigen offenen Themen.
+- Für AGB-Klauseln sind insbesondere Klauselwortlaut, Verwender, Adressatenkreis und nur bei echter Bedeutung der sachliche Vertrags-/Produktbereich zulässig.
+- Fragen nach URL, Fundort, Nutzungskanal oder konkreter Verwendung werden bei einer inhaltlich eigenständig zu beurteilenden Klausel nicht gestellt.
+- „Verwenden oder sich darauf berufen“ und die Inhaltsgleichheitsformel werden als fachliche Tenor-Standards behandelt, nicht als unnötige Nutzerfragen.
+- Enthält die Eingabe bereits den vollständigen Klauselwortlaut, den Verwender und den Adressatenkreis, kann die KI unmittelbar zur Tenorerzeugung freigeben.
+- Für Werbung, Kündigungsschaltflächen, Consent-Gestaltungen und Dark Patterns werden jeweils eigene Themenkataloge verwendet, etwa konkrete Gestaltung, Täuschungstatsache, betroffene Gruppe und tenortragende Gegenfälle.
+
+## Schnittstellen und Tests
+
+- Das Rückfrageschema erhält `topic_id`, `single_choice` und `options`; beantwortete Rückfragen übertragen künftig ebenfalls ihre `topic_id`.
+- Frontend und Kontextkomposition speichern sowohl eine gewählte Option als auch eine freie „Andere Angabe“ unverändert für die Tenorerzeugung.
+- Backendtests decken doppelte Themen, paraphrasierte Wiederholungen, irrelevante AGB-Fragen, ungültige Ja/Nein-Alternativen und fehlgeschlagene Modellkorrekturen ab.
+- Frontendtests prüfen Auswahlbuttons, „Andere Angabe“, Gesprächsreihenfolge und die vollständige Übergabe aller Antworten.
+- Browser-Smoke-Test mit einer synthetischen offensichtlich unwirksamen AGB-Klausel: keine Frage nach URL oder Verwendungskontext, keine Wiederholung und höchstens fachlich tenorbezogene Folgefragen.
+
+## Annahmen
+
+- Auswahlfragen erlauben eine Antwort; Mehrfachauswahl ist nicht vorgesehen.
+- „Andere Angabe“ steht bei jeder Auswahlfrage zur Verfügung.
+- Die bestehende Fallgruppenerkennung bleibt bestehen; die eingefrorene Tenorgenerierung wird nicht verändert.
