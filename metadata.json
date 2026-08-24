@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0TC9T16WPMDHXFSPMYMGBC6",
+  "strategy": "manual-commit",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".env.example",
+    "frontend/src/data/caseViews.ts",
+    "frontend/src/lib/monitoring-api.ts",
+    "muclegal/domain_monitor.py",
+    "muclegal/live.py",
+    "muclegal/llm/__init__.py",
+    "muclegal/llm/god_mode_summary.py",
+    "muclegal/monitoring_cases.py",
+    "muclegal/templates/evidence_lab.html",
+    "muclegal/ui.py",
+    "reference/BROWSER_MODE_AUDIT.md",
+    "reference/FRONTEND_BACKEND_UEBERGABE_2026-08-21.md",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_case_monitoring.py",
+    "tests/test_god_mode_summary.py",
+    "tests/test_live_ui.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 974342,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 35172608,
+    "output_tokens": 114784,
+    "api_call_count": 322
+  }
+}

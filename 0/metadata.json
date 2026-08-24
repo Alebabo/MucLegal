@@ -1,0 +1,70 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0TC9T16WPMDHXFSPMYMGBC6",
+  "session_id": "01a0347c-1f0b-7542-b29b-4229db728663",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-24T17:15:34.6127154Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 5,
+  "save_step_count": 2,
+  "files_touched": [
+    ".env.example",
+    "frontend/src/data/caseViews.ts",
+    "frontend/src/lib/monitoring-api.ts",
+    "muclegal/domain_monitor.py",
+    "muclegal/live.py",
+    "muclegal/llm/__init__.py",
+    "muclegal/llm/god_mode_summary.py",
+    "muclegal/monitoring_cases.py",
+    "muclegal/templates/evidence_lab.html",
+    "muclegal/ui.py",
+    "reference/BROWSER_MODE_AUDIT.md",
+    "reference/FRONTEND_BACKEND_UEBERGABE_2026-08-21.md",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_case_monitoring.py",
+    "tests/test_god_mode_summary.py",
+    "tests/test_live_ui.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "08170108e834",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 974342,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 35172608,
+    "output_tokens": 114784,
+    "api_call_count": 322
+  },
+  "session_metrics": {
+    "turn_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-24T17:15:34.041339Z",
+    "agent_lines": 451,
+    "agent_removed": 934,
+    "human_added": 0,
+    "human_modified": 18,
+    "human_removed": 0,
+    "total_committed": 469,
+    "total_lines_changed": 1403,
+    "agent_percentage": 98.71703492516038,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 469,
+      "agent_lines_removed": 952
+    }
+  ]
+}

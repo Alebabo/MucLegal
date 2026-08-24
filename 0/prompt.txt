@@ -1,0 +1,37 @@
+Wenn ich links im beweislab bin dann sieht das desgn der seite anders aus als auf den anderen seiten
+
+---
+
+Warum kann er bei mirageperfum.de nciht die agb screenshoten wenn der api key fehlt
+
+---
+
+bereits archivierte tenore soll man anpassen können und man soll wenn man den tenor ausgewählt hat un er im textfeld ist die möglichkeit haben darunter wie in einem chatfenster einzugeben, ob und wie er verändert werden soll. Zudem musst du nochmal bei der maske schauen, da die erzeugten tenore dort nicht so gut sind wie beim freitext. Beim freitext soll außerdem die möglichkeit bestehen, bzw. es soll. bei bedarf gefragt werden, welche spezisfischen Gesetzte betroffen sind und wo genau der verstoß legt wie in der maske
+
+---
+
+[https://mirageperfume.com/](https://mirageperfume.com/) da werden die datenschutzerklörungen und die agbs nichtausgegeben, **GREY MODE · Hinweis: AGB-Screenshot nicht erzeugt: TTFError: Can't open file "C:/Windows/Fonts/ar** &#x20;
+
+---
+
+push, deploy und entire
+
+---
+
+wie genau ist es auf hetzer deployed und wie genau fondet die aktualisierung statt
+
+---
+
+was genau ist FAstApi
+
+---
+
+ok und wie sieht fastApi auf code eben aus
+
+---
+
+wie kann ich einen demo durchlauf machen. ich will es mit decathlon und ihren zwei klauseln. Die alten agb sind hier:  [https://web.archive.org/web/20241008191055/https://www.decathlon.de/AGB\_lp-P7ELHE](https://web.archive.org/web/20241008191055/https://www.decathlon.de/AGB_lp-P7ELHE)
+
+---
+
+vielleicht kann man für dmo zwecke im beweislab einen beweis mit einem button zu einem Fall manuell hinzufügen um dann noch einen weiteren scan zu machen, der dann damit verglichen wird. So kann ich auch eigene seiten nutzen un d manipulieren zum test.
