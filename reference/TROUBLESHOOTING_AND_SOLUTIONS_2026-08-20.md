@@ -980,3 +980,69 @@ einer 403-Origin-Meldung. Die Proxy-Korrektur gilt nur für die lokale
 Entwicklungsadresse auf Port 4173; wird der Frontend-Port geändert, muss das lokale
 Proxy-Ziel konsistent angepasst oder Frontend und Backend unter derselben Origin
 ausgeliefert werden.
+# Windows-Anwendungsrichtlinie blockiert `warcio.exe` trotz installiertem Paket
+
+### Symptom
+
+Der vollständige lokale Testlauf vom 24.08.2026 scheiterte in mehreren Golden-Path-
+und WARC-Tests mit `OSError: [WinError 4551] Eine Anwendungssteuerungsrichtlinie hat
+diese Datei blockiert`. Fallbezogene Läufe stuften den WARC-Schritt dadurch als
+`warning` und den Gesamtstatus als `completed_with_warnings` ein.
+
+### Ursache und Diagnose
+
+`find_tool("warcio")` fand den von Python installierten Windows-Console-Script-Shim
+`Python313/Scripts/warcio.exe`. Die lokale Anwendungssteuerung blockierte erst den
+Prozessstart dieses EXE-Shims. Deshalb griff der bereits vorhandene In-Process-
+Fallback nicht: Er war bisher ausschließlich für den Fall vorgesehen, dass kein
+CLI-Pfad gefunden wird. `warcio` selbst war als Python-Paket installiert und
+importierbar; lediglich der separate EXE-Start war untersagt.
+
+### Lösung
+
+`validate_warc` fängt jetzt auch einen Betriebssystemfehler beim Start des gefundenen
+CLI-Shims ab und wechselt zu `_validate_warc_in_process`. Dieser Pfad liest weiterhin
+alle Records mit `ArchiveIterator(check_digests=True)`, konsumiert die Record-Inhalte
+vollständig und verwirft leere Archive. Die WARC-Validierung wird damit nicht
+übersprungen oder abgeschwächt.
+
+### Verifikation und verbleibende Grenze
+
+Der zuvor blockierte produktive Snapshot-WARC-Test, beide Offline-Golden-Path-Tests,
+der fallbezogene Status-Test und der Live-Workflow-Status-Test bestanden nach der
+Korrektur. Der vollständige Lauf ohne den separat bekannten Wget-Flake bestand mit
+`129 passed, 1 deselected`. Der GNU-Wget-Test selbst scheiterte in diesem Lauf an
+einem abweichenden Response-Payload-Hash und wird deshalb ausdrücklich nicht als grün
+ausgegeben. Echte Digest- oder Payloadfehler in von Wget erzeugten Records müssen
+weiterhin strikt fehlschlagen und dürfen nicht durch den Fallback kaschiert werden.
+
+# Minimal-Tenorschreibhilfe ordnet „wirbt“ der falschen Fallgruppe zu
+
+### Symptom
+
+Die am 24.08.2026 wieder aktivierte Minimalansicht erzeugte für einen beschriebenen
+Werbeverstoß mit der Formulierung „das Unternehmen wirbt …“ einen Entwurf zur
+Kündigungsschaltfläche. Eine Autovervollständigung konnte außerdem einen ungefüllten
+Registerplatzhalter wie `{{vollstreckungsperson}}` anzeigen.
+
+### Ursache und Diagnose
+
+Die deterministische Fallgruppenerkennung kannte `Werbung` und den Wortstamm `werb`,
+nicht aber die häufige Verbform `wirbt`. Dadurch fiel sie auf die Default-Fallgruppe
+`kuendigungsbutton` zurück. Die Autovervollständigung gab den Rohbaustein statt des
+bereits mit dem Profil gerenderten Bausteins zurück.
+
+### Lösung
+
+Die Erkennung liegt nun als getestete reine Funktion in
+`frontend/src/lib/minimal-tenor-logic.ts` und umfasst `werb`, `wirb` sowie
+`irreführ`. `nextAutofillBlock` rendert Slots vor der Anzeige mit demselben lokalen
+Profil wie die beiden Entwurfsvorschläge.
+
+### Verifikation und verbleibende Grenze
+
+Der neue Unit-Test unterscheidet die Formen `wirbt` und `Werbung`; TypeScript-Prüfung
+und Produktionsbuild bestehen. Die Erkennung bleibt eine transparente,
+deterministische Prototyp-Heuristik. Nicht erkannte Fallgruppen dürfen weiterhin nur
+lokale Vorschläge erzeugen; eine menschliche Freigabe erfolgt ausschließlich über die
+backendgebundene Maske.

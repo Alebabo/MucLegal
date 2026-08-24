@@ -198,13 +198,19 @@ def validate_warc(warc_path: str | Path, *, warcio_path: str | None = None) -> s
             warcio_path = find_tool("warcio")
         except FileNotFoundError:
             return _validate_warc_in_process(warc_path)
-    completed = subprocess.run(
-        [warcio_path, "check", "-v", str(Path(warc_path).resolve())],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            [warcio_path, "check", "-v", str(Path(warc_path).resolve())],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except OSError:
+        # Windows application-control policies can discover the generated
+        # console-script EXE but block it at process start. The in-process
+        # path uses the same warcio digest checks without the blocked shim.
+        return _validate_warc_in_process(warc_path)
     output = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
     if completed.returncode != 0:
         raise RuntimeError(f"WARC-Validierung fehlgeschlagen: {output}")

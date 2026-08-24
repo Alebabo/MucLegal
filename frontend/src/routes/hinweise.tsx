@@ -1,19 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ChevronDown, Clock, HelpCircle, Scale } from "lucide-react";
 import { useState } from "react";
 
-import { lottoDemoCases, type Tone } from "../data/lottoDemoCases";
+import { useCaseViews } from "../data/caseViews";
+import type { Tone } from "../data/lottoDemoCases";
+import {
+  getMonitoringRun,
+  monitoringCasesQueryKey,
+  reviewMonitoringCase,
+  startMonitoringRun,
+} from "../lib/monitoring-api";
 
 export const Route = createFileRoute("/hinweise")({
   head: () => ({
     meta: [
-      { title: "Hinweise – MucLegal" },
+      { title: "Hinweise – Muc Legal Monitoring" },
       {
         name: "description",
         content:
           "Aktuelle Hinweise aus dem Monitoring als Benachrichtigungen – mit Zeitstempel, Kontext und vollständiger Beweisführung.",
       },
-      { property: "og:title", content: "Hinweise – MucLegal" },
+      { property: "og:title", content: "Hinweise – Muc Legal Monitoring" },
       {
         property: "og:description",
         content:
@@ -49,7 +57,7 @@ const toneLabel: Record<Tone, string> = {
 
 function relativeTime(iso: string | null) {
   if (!iso) return "geplant";
-  const now = new Date("2026-08-21T15:29:00Z").getTime();
+  const now = Date.now();
   const mins = Math.max(1, Math.round((now - new Date(iso).getTime()) / 60000));
   if (mins < 60) return `vor ${mins} Min.`;
   const hours = Math.round(mins / 60);
@@ -70,27 +78,75 @@ function formatDateTime(iso: string | null) {
 }
 
 function HinweisePage() {
+  const { cases } = useCaseViews();
+  const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<Record<string, string>>({});
+
+  async function decide(caseId: string, decision: "freigegeben" | "abgelehnt") {
+    setActionState((state) => ({ ...state, [caseId]: "Entscheidung wird gespeichert …" }));
+    try {
+      await reviewMonitoringCase(caseId, decision);
+      await queryClient.invalidateQueries({ queryKey: monitoringCasesQueryKey });
+      setActionState((state) => ({
+        ...state,
+        [caseId]: decision === "freigegeben" ? "Fall wurde freigegeben." : "Fall wurde abgelehnt.",
+      }));
+    } catch (error) {
+      setActionState((state) => ({
+        ...state,
+        [caseId]: error instanceof Error ? error.message : "Entscheidung fehlgeschlagen.",
+      }));
+    }
+  }
+
+  async function startRun(caseId: string) {
+    setActionState((state) => ({ ...state, [caseId]: "Monitoringlauf wird gestartet …" }));
+    try {
+      let run = await startMonitoringRun(caseId);
+      setActionState((state) => ({ ...state, [caseId]: run.message }));
+      const terminal = new Set([
+        "referenzzustand_dokumentiert",
+        "unveraendert_fortbestehend",
+        "beseitigt",
+        "kerngleich_wiederaufgetreten",
+        "neuer_sachverhalt",
+        "unsicher",
+        "pruefung_unvollstaendig",
+        "failed",
+      ]);
+      for (let attempt = 0; attempt < 240 && !terminal.has(run.status); attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        run = await getMonitoringRun(run.run_id);
+        setActionState((state) => ({ ...state, [caseId]: run.message }));
+      }
+    } catch (error) {
+      setActionState((state) => ({
+        ...state,
+        [caseId]: error instanceof Error ? error.message : "Monitoringlauf fehlgeschlagen.",
+      }));
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background px-6 py-10 sm:px-10">
       <div className="mx-auto max-w-3xl">
         <ul className="space-y-4">
-          {lottoDemoCases.map((c) => {
+          {cases.map((c) => {
             const Icon = toneIcon[c.tone];
             const isOpen = openId === c.case_id;
             return (
               <li key={c.case_id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(isOpen ? null : c.case_id)}
-                  className="w-full text-left"
-                  aria-expanded={isOpen}
+                <article
+                  className={`group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md ${
+                    isOpen ? "ring-1 ring-ring" : ""
+                  }`}
                 >
-                  <article
-                    className={`group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md ${
-                      isOpen ? "ring-1 ring-ring" : ""
-                    }`}
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(isOpen ? null : c.case_id)}
+                    className="w-full text-left"
+                    aria-expanded={isOpen}
                   >
                     <div className="flex items-start gap-4">
                       <span
@@ -123,110 +179,169 @@ function HinweisePage() {
                         </p>
                       </div>
                     </div>
+                  </button>
 
-                    {isOpen && (
-                      <div className="mt-5 border-t border-border pt-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div className="rounded-xl bg-muted p-4">
-                            <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                              Kontext
-                            </p>
-                            <p className="mt-1 text-sm text-foreground">{c.secondary}</p>
-                          </div>
-                          <div className="rounded-xl bg-muted p-4">
-                            <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                              Details
-                            </p>
-                            <ul className="mt-1 space-y-1 text-sm text-foreground">
-                              <li>
-                                <span className="text-muted-foreground">Fall-ID:</span> {c.fall_id}
-                              </li>
-                              <li>
-                                <span className="text-muted-foreground">Domain:</span> {c.domain}
-                              </li>
-                              {c.confidence !== null && (
-                                <li>
-                                  <span className="text-muted-foreground">Confidence:</span>{" "}
-                                  {Math.round(c.confidence * 100)} %
-                                </li>
-                              )}
-                            </ul>
-                          </div>
-                        </div>
+                  {isOpen && (
+                    <div className="mt-5 border-t border-border pt-4">
+                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+                        <p className="text-xs font-medium tracking-wider text-primary uppercase">
+                          Tenor / Formulierungsvorschlag
+                        </p>
+                        <p className="mt-2 font-serif text-base leading-relaxed text-foreground">
+                          {c.tenor.formulierung}
+                        </p>
+                        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                          {c.tenor.hinweis}
+                        </p>
+                      </div>
 
-                        <div className="mt-4 rounded-xl border border-border bg-background p-5">
-                          <p className="font-serif text-lg tracking-tight text-foreground">
-                            Beweisführung
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div className="rounded-xl bg-muted p-4">
+                          <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                            Kontext
                           </p>
-
-                          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                            <div>
-                              <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                Fundstelle
-                              </dt>
-                              <dd className="mt-1 text-sm text-foreground">
-                                {c.evidence.fundstelle}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                Erfassung
-                              </dt>
-                              <dd className="mt-1 text-sm text-foreground">
-                                {c.evidence.erfassung}
-                              </dd>
-                            </div>
-                          </dl>
-
-                          <p className="mt-5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                            Beweiskette
-                          </p>
-                          <ol className="mt-2 space-y-2">
-                            {c.evidence.kette.map((step, i) => (
-                              <li key={step} className="flex gap-3 text-sm text-foreground">
-                                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
-                                  {i + 1}
-                                </span>
-                                <span className="leading-relaxed">{step}</span>
-                              </li>
-                            ))}
-                          </ol>
-
-                          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                            <div>
-                              <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                Rechtliche Einordnung
-                              </p>
-                              <p className="mt-1 text-sm leading-relaxed text-foreground">
-                                {c.evidence.einordnung}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                                Offene Punkte
-                              </p>
-                              <p className="mt-1 text-sm leading-relaxed text-foreground">
-                                {c.evidence.offen}
-                              </p>
-                            </div>
-                          </div>
+                          <p className="mt-1 text-sm text-foreground">{c.secondary}</p>
                         </div>
-
-                        <div className="mt-4 flex items-center gap-3">
-                          <a
-                            href={c.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-                          >
-                            Zielseite öffnen
-                          </a>
-                          <span className="truncate text-xs text-muted-foreground">{c.url}</span>
+                        <div className="rounded-xl bg-muted p-4">
+                          <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                            Details
+                          </p>
+                          <ul className="mt-1 space-y-1 text-sm text-foreground">
+                            <li>
+                              <span className="text-muted-foreground">Fall-ID:</span> {c.fall_id}
+                            </li>
+                            <li>
+                              <span className="text-muted-foreground">Domain:</span> {c.domain}
+                            </li>
+                            {c.confidence !== null && (
+                              <li>
+                                <span className="text-muted-foreground">Confidence:</span>{" "}
+                                {Math.round(c.confidence * 100)} %
+                              </li>
+                            )}
+                          </ul>
                         </div>
                       </div>
-                    )}
-                  </article>
-                </button>
+
+                      <div className="mt-4 rounded-xl border border-border bg-background p-5">
+                        <p className="font-serif text-lg tracking-tight text-foreground">
+                          Beweisführung
+                        </p>
+
+                        <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                              Fundstelle
+                            </dt>
+                            <dd className="mt-1 text-sm text-foreground">
+                              {c.evidence.fundstelle}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                              Erfassung
+                            </dt>
+                            <dd className="mt-1 text-sm text-foreground">{c.evidence.erfassung}</dd>
+                          </div>
+                        </dl>
+
+                        <p className="mt-5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                          Beweiskette
+                        </p>
+                        <ol className="mt-2 space-y-2">
+                          {c.evidence.kette.map((step, i) => (
+                            <li key={step} className="flex gap-3 text-sm text-foreground">
+                              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                                {i + 1}
+                              </span>
+                              <span className="leading-relaxed">{step}</span>
+                            </li>
+                          ))}
+                        </ol>
+
+                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                              Rechtliche Einordnung
+                            </p>
+                            <p className="mt-1 text-sm leading-relaxed text-foreground">
+                              {c.evidence.einordnung}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                              Offene Punkte
+                            </p>
+                            <p className="mt-1 text-sm leading-relaxed text-foreground">
+                              {c.evidence.offen}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-3">
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                        >
+                          Zielseite öffnen
+                        </a>
+                        <span className="truncate text-xs text-muted-foreground">{c.url}</span>
+                      </div>
+
+                      {c.source === "backend" && (
+                        <div className="mt-4 border-t border-border pt-4">
+                          <p className="text-xs text-muted-foreground">Menschliche Entscheidung</p>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            {c.decision === "weitere_pruefung" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void decide(c.case_id, "freigegeben");
+                                  }}
+                                  className="bg-primary px-4 py-2 text-sm text-primary-foreground"
+                                >
+                                  Fall freigeben
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void decide(c.case_id, "abgelehnt");
+                                  }}
+                                  className="border border-border px-4 py-2 text-sm text-foreground"
+                                >
+                                  Ablehnen
+                                </button>
+                              </>
+                            )}
+                            {c.decision === "freigegeben" && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void startRun(c.case_id);
+                                }}
+                                className="bg-primary px-4 py-2 text-sm text-primary-foreground"
+                              >
+                                Monitoring starten
+                              </button>
+                            )}
+                          </div>
+                          {actionState[c.case_id] && (
+                            <p className="mt-3 text-sm text-muted-foreground" role="status">
+                              {actionState[c.case_id]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </article>
               </li>
             );
           })}

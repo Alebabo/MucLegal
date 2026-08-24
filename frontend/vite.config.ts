@@ -6,6 +6,8 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+const apiOrigin = process.env["MUCLEGAL_API_ORIGIN"] ?? "http://127.0.0.1:8000";
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -15,14 +17,14 @@ export default defineConfig({
   vite: {
     server: {
       proxy: {
-        "/beweis-labor": { target: "http://127.0.0.1:8000", changeOrigin: true },
+        "/beweis-labor": { target: apiOrigin, changeOrigin: true },
         "/api": {
-          target: "http://127.0.0.1:8000",
+          target: apiOrigin,
           changeOrigin: true,
-          headers: { origin: "http://127.0.0.1:8000" },
+          headers: { origin: apiOrigin },
         },
-        "/artifact": { target: "http://127.0.0.1:8000", changeOrigin: true },
-        "/static": { target: "http://127.0.0.1:8000", changeOrigin: true },
+        "/artifact": { target: apiOrigin, changeOrigin: true },
+        "/static": { target: apiOrigin, changeOrigin: true },
       },
     },
   },

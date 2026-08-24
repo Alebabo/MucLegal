@@ -186,5 +186,7 @@ export function deriveReviewFeatures(profile: Profile, draft: Draft): ReviewFeat
 export function nextAutofillBlock(profile: Profile, acceptedIds: string[]): BuildingBlock | null {
   const draft = composeDraft(profile, "kerngleich");
   const nextId = draft.blockIds.find((id) => !acceptedIds.includes(id));
-  return nextId ? getBlock(nextId) : null;
+  if (!nextId) return null;
+  const block = getBlock(nextId);
+  return { ...block, text: renderBlock(block, profile) };
 }

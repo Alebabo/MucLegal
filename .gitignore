@@ -17,6 +17,8 @@ build/
 
 # Runtime artifacts
 data/
+!frontend/src/data/
+!frontend/src/data/*.ts
 artifacts/
 .muclegal/
 .muclegal-demo/

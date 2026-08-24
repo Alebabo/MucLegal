@@ -4,12 +4,11 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "predev": "python ../scripts/validate.py --reference ../reference --frontend-output src/generated/tenorregister.json",
     "dev": "vite dev",
-    "prebuild": "python ../scripts/validate.py --reference ../reference --frontend-output src/generated/tenorregister.json",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "test:minimal": "node --experimental-strip-types --test tests/minimal-tenor-logic.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write ."

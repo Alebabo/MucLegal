@@ -7,22 +7,24 @@
   <style>
     :root {
       color-scheme:light;
-      --ink:oklch(0.21 0.03 264); --muted:oklch(0.55 0.02 258);
-      --line:oklch(0.90 0.004 265); --soft:oklch(0.972 0.003 265);
-      --green:oklch(0.67 0.13 231); --green-dark:oklch(0.57 0.14 231);
-      --amber:oklch(0.58 0.14 62); --red:oklch(0.50 0.19 27);
-      --sidebar:#fff; --sidebar-accent:oklch(0.965 0.004 265);
+      --ink:oklch(0.13 0 0); --muted:oklch(0.48 0 0);
+      --line:oklch(0.90 0 0); --soft:oklch(0.97 0 0);
+      --green:oklch(0.13 0 0); --green-dark:oklch(0.13 0 0);
+      --amber:oklch(0.50 0.09 62); --red:oklch(0.42 0.14 27);
+      --sidebar:#fff; --sidebar-accent:oklch(0.96 0 0);
     }
     * { box-sizing:border-box; }
-    body { margin:0; background:#fff; color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    body { margin:0; background:#fff; color:var(--ink); font:14px/1.5 Manrope,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    p { font-family:Lora,Georgia,serif; line-height:1.65; }
     button,input { font:inherit; }
     button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible { outline:3px solid color-mix(in srgb,var(--green) 40%,transparent); outline-offset:2px; }
     .aura-shell { min-height:100vh; display:flex; width:100%; background:#fff; }
     .aura-sidebar { position:sticky; top:0; z-index:40; width:248px; height:100vh; flex:0 0 248px; display:flex; flex-direction:column; border-right:1px solid var(--line); background:var(--sidebar); transition:width .2s ease,flex-basis .2s ease; }
     .aura-sidebar.collapsed { width:72px; flex-basis:72px; }
     .aura-brand { height:64px; display:flex; align-items:center; gap:12px; padding:0 16px; color:var(--ink); text-decoration:none; }
-    .aura-mark { width:32px; height:32px; display:grid; flex:0 0 auto; place-items:center; border-radius:50%; background:var(--green); color:#fff; font-size:14px; font-weight:650; }
-    .aura-brand-name { overflow:hidden; font-family:"Bodoni Moda",Georgia,serif; font-size:18px; letter-spacing:-.01em; white-space:nowrap; }
+    .aura-mark { width:36px; height:36px; display:grid; flex:0 0 auto; place-items:center; border:1px solid var(--ink); background:var(--ink); color:#fff; font-size:11px; font-weight:800; letter-spacing:.06em; }
+    .aura-brand-name { display:flex; overflow:hidden; flex-direction:column; font-size:14px; font-weight:800; line-height:1; letter-spacing:-.02em; text-transform:uppercase; white-space:nowrap; }
+    .aura-brand-name small { margin-top:5px; color:var(--muted); font-size:10px; font-weight:500; letter-spacing:.18em; }
     .aura-nav { display:flex; flex:1; flex-direction:column; gap:4px; padding:8px 12px; }
     .aura-nav a,.aura-collapse { min-height:40px; display:flex; align-items:center; gap:12px; border:0; border-radius:999px; background:transparent; color:var(--muted); padding:0 12px; font-size:14px; text-decoration:none; white-space:nowrap; cursor:pointer; transition:background .15s ease,color .15s ease; }
     .aura-nav a:hover,.aura-collapse:hover,.aura-nav a[aria-current=page] { background:var(--sidebar-accent); color:var(--ink); }
@@ -35,7 +37,7 @@
     .lab-page { min-width:0; flex:1; }
     header { border-bottom:1px solid var(--line); background:#fff; }
     .head { width:min(960px,calc(100% - 32px)); min-height:72px; display:flex; align-items:center; gap:14px; margin:auto; }
-    .logo { width:164px; max-height:43px; object-fit:contain; object-position:left center; }
+    .logo { width:164px; max-height:43px; object-fit:contain; object-position:left center; filter:grayscale(1) contrast(1.8); }
     .brand-rule { width:1px; height:28px; background:var(--line); }
     .brand-name { font-weight:750; letter-spacing:-.01em; }
     .verification-control { display:flex; align-items:center; gap:6px; margin-left:auto; }
@@ -128,6 +130,9 @@
     .legal-link { display:block; margin:7px 0; padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--green-dark); text-decoration:none; }
     .legal-link small { display:block; margin-top:2px; color:var(--muted); word-break:break-all; }
     .popover { position:fixed; z-index:50; width:min(280px,calc(100vw - 24px)); border:1px solid var(--line); border-radius:10px; background:#fff; padding:11px 12px; color:var(--ink); box-shadow:0 14px 38px rgb(15 23 42 / .16); font-size:12px; }
+    [class*="pill"],.url-input,.start,.god-mode-check,.trace,.protection,.result-summary,.download,.viewer,.gallery-controls button,.legal-link,.popover,.switch-track { border-radius:0 !important; box-shadow:none !important; }
+    .start,.download { text-transform:uppercase; letter-spacing:.12em; font-size:11px; font-weight:800; }
+    .kicker,.text-xs { letter-spacing:.12em; text-transform:uppercase; }
     [hidden] { display:none !important; }
     @media (max-width:850px) { .aura-sidebar { width:72px; flex-basis:72px; } .aura-brand-name,.aura-label { display:none; } }
     @media (max-width:650px) { .aura-sidebar { position:fixed; inset:auto 0 0; z-index:45; width:100%; height:64px; flex-basis:auto; border-top:1px solid var(--line); border-right:0; } .aura-brand,.aura-sidebar-foot { display:none; } .aura-nav { flex-direction:row; justify-content:space-around; padding:8px; } .aura-nav a { width:44px; justify-content:center; padding:0; } .lab-page { padding-bottom:64px; } .head { min-height:62px; } .logo { width:125px; } .brand-rule,.back,.verification-label { display:none; } main { margin-top:30px; } .url-form { grid-template-columns:1fr; } .start { width:100%; } .run-state { max-width:45%; } .viewer { min-height:360px; } .viewer-body,.empty { min-height:315px; } }
@@ -136,12 +141,13 @@
 <body>
 <div class="aura-shell">
   <aside id="aura-sidebar" class="aura-sidebar" aria-label="Hauptnavigation">
-    <a class="aura-brand" href="/"><span class="aura-mark">M</span><span class="aura-brand-name">MucLegal</span></a>
+    <a class="aura-brand" href="/"><span class="aura-mark">MLM</span><span class="aura-brand-name">Muc Legal<small>Monitoring</small></span></a>
     <nav class="aura-nav">
       <a href="/" title="Home"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-7h6v7"></path></svg><span class="aura-label">Home</span></a>
-      <a href="/archiv" title="Archiv"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M5 6v15h14V6"></path><path d="M8 3h8l2 3H6l2-3Z"></path><path d="M9 11h6"></path></svg><span class="aura-label">Archiv</span></a>
       <a href="/hinweise" title="Hinweise"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg><span class="aura-label">Hinweise</span></a>
+      <a href="/archiv" title="Archiv"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M5 6v15h14V6"></path><path d="M8 3h8l2 3H6l2-3Z"></path><path d="M9 11h6"></path></svg><span class="aura-label">Archiv</span></a>
       <a href="/neu" title="Neu hinzufügen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg><span class="aura-label">Neu hinzufügen</span></a>
+      <a href="/tenorhilfe" title="Tenorschreibhilfe"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg><span class="aura-label">Tenorschreibhilfe</span></a>
       <a href="/beweis-labor" aria-current="page" title="BeweisLab"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"></path><path d="M8 15h8"></path></svg><span class="aura-label">BeweisLab</span></a>
     </nav>
     <div class="aura-sidebar-foot"><button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><span class="aura-label">Einklappen</span></button></div>

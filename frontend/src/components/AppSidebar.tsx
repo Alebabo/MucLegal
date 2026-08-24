@@ -13,8 +13,8 @@ import { useState } from "react";
 
 const items = [
   { to: "/", label: "Home", icon: Home, exact: true },
-  { to: "/archiv", label: "Archiv", icon: Archive, exact: false },
   { to: "/hinweise", label: "Hinweise", icon: Info, exact: false },
+  { to: "/archiv", label: "Archiv", icon: Archive, exact: false },
   { to: "/neu", label: "Neu hinzufügen", icon: Plus, exact: false },
   { to: "/tenorhilfe", label: "Tenorschreibhilfe", icon: FilePenLine, exact: false },
 ] as const;
@@ -29,10 +29,19 @@ export function AppSidebar() {
       }`}
     >
       <div className="flex h-16 items-center gap-3 px-4">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-          M
+        <span className="grid size-9 shrink-0 place-items-center border border-foreground bg-foreground text-background">
+          <span className="text-[11px] font-extrabold uppercase leading-none tracking-[0.06em]">
+            MLM
+          </span>
         </span>
-        {!collapsed && <span className="font-serif text-lg tracking-tight">MucLegal</span>}
+        {!collapsed && (
+          <span className="flex flex-col leading-none">
+            <span className="text-sm font-extrabold uppercase tracking-[-0.02em]">Muc Legal</span>
+            <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Monitoring
+            </span>
+          </span>
+        )}
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
