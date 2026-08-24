@@ -1,0 +1,13 @@
+Warum passiert das und wie können wir das verhindern
+Amazon.de:&#x20;
+\\\*\\\*Autorisiert (God Mode)Erfassung starten\\\*\\\*
+Keine Logins, Paywalls oder CAPTCHAs\\\*\\\*i\\\*\\\*
+\\\*\\\*›PrüfverlaufiDie konfigurierte Extraktion ergab keinen relevanten Text.\\\*\\\*
+\\\*\\\*Vorbereitung\\\*\\\*10:51:59
+GOD MODE autorisiert: Vollmacht und Rechtsrahmen wurden per Checkbox bestätigt; robots.txt, Browser, Screenshots und Normalisierung sind für das Ziel freigeschaltet.
+\\\*\\\*Seite abrufen\\\*\\\*10:51:59
+Öffentliche Webseite und robots.txt werden geprüft und abgerufen.
+\\\*\\\*Browser-Erfassung\\\*\\\*10:52:00
+Der direkte Abruf enthielt nur eine JavaScript-Hülle; die öffentliche Seite wird einmalig im Browser gerendert.
+\\\*\\\*Browser-Erfassung\\\*\\\*10:52:08
+Die konfigurierte Extraktion ergab keinen relevanten Text.
