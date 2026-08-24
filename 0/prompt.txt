@@ -1,0 +1,9 @@
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 2 tabs.
+- Current URL: http://127.0.0.1:8080/tenorhilfe
+</in-app-browser-context>
+
+## My request:
+das design soll wirklich noch mehr minimalistisch sein. wie wenn man auf eine leere weiße seite schriebt ohne kasten ohne beschriebung one garnciht. die einzige auswahl sollen zwei vorgeschlagene entwürfe sein, die kommen nachdem ma auf der weißen seite den kontext geschrieben oder hochgeladen hat. Das heiß am anfang soll einfach dort stehen: beschriebe den Sachverhalt oder droppe ein pdf oder diktiere den Sachverhalt..., wenn man dann anfängt zu schreiben verschwindet der hinweis und es soll ein button "generieren" kommen. Es soll aber auch funktionieren wenn man einfach eien tenor reinkopiert (korrigieren) oder anfängt zu tippen (auto complete). Wenn man einen tenor generiert dann erscheint eine bbinäre auswahl zwischen zwei möglichen tenoren&#x20;
