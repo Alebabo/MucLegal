@@ -1,0 +1,1 @@
+erkläre die Änderungen und pushe auf git. Mache auch kurz eine kalkulation der Api kosten. Solche art von Seiten sollen in die kategorie stichporbenartig (einmal in der woche oder so) fallen um kosten gering zu halten
