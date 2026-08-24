@@ -1252,3 +1252,76 @@ Generierungsbutton als auch die beiden OpenAI-Entwürfe. Nach Auswahl nutzt der
 Entwurf die breite Einzeldarstellung. Die Vollständigkeitsprüfung bleibt eine
 begrenzte, sichtbare Schlüsselwortlogik und kann weitere bislang unbekannte Synonyme
 übersehen; sie trifft keine juristische Bewertung.
+
+# Ausgewählter Tenor ist mobil zu schmal und Diktat wiederholt Sätze nach Pausen
+
+### Symptom
+
+In der Einzeldarstellung blieb der ausgewählte Tenor zu klein zum konzentrierten
+Lesen. Bei 390 × 844 Pixeln war das Textfeld nur 94 Pixel breit. Außerdem hängte die
+Browser-Spracherkennung nach einer Sprechpause den bereits erkannten ersten Satz
+erneut an, bevor sie den nächsten Satz ergänzte.
+
+### Ursache und Diagnose
+
+Die ausgewählte Fassung erbte die für den Zwei-Spalten-Vergleich gedachte kompakte
+Höhe und Innenbreite. Zusätzlich blieb die 248 Pixel breite Desktop-Seitenleiste auch
+unterhalb des `md`-Breakpoints sichtbar. Beim Diktat wurde bei jedem `onresult` die
+gesamte kumulierte `results`-Liste an den jeweils aktuellen Text angehängt. Die Web
+Speech API liefert nach einer Pause frühere Ergebnisse weiterhin in dieser Liste und
+kennzeichnet nur über `resultIndex`, ab welcher Position sich Resultate geändert
+haben.
+
+### Lösung
+
+Die ausgewählte Fassung verwendet nun eine eigene hohe Lese- und Bearbeitungsansicht
+mit größerer Schrift, 32 Pixel Zeilenhöhe und nahezu der gesamten verfügbaren
+Inhaltsbreite. Die Desktop-Seitenleiste wird auf kleinen Viewports ausgeblendet. Das
+Diktat hält den Text vor Beginn der Aufnahme unverändert fest und verwaltet jedes
+Sprachresultat unter seinem Ergebnisindex. Finale und vorläufige Updates ersetzen
+damit das jeweilige Segment; der sichtbare Text wird aus Basis und geordneten
+Segmenten rekonstruiert und nicht mehr kumulativ an sich selbst angehängt. Beginnt der
+Nutzer während eines laufenden Diktats manuell zu schreiben, wird die Aufnahme
+beendet, damit ein spätes Sprachergebnis die Eingabe nicht überschreibt.
+
+### Verifikation und verbleibende Grenze
+
+Der Logiktest simuliert `erster Satz → Finalisierung → Pause → zweiter Satz` und
+bestätigt jeden Satz genau einmal. Ein Browserlauf mit kontrollierter
+SpeechRecognition-Implementierung ergab exakt
+`Der erste Satz. Nach der Pause folgt Satz zwei.` und keine Konsolenfehler. Die
+ausgewählte Textfläche maß bei 1280 × 720 Pixeln 984 × 440 Pixel und bei 390 × 844
+Pixeln 342 × 473 Pixel; der mobile Dokumentkörper hatte keinen horizontalen
+Überlauf. Erkennungsqualität, Zeichensetzung und Mikrofonfreigabe bleiben Funktionen
+der im jeweiligen Browser verfügbaren Web Speech API.
+
+# Vite liefert nach überlappenden HMR-Änderungen einen veralteten Modulstand
+
+### Symptom
+
+Während der laufenden Bearbeitung zeigte die Tenorhilfe nach einem vollständigen
+Reload die Fehlerseite. Die Browserkonsole meldete `needsMoreContext is not defined`,
+obwohl dieser Bezeichner im aktuellen Quelltext bereits nicht mehr vorkam.
+
+### Ursache und Diagnose
+
+Mehrere zeitlich überlappende Änderungen an `MinimalTenorView.tsx` wurden vom lange
+laufenden Vite-Prozess nacheinander per Hot Module Replacement verarbeitet. Der über
+Port 4173 ausgelieferte transformierte Modultext enthielt noch die alte JSX-Referenz,
+aber nicht mehr deren Deklaration. Der aktuelle Quelltext und der frische
+Produktions-Build enthielten diese inkonsistente Kombination nicht.
+
+### Lösung
+
+Der Vite-Entwicklungsprozess wurde vollständig beendet und auf demselben Host und
+Port neu gestartet. Der bestehende ngrok-Tunnel konnte dadurch unverändert auf das
+frisch geladene Frontend weiterleiten.
+
+### Verifikation und verbleibende Grenze
+
+Nach dem Neustart lud `/tenorhilfe` lokal wieder vollständig. Die mobile
+Einzeldarstellung und der Diktat-Pausenlauf liefen anschließend ohne Konsolenfehler.
+HMR ist nur eine Entwicklungsfunktion; bei erneut überlappenden Dateiänderungen muss
+der Dev-Prozess vor einer Demo sauber neu gestartet werden. Ein erfolgreicher
+Produktions-Build allein repariert den Speicherzustand eines bereits laufenden
+Dev-Prozesses nicht.

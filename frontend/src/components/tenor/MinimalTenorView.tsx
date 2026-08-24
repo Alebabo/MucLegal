@@ -24,6 +24,11 @@ import {
   nextWrappedIndex,
   type WritingMode,
 } from "@/lib/minimal-tenor-logic";
+import {
+  composeDictationText,
+  mergeDictationSegments,
+  type DictationSegments,
+} from "@/lib/dictation";
 import { createTenorProposals, type TenorProposalResponse } from "@/lib/tenor-api";
 
 const baseProfile: Profile = {
@@ -47,9 +52,9 @@ const baseProfile: Profile = {
 type SpeechResult = { readonly transcript: string };
 type SpeechResultList = {
   readonly length: number;
-  [index: number]: { [index: number]: SpeechResult };
+  [index: number]: { readonly isFinal: boolean; [index: number]: SpeechResult };
 };
-type SpeechEvent = { readonly results: SpeechResultList };
+type SpeechEvent = { readonly resultIndex: number; readonly results: SpeechResultList };
 type SpeechRecognitionInstance = {
   lang: string;
   continuous: boolean;
@@ -127,6 +132,7 @@ function DraftChoice({
   onSelect,
   onText,
   provenance,
+  expanded = false,
 }: {
   title: string;
   draft: Draft;
@@ -135,10 +141,21 @@ function DraftChoice({
   onSelect: () => void;
   onText: (text: string) => void;
   provenance?: string | null;
+  expanded?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col px-1 py-4 md:min-h-0 md:px-6 md:py-1">
-      <button type="button" onClick={onSelect} className="flex items-center gap-3 text-left">
+    <div
+      className={`flex min-w-0 flex-col ${
+        expanded
+          ? "min-h-[64dvh] flex-1 px-0 py-2 md:min-h-0"
+          : "px-1 py-4 md:min-h-0 md:px-6 md:py-1"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`flex items-center gap-3 text-left ${expanded ? "min-h-11" : ""}`}
+      >
         <span
           className={`grid size-5 place-items-center rounded-full border ${selected ? "border-slate-950 bg-slate-950" : "border-slate-300"}`}
         >
@@ -151,7 +168,11 @@ function DraftChoice({
         onFocus={onSelect}
         onChange={(event) => onText(event.target.value)}
         aria-label={`${title} bearbeiten`}
-        className="mt-3 min-h-48 w-full resize-none overflow-y-auto bg-transparent font-serif text-sm leading-6 text-slate-700 outline-none md:min-h-0 md:flex-1"
+        className={`w-full overflow-y-auto bg-transparent font-serif text-slate-700 outline-none ${
+          expanded
+            ? "mt-4 min-h-[56dvh] resize-y text-base leading-8 md:min-h-0 md:flex-1"
+            : "mt-3 min-h-48 resize-none text-sm leading-6 md:min-h-0 md:flex-1"
+        }`}
       />
       <p className="mt-3 break-words font-mono text-[9px] leading-4 text-slate-300">
         {provenance ?? referenceSummary(draft)}
@@ -182,6 +203,9 @@ export function MinimalTenorView() {
   const fileInput = useRef<HTMLInputElement>(null);
   const contextInput = useRef<HTMLTextAreaElement>(null);
   const speech = useRef<SpeechRecognitionInstance | null>(null);
+  const dictationBase = useRef("");
+  const dictationSegments = useRef<DictationSegments>({});
+  const dictationSession = useRef(0);
 
   const profile = useMemo(() => profileFromContext(context), [context]);
   const preciseDraft = useMemo(() => composeDraft(profile, "eng"), [profile]);
@@ -242,6 +266,14 @@ export function MinimalTenorView() {
     input.style.height = `${Math.max(input.scrollHeight, 36)}px`;
   }, [context, pdf]);
 
+  useEffect(
+    () => () => {
+      dictationSession.current += 1;
+      speech.current?.stop();
+    },
+    [],
+  );
+
   const acceptPdf = (file?: File) => {
     if (!file || (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")))
       return;
@@ -290,16 +322,32 @@ export function MinimalTenorView() {
       return;
     }
     const recognition = new Recognition();
+    const session = dictationSession.current + 1;
+    dictationSession.current = session;
+    dictationBase.current = context;
+    dictationSegments.current = {};
     recognition.lang = "de-DE";
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.onresult = (event) => {
-      let transcript = "";
-      for (let index = 0; index < event.results.length; index += 1)
-        transcript += `${event.results[index]?.[0]?.transcript ?? ""} `;
-      setContext((current) => `${current}${current.trim() ? " " : ""}${transcript.trim()}`);
+      if (dictationSession.current !== session) return;
+      const updates = [];
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        updates.push({
+          index,
+          transcript: result?.[0]?.transcript ?? "",
+          isFinal: result?.isFinal ?? false,
+        });
+      }
+      dictationSegments.current = mergeDictationSegments(dictationSegments.current, updates);
+      setContext(composeDictationText(dictationBase.current, dictationSegments.current));
     };
-    recognition.onend = () => setDictating(false);
+    recognition.onend = () => {
+      if (dictationSession.current !== session) return;
+      speech.current = null;
+      setDictating(false);
+    };
     speech.current = recognition;
     setDictationNotice("");
     setDictating(true);
@@ -440,6 +488,12 @@ export function MinimalTenorView() {
                 autoFocus
                 value={context}
                 onChange={(event) => {
+                  if (dictating) {
+                    dictationSession.current += 1;
+                    speech.current?.stop();
+                    speech.current = null;
+                    setDictating(false);
+                  }
                   setContext(event.target.value);
                   setGenerated(false);
                   setGenerationError("");
@@ -680,7 +734,13 @@ export function MinimalTenorView() {
           </div>
         </main>
       ) : (
-        <main className="mx-auto flex max-w-6xl flex-col px-6 py-8 md:h-[calc(100dvh-8rem)] md:min-h-[30rem] md:py-6">
+        <main
+          className={`mx-auto flex max-w-6xl flex-col px-6 py-8 md:py-6 ${
+            selected
+              ? "md:h-[calc(100dvh-2rem)] md:min-h-[38rem]"
+              : "md:h-[calc(100dvh-8rem)] md:min-h-[30rem]"
+          }`}
+        >
           {selected ? (
             <>
               <div className="flex items-center justify-between gap-4">
@@ -693,7 +753,7 @@ export function MinimalTenorView() {
                 </button>
                 <span className="text-xs text-slate-300">Breite Lese- und Bearbeitungsansicht</span>
               </div>
-              <div className="mx-auto mt-4 flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+              <div className="mx-auto mt-4 flex min-h-[64dvh] w-full max-w-5xl flex-1 flex-col md:min-h-0">
                 <DraftChoice
                   title={selected === "precise" ? "Präzise" : "Technikneutral"}
                   draft={selected === "precise" ? preciseDraft : neutralDraft}
@@ -702,6 +762,7 @@ export function MinimalTenorView() {
                   onSelect={() => undefined}
                   onText={selected === "precise" ? setPreciseText : setNeutralText}
                   provenance={aiProvenance(proposalResponse, selected)}
+                  expanded
                 />
               </div>
               <div className="mt-4 flex min-h-11 items-center justify-center">

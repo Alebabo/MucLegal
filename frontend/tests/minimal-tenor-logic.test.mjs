@@ -8,6 +8,7 @@ import {
   isTenor,
   nextWrappedIndex,
 } from "../src/lib/minimal-tenor-logic.ts";
+import { composeDictationText, mergeDictationSegments } from "../src/lib/dictation.ts";
 
 test("asks for the first missing semantic fact", () => {
   const empty = assessCompleteness("");
@@ -54,4 +55,24 @@ test("filters slash modes and wraps keyboard selection", () => {
   );
   assert.equal(nextWrappedIndex(2, 3, 1), 0);
   assert.equal(nextWrappedIndex(0, 3, -1), 2);
+});
+
+test("replaces cumulative dictation results instead of appending them twice", () => {
+  let segments = mergeDictationSegments({}, [
+    { index: 0, transcript: "Der erste Satz", isFinal: false },
+  ]);
+  assert.equal(composeDictationText("Ausgangstext.", segments), "Ausgangstext. Der erste Satz");
+
+  segments = mergeDictationSegments(segments, [
+    { index: 0, transcript: "Der erste Satz.", isFinal: true },
+  ]);
+  assert.equal(composeDictationText("Ausgangstext.", segments), "Ausgangstext. Der erste Satz.");
+
+  segments = mergeDictationSegments(segments, [
+    { index: 1, transcript: "Nach der Pause folgt Satz zwei.", isFinal: true },
+  ]);
+  assert.equal(
+    composeDictationText("Ausgangstext.", segments),
+    "Ausgangstext. Der erste Satz. Nach der Pause folgt Satz zwei.",
+  );
 });
