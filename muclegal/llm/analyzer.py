@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from muclegal.llm.prompt import PROMPT_SHA256, PROMPT_VERSION, SYSTEM_PROMPT
+from muclegal.llm.monitor_knowledge import (
+    MONITOR_KNOWLEDGE_VERSION,
+    build_monitor_knowledge,
+)
 from muclegal.llm.schema import (
     ASSESSMENT_JSON_SCHEMA,
     AssessmentValidationError,
@@ -50,10 +54,23 @@ def build_model_input(
     if not isinstance(vorher, str) or not isinstance(nachher, str):
         raise ValueError("Vorher- und Nachher-Ausschnitt müssen Text sein.")
     safe_metadata = {key: metadata[key] for key in ALLOWED_METADATA if key in metadata}
+    knowledge_text = " ".join(
+        str(value)
+        for value in (
+            tenor.get("tenor", ""),
+            tenor.get("verbotene_praxis", ""),
+            vorher,
+            nachher,
+        )
+    )
     return {
         "tenor": tenor,
         "aenderung": {"vorher": vorher, "nachher": nachher},
         "belegte_metadaten": safe_metadata,
+        "wissensbasis": build_monitor_knowledge(
+            fallgruppe=tenor.get("fallgruppe"),
+            text=knowledge_text,
+        ),
     }
 
 
@@ -148,6 +165,7 @@ def analyze_and_store(
         "model": analyzer.model,
         "prompt_version": PROMPT_VERSION,
         "prompt_sha256": PROMPT_SHA256,
+        "knowledge_version": MONITOR_KNOWLEDGE_VERSION,
         "valid": assessment is not None,
         "validation_error": validation_error,
     }

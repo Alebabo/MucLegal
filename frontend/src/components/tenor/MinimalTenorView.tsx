@@ -103,7 +103,10 @@ function debtorFromContext(context: string) {
 function aiProvenance(response: TenorProposalResponse | null, strategy: "precise" | "neutral") {
   const proposal = response?.proposals.find((item) => item.strategy === strategy);
   if (!response || !proposal) return null;
-  return `OpenAI ${response.model} · ${proposal.source_ids.join(" · ")} · nicht juristisch freigegeben`;
+  const knowledgeLabel = response.reference_version.includes("2026-08-24")
+    ? "Wissensbasis 24.08.2026"
+    : response.reference_version;
+  return `OpenAI ${response.model} · ${knowledgeLabel} · ${proposal.source_ids.length} Quellenanker · nicht juristisch freigegeben`;
 }
 
 function referenceSummary(draft: Draft) {

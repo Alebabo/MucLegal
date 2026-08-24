@@ -48,10 +48,13 @@ Die wichtigsten Ergebnisse:
 
 ### Fachliche Referenz
 
-Die Vorschläge berücksichtigen ausgewählte Leitlinien `R-001`, `R-002`, `R-003`,
-`R-008` und `R-009` aus der bereitgestellten BfJ-Tenorregister-Auswertung. Die
-Referenzversion lautet `BfJ-Tenorregister-2026-08-24`. Die Leitlinien sind eine
-Formulierungshilfe, keine juristische Freigabe.
+Die Vorschläge nutzen jetzt die strukturierte Referenzversion
+`Unterlassungsmonitor-Wissensdokument-2026-08-24-v1`. Sie enthält zehn kompakte
+Leitlinien, den statusbehafteten Katalog FALL-001 bis FALL-011 und eine
+Klauseltypen-Bibliothek. Pro Aufruf werden nur die zum Sachverhalt passenden
+Einträge übergeben. Herkunft, Quellhash und fehlende juristische Freigabe bleiben
+im Modellinput erhalten. Einzelheiten stehen in
+`reference/KI_WISSEN_INTEGRATION_2026-08-24.md`.
 
 ### Grenzen
 
@@ -191,7 +194,7 @@ Freigabestatus.
 | Prüfung | Ergebnis |
 | --- | --- |
 | `python -m compileall -q muclegal app.py` | bestanden |
-| `python -m pytest -q` | **135 bestanden** in 185,23 s |
+| `python -m pytest -q` | **139 bestanden** in 148,91 s |
 | `npm run typecheck` | bestanden |
 | `npm run test:minimal` | **5 bestanden** |
 | `npm run build` | bestanden |
@@ -207,7 +210,8 @@ Zusätzlich wurden lokal und über den temporären Tunnel geprüft:
 - Tenorschreibhilfe bei `390 × 844` Pixeln einschließlich Button-Hit-Test und
   sichtbarem Ladehinweis.
 - Reale OpenAI-Antwort mit zwei verschiedenen Strategien und zwingender
-  menschlicher Prüfung.
+  menschlicher Prüfung. Der AGB-Livetest verwendete die neue Wissensversion und
+  elf passende Quellenanker einschließlich FALL-001 und FALL-009.
 - Frontend-Proxy zum FastAPI-Endpunkt.
 
 ## 8. Wichtige Dateien

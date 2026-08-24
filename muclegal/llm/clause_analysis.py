@@ -15,6 +15,10 @@ from muclegal.llm.classification import (
     validate_clause_classification,
 )
 from muclegal.llm.schema import LegalAssessment, LegalSource
+from muclegal.llm.monitor_knowledge import (
+    MONITOR_KNOWLEDGE_VERSION,
+    build_monitor_knowledge,
+)
 
 
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "classify_v1.md"
@@ -83,6 +87,17 @@ def tenor_elements_from_tenor(tenor: dict[str, Any]) -> list[dict[str, Any]]:
 def build_clause_input(
     tenor: dict[str, Any], pair: ClausePair, tenor_elements: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    knowledge_text = " ".join(
+        filter(
+            None,
+            (
+                tenor.get("tenor"),
+                tenor.get("verbotene_praxis"),
+                pair.previous.text if pair.previous else None,
+                pair.current.text if pair.current else None,
+            ),
+        )
+    )
     return {
         "fall_id": tenor["fall_id"],
         "tenor": tenor["tenor"],
@@ -90,6 +105,10 @@ def build_clause_input(
         "tenor_elements": tenor_elements,
         "altes_klauselstueck": pair.previous.text if pair.previous else None,
         "neues_klauselstueck": pair.current.text if pair.current else None,
+        "wissensbasis": build_monitor_knowledge(
+            fallgruppe=tenor.get("fallgruppe"),
+            text=knowledge_text,
+        ),
     }
 
 
@@ -244,6 +263,7 @@ def analyze_clause_pairs_and_store(
         "model": analyzer.model,
         "prompt_version": CLAUSE_PROMPT_VERSION,
         "prompt_sha256": CLAUSE_PROMPT_SHA256,
+        "knowledge_version": MONITOR_KNOWLEDGE_VERSION,
         "schema_valid": valid,
         "pair_count": len(findings),
     })

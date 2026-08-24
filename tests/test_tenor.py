@@ -82,6 +82,8 @@ class TenorDraftTests(unittest.TestCase):
         self.assertNotEqual(result["proposals"][0]["text"], result["proposals"][1]["text"])
         self.assertTrue(all(item["human_approval_required"] for item in result["proposals"]))
         self.assertTrue(all(item["freigabe_durch_mensch"] is None for item in result["proposals"]))
+        self.assertIn("Unterlassungsmonitor-Wissensdokument", result["reference_version"])
+        self.assertTrue(all("KW-002" in item["source_ids"] for item in result["proposals"]))
 
     def test_openai_analyzer_uses_frozen_prompt_and_structured_output(self) -> None:
         class FakeResponses:
