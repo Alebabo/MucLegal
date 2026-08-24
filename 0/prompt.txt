@@ -1,0 +1,6 @@
+# Files pasted by the user:
+
+## "# CONTEXT – MucLegal / Challenge II: KI-gestützter Unterlassungs- und Umsetzung…": C:\Users\User\.codex/attachments/eff43d30-4906-40b9-aab7-b59aa2b06962/pasted-text.txt
+
+## My request:
+debugge alles und sehe ob es in allignement mit der chalennge und den anforderungen ist. Denk dran dass das nur das Backend und die logik ist und das frntednd danach kommt
