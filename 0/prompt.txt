@@ -1,0 +1,11 @@
+Warum kommt das raus: **Autorisiert (God Mode)Erfassung starten**
+Keine Logins, Paywalls oder CAPTCHAs**i**
+**›PrüfverlaufiDie konfigurierte Extraktion ergab keinen relevanten Text.**
+**Vorbereitung**10:36:33
+GOD MODE autorisiert: Vollmacht und Rechtsrahmen wurden per Checkbox bestätigt; robots.txt, Browser, Screenshots und Normalisierung sind für das Ziel freigeschaltet.
+**Seite abrufen**10:36:34
+Öffentliche Webseite und robots.txt werden geprüft und abgerufen.
+**Browser-Erfassung**10:36:34
+Der direkte Abruf enthielt nur eine JavaScript-Hülle; die öffentliche Seite wird einmalig im Browser gerendert.
+**Browser-Erfassung**10:36:39
+Die konfigurierte Extraktion ergab keinen relevanten Text.
