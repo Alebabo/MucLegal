@@ -1,0 +1,1 @@
+Implementiere den neuen Hinweis-Monitor gemäß der aktualisierten AGENTS.md und teste ihn mit [https://www.adidas.com/](https://www.adidas.com/). Bei nicht erreichbarer robots.txt fortfahren, ungeprüften Status protokollieren und sämtliche Ergebnisse deutlich als nicht beweisgeeignet kennzeichnen.
