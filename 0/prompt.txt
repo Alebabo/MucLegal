@@ -1,0 +1,5 @@
+<environment_context>
+  <current_date>2026-08-19</current_date>
+  <timezone>Europe/Berlin</timezone>
+  <filesystem><workspace_roots><root>C:\Users\User\Documents\ChatGPT\Muc Legal LLT Hackathon</root><root>C:\Users\User\.codex\visualizations\2026\08\18\01a016d9-f502-7e62-879b-bb6df8883efc</root></workspace_roots><permission_profile type="disabled"><file_system type="unrestricted" /></permission_profile></filesystem>
+</environment_context>
