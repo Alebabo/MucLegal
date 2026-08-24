@@ -1,0 +1,1 @@
+ok alsi wenn ich es lokal starte dnn müsste es bei adidas ohne api funktionieren
