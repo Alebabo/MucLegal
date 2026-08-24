@@ -1,0 +1,9 @@
+Zu jedem dieser punkte eine ein satz erklärung: normaler Webseitenabruf
+trafilatura
+SHA-256-Hashing
+SQLite
+WARC-Erzeugung mit Wget
+RFC-3161-Zeitstempel über freeTSA/OpenSSL
+die derzeit öffentliche Rechtsinformationen-API
+
+ich will wissen wie genau die datenextraktion von den webseten funktioniert. So stelle ich mir zum Beipsiel di frage wie dark patterns zum Beispiel erkannt werden. Antowrte kurz
