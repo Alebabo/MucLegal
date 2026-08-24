@@ -1,0 +1,100 @@
+PLEASE IMPLEMENT THIS PLAN:
+# Bildschirmfüllendes shadcn-inspiriertes Beweispipeline-Harness
+
+## Zusammenfassung
+
+Die Oberfläche wird als feste, automatisch an die verfügbare Desktopgröße angepasste App-Shell umgesetzt. Der Browserbereich selbst scrollt nicht. Links bleiben URL-Eingabe, Pipeline-Schritte und technischer Laufstatus vollständig sichtbar; rechts befindet sich eine eigenständig scrollbare Proof-Seitenleiste.
+
+Die Seitenleiste bietet alle bisher erzeugten Beweispakete, gruppiert nach URL. Text-, JSON-, Diff- und PDF-Artefakte können direkt darin betrachtet werden. Die Oberfläche bleibt ein technisches Test-Harness und stellt keine fertige juristische Anwendung dar.
+
+## Layout und Design
+
+- `html`, `body` und App-Shell verwenden `100dvh` und `overflow: hidden`.
+- Weißer, kompakter Kopfbereich mit dem hellen MucLegal-Logo und Badge `Pipeline Test Harness`.
+- Darunter zweispaltiger Workspace:
+  - links flexibel ungefähr 60–65 % für Steuerung und Pipeline,
+  - rechts mindestens 360 Pixel beziehungsweise 35–40 % für Proof und Artefakte.
+- Linker Bereich ohne eigenen Seitenscroll:
+  - kompakte URL-Card,
+  - horizontale Pipeline,
+  - technische Status- und Hashkarten,
+  - kleine Sektion zur simulierten menschlichen Freigabe.
+- Rechte Seitenleiste mit `min-height: 0` und `overflow-y: auto`; nur diese Spalte scrollt.
+- Abstände, Schriftgrößen und Kartenhöhen über `clamp()` sowie `max-height`-Media-Queries an die Bildschirmhöhe anpassen.
+- Bei niedrigen Desktopfenstern Beschreibungen kürzen und Abstände reduzieren, ohne Schritte oder Status auszublenden.
+- Unterhalb einer Desktop-Mindestbreite von 1024 Pixel darf die Proof-Seitenleiste als einblendbares Panel erscheinen; der primäre Abnahmefall bleibt Desktop.
+- Shadcn-inspirierte Tokens und Muster verwenden: Card, Input, Button, Badge, Alert, Select, Separator und Scroll Area – umgesetzt in Jinja/CSS ohne React, Tailwind oder neuen Build-Schritt.
+
+## Pipeline-Bereich
+
+- URL-Feld und Button `Pipeline testen`.
+- Deutlicher Hinweis: erster Abruf erstellt die Baseline, erst eine spätere Änderung startet Anthropic und Beweissicherung.
+- Kompakte Pipeline-Schritte:
+  `Abruf → Normalisierung → Vergleich → Anthropic → WARC → Manifest → TSA/PDF`.
+- Jeder Schritt erhält einen der Zustände:
+  `wartend`, `aktiv`, `erfolgreich`, `übersprungen`, `Warnung`, `fehlgeschlagen`.
+- Baseline und unveränderter Lauf markieren die späteren Schritte sichtbar als übersprungen.
+- Nach einer Änderung zeigt der Hauptbereich nur technische Informationen:
+  - Ergebniscode und Confidence des Anthropic-Gateways,
+  - Schema-Validität,
+  - aktueller und vorheriger Hash,
+  - WARC-, Manifest-, TSA- und PDF-Status,
+  - technische Warnungen oder Fehler.
+- Juristische Langtexte werden nicht in der Hauptansicht dargestellt; der validierte Modelloutput bleibt als Proof-Artefakt verfügbar.
+- `Freigabe simulieren` bleibt als kompakter Testschritt erhalten; das Modell setzt `freigabe_durch_mensch` weiterhin nie selbst.
+
+## Scrollbare Proof-Seitenleiste
+
+- Oberhalb der Sidebar ein shadcn-artiges Select für URL und Beweislauf.
+- Alle vollständigen `case.json`-Pakete unterhalb des lokalen Bundle-Verzeichnisses einlesen, nach URL gruppieren und innerhalb der URL absteigend nach Zeitpunkt sortieren.
+- Die Auswahl eines älteren Laufs aktualisiert Status, Hashes und Artefaktliste ohne vollständigen Seitenreload.
+- Artefakte nach Gruppen darstellen:
+  - `Abruf`: Roh-HTML, Header, normalisierter Text, vorheriger Text, Diff
+  - `Analyse`: Modellinput und validierter Modelloutput
+  - `Beweis`: WARC, CDX, Manifest, Manifest-Digest, TSA-Anfrage/-Antwort
+  - `Bericht`: PDF
+- Inline-Vorschau:
+  - HTML ausschließlich escaped als Quelltext, niemals ausführbar rendern,
+  - Text, JSON und Diff in einem begrenzten `<pre>`-Bereich,
+  - PDF in einem eingebetteten Viewer,
+  - WARC und CDX als Download beziehungsweise Öffnen in neuem Tab.
+- Vorschauen auf eine sichere Maximalgröße begrenzen; größere Dateien nur herunterladen.
+- Artefaktpfade strikt auf das lokale Store-Verzeichnis begrenzen.
+- Fehlende oder unvollständige Artefakte als neutrale Warnung anzeigen, nicht als kaputten Link.
+
+## Schnittstellen und Datenmodell
+
+- Bestehende Lauf-API beibehalten und Statusinformationen um die einzelnen Beweisschritte ergänzen.
+- `GET /api/cases` liefert ausschließlich sichere technische Metadaten aller gespeicherten Beweispakete: ID, URL, Zeitpunkt, Status und Hash.
+- `GET /api/cases/{case_id}` liefert technische Zusammenfassung und erlaubte Artefaktlabels, keine unvalidierten Modellinhalte.
+- Historische Artefaktroute um eine sichere Case-ID ergänzen; die bestehende Latest-Artifact-Route bleibt kompatibel.
+- Textvorschauen über eine eigene API als escaped Text liefern; Binärdateien niemals in JSON einbetten.
+- Anthropic-Key ausschließlich aus `ANTHROPIC_API_KEY` lesen und nie an Browser, Laufstatus, Historie oder Artefaktmetadaten übermitteln.
+- Bestehende öffentliche URL-Prüfung, Redirect-Kontrolle sowie Login-/CAPTCHA-/`robots.txt`-Abbruch unverändert erhalten.
+
+## Tests und Abnahme
+
+- Gesamte bestehende Testsuite bleibt grün.
+- App-Shell besitzt auf unterschiedlichen Desktopgrößen keinen Body-Scroll.
+- Linker Pipeline-Bereich bleibt vollständig sichtbar; nur die Proof-Seitenleiste scrollt.
+- Helles MucLegal-Logo und Harness-Kennzeichnung sind sichtbar.
+- Baseline, unveränderter Lauf, erfolgreicher Änderungsfall und Fehlerfall zeigen korrekte Schrittzustände.
+- Alle gespeicherten Beweispakete erscheinen nach URL gruppiert und zeitlich sortiert.
+- Wechsel zwischen verschiedenen URLs und älteren Läufen lädt die richtigen Hashes und Artefakte.
+- HTML-Vorschau wird escaped; Pfad-Traversal und Artefakte außerhalb des Stores werden abgewiesen.
+- Große oder binäre Artefakte werden nicht unkontrolliert inline geladen.
+- PDF-Vorschau, Text-/JSON-/Diff-Vorschau und WARC-Download funktionieren.
+- Menschliche Freigabe bleibt getrennt von der Anthropic-Ausgabe.
+- Playwright-Abnahme auf mehreren Viewports, mindestens:
+  - 1366 × 768,
+  - 1440 × 900,
+  - 1920 × 1080.
+- Zusätzlich Browser-Konsole, Polling, URL-/Run-Wechsel, Sidebar-Scroll und Artefaktvorschau prüfen.
+
+## Annahmen
+
+- „Bildschirmangepasst“ bedeutet eine `100dvh`-Desktop-App-Shell ohne Scrollen des Dokuments; nur die Proof-Sidebar besitzt einen internen Scrollbereich.
+- Mobilgeräte sind nicht der primäre Hackathon-Abnahmefall; dort darf die Proof-Sidebar als Panel geöffnet werden.
+- „shadcn“ bezeichnet die Gestaltungssprache, nicht eine React-Abhängigkeit.
+- Es werden alle vollständigen lokalen Beweispakete angezeigt, nicht nur der letzte Lauf je URL.
+- Die echte juristische Fachanwendung und ihre spätere Informationsarchitektur bleiben ausdrücklich außerhalb dieses Test-Harnesses.
