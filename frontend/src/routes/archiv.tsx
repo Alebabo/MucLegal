@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
@@ -351,6 +351,20 @@ function TenorDetail({ item, onClose }: { item: TenorArchiveRecord; onClose: () 
           <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">
             {item.context}
           </p>
+        </div>
+
+        <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
+          <p className="max-w-xl text-xs leading-5 text-muted-foreground">
+            Die gespeicherte Fassung bleibt erhalten. Eine Überarbeitung wird als neuer
+            Archiveintrag angelegt.
+          </p>
+          <Link
+            to="/tenorhilfe"
+            search={{ tenor_id: item.tenor_id }}
+            className="inline-flex min-h-10 items-center rounded-full bg-foreground px-5 text-sm font-semibold text-background transition-opacity hover:opacity-85"
+          >
+            Tenor anpassen
+          </Link>
         </div>
       </article>
     </div>

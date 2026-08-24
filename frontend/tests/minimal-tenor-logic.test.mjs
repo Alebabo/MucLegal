@@ -3,9 +3,13 @@ import test from "node:test";
 
 import {
   assessCompleteness,
+  composeRevisionContext,
+  extractLegalBases,
   filterModeCommands,
+  hasConcreteViolationLocation,
   inferFallgruppe,
   isTenor,
+  nextRequiredIntakeFact,
   nextWrappedIndex,
 } from "../src/lib/minimal-tenor-logic.ts";
 import { composeDictationText, mergeDictationSegments } from "../src/lib/dictation.ts";
@@ -33,6 +37,46 @@ test("accepts a short semantically complete description", () => {
   );
   assert.equal(result.complete, true);
   assert.equal(result.nextQuestion, null);
+});
+
+test("asks deterministically for exact violation location and specific legal bases", () => {
+  const context = "Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer falschen Frist.";
+  const first = nextRequiredIntakeFact(context, "irrefuehrende_werbung", []);
+  assert.equal(first?.id, "verstossort");
+
+  const locationAnswer = {
+    ...first,
+    answer: "Auf der Produktseite https://example.org/angebot startet der Countdown erneut.",
+  };
+  const second = nextRequiredIntakeFact(context, "irrefuehrende_werbung", [locationAnswer]);
+  assert.equal(second?.id, "rechtsgrundlagen");
+  const legalAnswer = { ...second, answer: "§ 5 UWG und § 8 Abs. 1 UWG" };
+  assert.equal(
+    nextRequiredIntakeFact(context, "irrefuehrende_werbung", [locationAnswer, legalAnswer]),
+    null,
+  );
+  assert.deepEqual(extractLegalBases(legalAnswer.answer), ["§ 5 UWG", "§ 8 Abs. 1 UWG"]);
+});
+
+test("does not demand a URL for a sufficiently quoted AGB clause", () => {
+  assert.equal(
+    hasConcreteViolationLocation(
+      'Klausel: "Der Vertrag verlängert sich automatisch um zwölf Monate."',
+      "agb_klausel",
+    ),
+    true,
+  );
+});
+
+test("keeps the original tenor, source context and revision request separate", () => {
+  const context = composeRevisionContext(
+    "Der Antragsgegnerin wird untersagt, mit einer falschen Frist zu werben.",
+    "Bitte technikneutral formulieren und den Countdown ausdrücklich erfassen.",
+    "Die Frist auf der Produktseite bestand tatsächlich nicht.",
+  );
+  assert.match(context, /Bestehender Tenor/);
+  assert.match(context, /Ursprünglicher Sachverhalt/);
+  assert.match(context, /Änderungswunsch/);
 });
 
 test("recognizes tenor correction input", () => {

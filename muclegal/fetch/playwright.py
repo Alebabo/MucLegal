@@ -742,12 +742,13 @@ def _capture_expanded_legal_print_pdf(
     normalized_text: str,
 ) -> None:  # noqa: ANN001
     """Store a derived PDF containing every sequentially expanded legal block."""
+    import reportlab
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfbase.ttfonts import TTFont, TTFError
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
     pdf_path = root / "expanded-legal-print.pdf"
@@ -755,15 +756,19 @@ def _capture_expanded_legal_print_pdf(
     source_url = page.url
     try:
         font_name = "Helvetica"
+        reportlab_fonts = Path(reportlab.__file__).resolve().parent / "fonts"
         for candidate in (
+            str(reportlab_fonts / "Vera.ttf"),
             "C:/Windows/Fonts/arial.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         ):
+            if not Path(candidate).is_file():
+                continue
             try:
                 pdfmetrics.registerFont(TTFont("MucLegalUnicode", candidate))
                 font_name = "MucLegalUnicode"
                 break
-            except (OSError, ValueError):
+            except (OSError, TTFError, ValueError):
                 continue
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
@@ -838,7 +843,8 @@ def _capture_expanded_legal_print_pdf(
                 "expansion_summary": expansion_summary,
             },
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, TTFError, ValueError) as exc:
+        pdf_path.unlink(missing_ok=True)
         _write_json(
             metadata_path,
             {

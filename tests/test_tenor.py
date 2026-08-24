@@ -15,6 +15,7 @@ from muclegal.llm.tenor import (
     TENOR_PROMPT_VERSION,
     TenorDraftValidationError,
     build_tenor_input,
+    build_tenor_strategy_input,
     create_tenor_draft,
     create_tenor_proposals,
     validate_tenor_draft,
@@ -152,6 +153,36 @@ class TenorDraftTests(unittest.TestCase):
         self.assertTrue(all(item["freigabe_durch_mensch"] is None for item in result["proposals"]))
         self.assertIn("Unterlassungsmonitor-Wissensdokument", result["reference_version"])
         self.assertTrue(all("KW-002" in item["source_ids"] for item in result["proposals"]))
+
+    def test_mask_input_uses_the_same_neutral_strategy_and_knowledge(self) -> None:
+        model_input = build_tenor_input(**tenor_payload())
+        enriched, source_ids, reference_version = build_tenor_strategy_input(
+            model_input,
+            fallgruppe="irrefuehrende_werbung",
+            strategy="neutral",
+        )
+        self.assertEqual("neutral", enriched["strategie"]["id"])
+        self.assertEqual("irrefuehrende_werbung", enriched["fallgruppe"])
+        self.assertEqual(source_ids, enriched["wissensbasis"]["source_ids"])
+        self.assertIn("KW-002", source_ids)
+        self.assertEqual(reference_version, enriched["wissensbasis"]["version"])
+
+    def test_mask_api_enriches_a_selected_fallgruppe(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                tenor_analyzer_factory=StrategyTenorAnalyzer,
+            )
+            payload = tenor_payload() | {"fallgruppe": "irrefuehrende_werbung"}
+            with TestClient(app) as client:
+                response = client.post("/api/v1/tenor-drafts", json=payload)
+            self.assertEqual(201, response.status_code, response.text)
+            record = response.json()
+            self.assertEqual("neutral", record["input"]["strategie"]["id"])
+            self.assertEqual("irrefuehrende_werbung", record["input"]["fallgruppe"])
+            self.assertIn("KW-002", record["input"]["wissensbasis"]["source_ids"])
 
     def test_openai_analyzer_uses_frozen_prompt_and_structured_output(self) -> None:
         class FakeResponses:

@@ -522,6 +522,47 @@ Plattformen benötigen eine Fallprofil-URL, eine öffentliche Sitemap oder einen
 eigenen eng begrenzten und belegten Plattformpfad. Login, Paywall, CAPTCHA und
 verändernde Formularaktionen bleiben ausgeschlossen.
 
+## Mirage-Rechtstextbilder brachen an einer nicht verfügbaren Windows-Schrift ab
+
+### Symptom
+
+Ein Grey-Mode-Lauf vom 24.08.2026 für `https://mirageperfume.com/` fand die
+öffentlichen Shopify-Rechtstextpfade, gab AGB und Datenschutz aber nicht als
+Bild aus. Die Oberfläche meldete unter anderem
+`AGB-Screenshot nicht erzeugt: TTFError: Can't open file
+"C:/Windows/Fonts/arial.ttf"`.
+
+### Ursache und Diagnose
+
+Der Fehler lag nicht in der Rechtstextsuche oder an einem fehlenden API-Schlüssel.
+Während einer Rechtstextaufnahme wird zusätzlich eine lokale PDF-Druckfassung
+sequenziell expandierter Klauselblöcke erzeugt. Deren ReportLab-Fontauswahl
+versuchte feste Windows- und Linux-Pfade. ReportLabs `TTFError` erbt weder von
+`OSError` noch von `ValueError`; deshalb erfassten die vorhandenen Fehlerpfade
+die nicht lesbare Arial-Datei nicht. Die optionale Druckfassung brach daraufhin
+den übergeordneten AGB-/Datenschutz-Erfassungspfad ab.
+
+### Lösung
+
+Die Fontauswahl bevorzugt nun die mit ReportLab ausgelieferte `Vera.ttf`, prüft
+Kandidaten vor dem Öffnen und behandelt `TTFError` sowohl je Kandidat als auch
+im äußeren PDF-Fehlerpfad. Ist keine TrueType-Schrift verwendbar, wird die
+integrierte Helvetica-Schrift genutzt. Ein Fehlschlag der abgeleiteten
+Druckfassung kann dadurch keinen Rechtstext-Screenshot mehr verhindern;
+unvollständige PDF-Dateien werden entfernt und der PDF-Status bleibt getrennt
+dokumentiert.
+
+### Verifikation und verbleibende Grenze
+
+Ein Regressionstest erzwingt exakt einen ReportLab-`TTFError` mit dem gemeldeten
+Arial-Pfad. Die Funktion fällt ohne Ausnahme auf Helvetica zurück und erzeugt
+weiterhin eine als lokal abgeleitet gekennzeichnete PDF. Die bestehenden Tests
+für Shopify-Pfaderkennung und browserlose Rechtstextbilder bleiben grün.
+Anschließend sind beide Mirage-Rollen in einem neuen Grey-Mode-Lauf zu prüfen;
+ein externer Seitenschutz oder ein Chromium-Abbruch kann weiterhin einen
+transparent gekennzeichneten HTML-Fallback statt eines pixelgetreuen
+Live-Screenshots erforderlich machen.
+
 ## Dynamisch schrumpfende Rechtstextseite ließ Kachelaufnahme abbrechen
 
 ### Symptom

@@ -24,6 +24,7 @@ from muclegal.fetch import (
     ScreenshotCaptureError,
 )
 from muclegal.fetch.playwright import (
+    _capture_expanded_legal_print_pdf,
     _capture_html_evidence_image,
     _capture_validated_screenshots,
     _cookie_rejection_action,
@@ -816,6 +817,30 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn("Gespeicherter öffentlicher Inhalt", normalized_content)
         self.assertTrue(screenshot_index_saved)
         self.assertTrue(preview_saved)
+
+    def test_legal_print_font_failure_does_not_abort_legal_capture(self) -> None:
+        from reportlab.pdfbase.ttfonts import TTFError
+
+        with tempfile.TemporaryDirectory() as output, patch(
+            "reportlab.pdfbase.ttfonts.TTFont",
+            side_effect=TTFError('Can\'t open file "C:/Windows/Fonts/arial.ttf"'),
+        ):
+            root = Path(output)
+            _capture_expanded_legal_print_pdf(
+                SimpleNamespace(url="https://shop.test/policies/terms-of-service"),
+                root,
+                {"complete": True},
+                [{"target_text": "AGB", "text": "Gespeicherter Klauseltext."}],
+                "Gespeicherter Klauseltext.",
+            )
+            metadata = json.loads(
+                (root / "expanded-legal-print.json").read_text(encoding="utf-8")
+            )
+            pdf_saved = (root / "expanded-legal-print.pdf").is_file()
+
+        self.assertTrue(pdf_saved)
+        self.assertFalse(metadata["website_original"])
+        self.assertEqual(1, metadata["expanded_block_count"])
 
     def test_browser_termination_uses_labeled_http_snapshot_fallback(self) -> None:
         fetcher = HttpFetcher(
@@ -1849,6 +1874,10 @@ class LiveUiTests(unittest.TestCase):
                     time.sleep(0.01)
 
         self.assertEqual(200, page.status_code)
+        self.assertIn('class="aura-brand-logo"', page.text)
+        self.assertIn('<h1 class="page-title">BeweisLab</h1>', page.text)
+        self.assertNotIn('class="aura-brand-name"', page.text)
+        self.assertNotIn('<header><div class="head">', page.text)
         self.assertNotIn("Eine URL. Eine nachvollziehbare Beweisspur.", page.text)
         self.assertIn("Prüfverlauf", page.text)
         self.assertNotIn("ANTHROPIC_API_KEY", page.text)

@@ -41,6 +41,7 @@ from muclegal.llm.tenor import (
     TenorAnalyzer,
     TenorDraft,
     build_tenor_input,
+    build_tenor_strategy_input,
     create_tenor_draft,
     create_tenor_proposals,
     validate_tenor_draft,
@@ -158,6 +159,7 @@ class TenorDraftRequest(BaseModel):
     fundstelle: str = Field(min_length=1, max_length=2048)
     beschreibung: str = Field(min_length=1, max_length=4000)
     rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
+    fallgruppe: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class TenorProposalRequest(BaseModel):
@@ -1090,7 +1092,15 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         })
 
     def generate_tenor(payload: TenorDraftRequest) -> dict:
-        model_input = build_tenor_input(**payload.model_dump())
+        values = payload.model_dump()
+        fallgruppe = values.pop("fallgruppe")
+        model_input = build_tenor_input(**values)
+        if fallgruppe:
+            model_input, _, _ = build_tenor_strategy_input(
+                model_input,
+                fallgruppe=fallgruppe,
+                strategy="neutral",
+            )
         draft, mode, model = create_tenor_draft(model_input, tenor_analyzer_factory())
         return tenor_drafts.save(model_input, draft, mode=mode, model=model)
 

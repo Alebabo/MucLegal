@@ -7,6 +7,7 @@ import {
   Loader2,
   Mic,
   RotateCcw,
+  Send,
   Sparkles,
   X,
 } from "lucide-react";
@@ -16,11 +17,15 @@ import { composeDraft, getBlock, nextAutofillBlock, register } from "@/tenor-eng
 import type { Draft, Profile } from "@/tenor-types";
 import { lottoDemoCases, type DemoCase } from "@/data/lottoDemoCases";
 import {
+  composeRevisionContext,
+  extractLegalBases,
   filterModeCommands,
   inferFallgruppe,
   isTenor,
   modeCommands,
+  nextRequiredIntakeFact,
   nextWrappedIndex,
+  type RequiredIntakeAnswer,
   type WritingMode,
 } from "@/lib/minimal-tenor-logic";
 import {
@@ -32,7 +37,9 @@ import {
   createTenorProposals,
   createTenorQuestion,
   extractTenorPdf,
+  listTenorArchiveEntries,
   saveTenorArchiveEntry,
+  type TenorArchiveRecord,
   type TenorPdfExtraction,
   type TenorProposalResponse,
   type TenorQuestion,
@@ -196,7 +203,7 @@ function DraftChoice({
   );
 }
 
-export function MinimalTenorView() {
+export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: string | undefined }) {
   const [context, setContext] = useState("");
   const [mode, setMode] = useState<WritingMode | null>(null);
   const [selectedCase, setSelectedCase] = useState<DemoCase | null>(null);
@@ -218,6 +225,14 @@ export function MinimalTenorView() {
   const [generationError, setGenerationError] = useState("");
   const [archiveError, setArchiveError] = useState("");
   const [savingArchive, setSavingArchive] = useState(false);
+  const [activeArchive, setActiveArchive] = useState<TenorArchiveRecord | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveLoadError, setArchiveLoadError] = useState("");
+  const [requiredIntakeAnswers, setRequiredIntakeAnswers] = useState<RequiredIntakeAnswer[]>([]);
+  const [requiredIntakeAnswer, setRequiredIntakeAnswer] = useState("");
+  const [revisionInput, setRevisionInput] = useState("");
+  const [revisionHistory, setRevisionHistory] = useState<string[]>([]);
+  const [lastGenerationContext, setLastGenerationContext] = useState("");
   const [clarificationTurns, setClarificationTurns] = useState<ClarificationTurn[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<TenorQuestion | null>(null);
   const [questionLoading, setQuestionLoading] = useState(false);
@@ -242,9 +257,20 @@ export function MinimalTenorView() {
   );
   const previousSourceContext = useRef(sourceContext);
 
+  const factualContext = useMemo(
+    () =>
+      [
+        sourceContext,
+        ...requiredIntakeAnswers.map((item) => `${item.question}\nAntwort: ${item.answer}`),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    [requiredIntakeAnswers, sourceContext],
+  );
+
   const clarifiedContext = useMemo(
-    () => composeClarifiedContext(sourceContext, clarificationTurns),
-    [clarificationTurns, sourceContext],
+    () => composeClarifiedContext(factualContext, clarificationTurns),
+    [clarificationTurns, factualContext],
   );
   const profile = useMemo(
     () => profileFromContext(clarifiedContext, Boolean(pdfExtraction)),
@@ -254,6 +280,9 @@ export function MinimalTenorView() {
   const neutralDraft = useMemo(() => composeDraft(profile, "kerngleich"), [profile]);
   const contextLength = sourceContext.length;
   const correctionMode = mode === "tenor" || isTenor(sourceContext);
+  const requiredIntakeFact = correctionMode
+    ? null
+    : nextRequiredIntakeFact(sourceContext, profile.fallgruppe, requiredIntakeAnswers);
   const slashMatch = context.match(/(?:^|\s)\/([^\s]*)$/);
   const slashQuery = slashMatch?.[1]?.toLocaleLowerCase("de") ?? "";
   const showModeMenu = Boolean(slashMatch);
@@ -271,15 +300,54 @@ export function MinimalTenorView() {
       : [];
   const canRequestQuestions =
     !showModeMenu &&
+    !correctionMode &&
     (mode !== "fälle" || Boolean(selectedCase)) &&
     contextLength >= 20 &&
     !pdfLoading &&
+    !requiredIntakeFact &&
     !clarificationReady;
   const canGenerate =
     !showModeMenu &&
+    !correctionMode &&
     !pdfLoading &&
     clarificationReady &&
     (Boolean(selectedCase) || clarifiedContext.length >= 20);
+
+  useEffect(() => {
+    if (!initialArchiveId) return;
+    let cancelled = false;
+    setArchiveLoading(true);
+    setArchiveLoadError("");
+    void listTenorArchiveEntries()
+      .then(({ tenors }) => {
+        if (cancelled) return;
+        const archivedTenor = tenors.find((item) => item.tenor_id === initialArchiveId);
+        if (!archivedTenor) {
+          setArchiveLoadError("Der archivierte Tenor wurde nicht gefunden.");
+          return;
+        }
+        setActiveArchive(archivedTenor);
+        setMode("tenor");
+        setContext(archivedTenor.text);
+        setSelectedCase(null);
+        setGenerated(false);
+        setRevisionInput("");
+        setRevisionHistory([]);
+        setLastGenerationContext("");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setArchiveLoadError(
+          error instanceof Error ? error.message : "Das Tenorarchiv konnte nicht geladen werden.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setArchiveLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialArchiveId]);
 
   useEffect(() => {
     if (!correctionMode || generated || context.trim().length < 4) {
@@ -319,6 +387,8 @@ export function MinimalTenorView() {
     setQuestionError("");
     setTextAnswer("");
     setCustomChoiceOpen(false);
+    setRequiredIntakeAnswers([]);
+    setRequiredIntakeAnswer("");
   }, [sourceContext]);
 
   useEffect(
@@ -380,6 +450,9 @@ export function MinimalTenorView() {
     const contextWithoutCommand = context.replace(/(?:^|\s)\/[^\s]*$/, "").trimEnd();
     setMode(nextMode);
     setSelectedCase(null);
+    setActiveArchive(null);
+    setRevisionInput("");
+    setRevisionHistory([]);
     setContext(nextMode === "fälle" ? "" : contextWithoutCommand);
     setCommandIndex(0);
     setCaseIndex(0);
@@ -392,6 +465,7 @@ export function MinimalTenorView() {
   const chooseCase = (item: DemoCase) => {
     setMode("fälle");
     setSelectedCase(item);
+    setActiveArchive(null);
     setCaseIndex(0);
     setContext(caseContext(item));
     setGenerated(false);
@@ -464,7 +538,7 @@ export function MinimalTenorView() {
     setCurrentQuestion(null);
     try {
       const response = await createTenorQuestion({
-        context: sourceContext,
+        context: factualContext,
         fallgruppe: profile.fallgruppe,
         answered_questions: answeredQuestions(turns),
       });
@@ -503,24 +577,44 @@ export function MinimalTenorView() {
     void requestClarificationQuestion(nextTurns);
   };
 
-  const generate = async () => {
-    if (!canGenerate || generating) return;
+  const answerRequiredIntakeFact = () => {
+    const answer = requiredIntakeAnswer.trim();
+    if (!requiredIntakeFact || !answer) return;
+    setRequiredIntakeAnswers((current) => [
+      ...current.filter((item) => item.id !== requiredIntakeFact.id),
+      { ...requiredIntakeFact, answer },
+    ]);
+    setRequiredIntakeAnswer("");
+  };
+
+  const generateProposals = async (generationContext: string) => {
+    if (generating || generationContext.trim().length < 4) return;
     setGenerating(true);
     setGenerationError("");
     setSuggestion(null);
+    setLastGenerationContext(generationContext);
     try {
+      const legalBases = extractLegalBases(generationContext);
+      const legalBasisStillOpen = requiredIntakeAnswers.some(
+        (item) => item.id === "rechtsgrundlagen" && extractLegalBases(item.answer).length === 0,
+      );
       const response = await createTenorProposals({
-        fall_id: selectedCase?.fall_id ?? "TENOR-ENTWURF",
-        schuldner: debtorFromContext(clarifiedContext),
+        fall_id: activeArchive?.fall_id ?? selectedCase?.fall_id ?? "TENOR-ENTWURF",
+        schuldner: activeArchive?.schuldner ?? debtorFromContext(generationContext),
         fundstelle:
           selectedCase?.url ??
-          clarifiedContext.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
+          generationContext.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
           (pdfExtraction
             ? `Hochgeladenes Vertragsdokument: ${pdfExtraction.filename}`
             : "Vom Nutzer beschriebene Fundstelle"),
-        context: clarifiedContext,
+        context: generationContext,
         fallgruppe: profile.fallgruppe,
-        rechtsgrundlagen: legalBasesFor(profile.fallgruppe),
+        rechtsgrundlagen:
+          legalBases.length > 0
+            ? legalBases
+            : legalBasisStillOpen
+              ? ["Rechtsgrundlage noch durch Menschen zu prüfen"]
+              : legalBasesFor(profile.fallgruppe),
       });
       const precise = response.proposals.find((item) => item.strategy === "precise");
       const neutral = response.proposals.find((item) => item.strategy === "neutral");
@@ -540,6 +634,24 @@ export function MinimalTenorView() {
     }
   };
 
+  const generate = () => {
+    if (!canGenerate) return;
+    void generateProposals(clarifiedContext);
+  };
+
+  const submitRevision = () => {
+    const instruction = revisionInput.trim();
+    if (!instruction || generating || context.trim().length < 4) return;
+    const revisionContext = composeRevisionContext(
+      context,
+      instruction,
+      activeArchive?.context ?? "",
+    );
+    setRevisionHistory((current) => [...current, instruction]);
+    setRevisionInput("");
+    void generateProposals(revisionContext);
+  };
+
   const reset = () => {
     setContext("");
     setMode(null);
@@ -557,6 +669,14 @@ export function MinimalTenorView() {
     setGenerationError("");
     setArchiveError("");
     setSavingArchive(false);
+    setActiveArchive(null);
+    setArchiveLoading(false);
+    setArchiveLoadError("");
+    setRequiredIntakeAnswers([]);
+    setRequiredIntakeAnswer("");
+    setRevisionInput("");
+    setRevisionHistory([]);
+    setLastGenerationContext("");
     questionSession.current += 1;
     setClarificationTurns([]);
     setCurrentQuestion(null);
@@ -574,22 +694,23 @@ export function MinimalTenorView() {
     const draft = selected === "precise" ? preciseDraft : neutralDraft;
     const text = selected === "precise" ? preciseText : neutralText;
     const proposal = proposalResponse?.proposals.find((item) => item.strategy === selected);
-    const schuldner = debtorFromContext(clarifiedContext);
+    const schuldner = activeArchive?.schuldner ?? debtorFromContext(lastGenerationContext);
     setArchiveError("");
     setSavingArchive(true);
     try {
-      await saveTenorArchiveEntry({
-        fall_id: selectedCase?.fall_id ?? "TENOR-ENTWURF",
+      const archivedTenor = await saveTenorArchiveEntry({
+        fall_id: activeArchive?.fall_id ?? selectedCase?.fall_id ?? "TENOR-ENTWURF",
         schuldner,
-        title: selectedCase?.title ?? schuldner,
+        title: activeArchive?.title ?? selectedCase?.title ?? schuldner,
         text,
-        context: clarifiedContext.trim(),
+        context: lastGenerationContext.trim() || clarifiedContext.trim(),
         strategy: selected,
         model: proposalResponse?.model ?? "Lokale Bausteinlogik",
         reference_version: proposalResponse?.reference_version ?? "Lokales Tenorregister",
         source_ids: proposal?.source_ids ?? draft.blockIds,
       });
       setContext(text);
+      setActiveArchive(archivedTenor);
       setAcceptedIds(draft.blockIds);
       setGenerated(false);
       setSelected(null);
@@ -639,6 +760,16 @@ export function MinimalTenorView() {
 
       {!generated ? (
         <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col px-6 pb-28 pt-[8vh]">
+          {archiveLoading && (
+            <p className="mb-6 flex items-center gap-2 text-sm text-slate-400" aria-live="polite">
+              <Loader2 className="size-4 animate-spin" /> Archivierter Tenor wird geladen …
+            </p>
+          )}
+          {archiveLoadError && (
+            <p role="alert" className="mb-6 text-sm text-red-600">
+              {archiveLoadError}
+            </p>
+          )}
           {pdf && (
             <div className="mb-8">
               <div className="flex items-center gap-3 text-sm text-slate-500">
@@ -684,7 +815,11 @@ export function MinimalTenorView() {
               {mode && (
                 <strong className="max-w-[45%] shrink-0 truncate pt-[7px] text-sm leading-6 text-slate-900">
                   /{mode}
-                  {selectedCase ? ` · ${selectedCase.title}` : ""}
+                  {selectedCase
+                    ? ` · ${selectedCase.title}`
+                    : activeArchive
+                      ? ` · ${activeArchive.title}`
+                      : ""}
                 </strong>
               )}
               <textarea
@@ -854,6 +989,92 @@ export function MinimalTenorView() {
                   <p className="px-3 py-2 text-xs text-slate-400">Kein Fall gefunden.</p>
                 )}
               </div>
+            )}
+            {requiredIntakeFact && contextLength >= 20 && !showModeMenu && (
+              <form
+                className="ml-4 mt-5 max-w-2xl border-l border-slate-200 pl-5 sm:ml-8 sm:pl-6"
+                onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  answerRequiredIntakeFact();
+                }}
+              >
+                <p className="text-sm leading-6 text-slate-400">{requiredIntakeFact.question}</p>
+                <div className="mt-2 flex items-end gap-3">
+                  <textarea
+                    autoFocus
+                    value={requiredIntakeAnswer}
+                    maxLength={1_500}
+                    rows={1}
+                    placeholder={requiredIntakeFact.placeholder}
+                    onChange={(event) => setRequiredIntakeAnswer(event.target.value)}
+                    className="min-h-10 flex-1 resize-y border-b border-slate-200 bg-transparent py-2 font-serif text-base leading-7 text-slate-700 outline-none placeholder:text-slate-300 focus:border-slate-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!requiredIntakeAnswer.trim()}
+                    className="min-h-10 rounded-full bg-slate-900 px-4 text-xs font-semibold text-white disabled:opacity-30"
+                  >
+                    Weiter
+                  </button>
+                </div>
+              </form>
+            )}
+            {correctionMode && context.trim().length >= 4 && !showModeMenu && (
+              <section
+                aria-label="Tenor überarbeiten"
+                className="ml-4 mt-6 max-w-2xl border-l border-slate-200 pl-5 sm:ml-8 sm:pl-6"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {activeArchive && (
+                  <p className="mb-4 text-[11px] leading-5 text-slate-400">
+                    Archivfassung vom{" "}
+                    {new Date(activeArchive.created_at).toLocaleDateString("de-DE")}. Das Original
+                    bleibt erhalten; die Überarbeitung wird als neue Fassung archiviert.
+                  </p>
+                )}
+                {revisionHistory.map((instruction, index) => (
+                  <div key={`${instruction}-${index}`} className="mb-4 flex justify-end">
+                    <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-slate-100 px-4 py-2.5 text-sm leading-6 text-slate-700">
+                      {instruction}
+                    </p>
+                  </div>
+                ))}
+                <form
+                  className="flex items-end gap-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    submitRevision();
+                  }}
+                >
+                  <textarea
+                    value={revisionInput}
+                    maxLength={2_000}
+                    rows={2}
+                    aria-label="Änderungswunsch"
+                    placeholder="Beschreibe, ob und wie der Tenor verändert werden soll …"
+                    onChange={(event) => setRevisionInput(event.target.value)}
+                    className="min-h-14 flex-1 resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 font-serif text-base leading-7 text-slate-700 outline-none placeholder:text-slate-300 focus:border-slate-400"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!revisionInput.trim() || generating}
+                    aria-label="Änderungswunsch senden"
+                    className="grid size-11 shrink-0 place-items-center rounded-full bg-slate-950 text-white disabled:opacity-30"
+                  >
+                    {generating ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-4" />
+                    )}
+                  </button>
+                </form>
+                {generationError && (
+                  <p role="alert" className="mt-3 text-xs text-red-600">
+                    {generationError}
+                  </p>
+                )}
+              </section>
             )}
             {(clarificationTurns.length > 0 || currentQuestion || questionLoading) && (
               <div
@@ -1093,7 +1314,7 @@ export function MinimalTenorView() {
                 {dictationNotice && (
                   <span className="ml-2 text-xs text-slate-400">{dictationNotice}</span>
                 )}
-                {generationError && (
+                {generationError && !correctionMode && (
                   <span role="alert" className="ml-2 max-w-md text-xs text-red-600">
                     {generationError}
                   </span>

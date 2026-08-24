@@ -13,6 +13,31 @@ export type Completeness = {
   nextQuestion: string | null;
 };
 
+export type RequiredIntakeFactId = "verstossort" | "rechtsgrundlagen";
+
+export type RequiredIntakeFact = {
+  id: RequiredIntakeFactId;
+  question: string;
+  placeholder: string;
+};
+
+export type RequiredIntakeAnswer = RequiredIntakeFact & { answer: string };
+
+const requiredIntakeFacts: Record<RequiredIntakeFactId, RequiredIntakeFact> = {
+  verstossort: {
+    id: "verstossort",
+    question:
+      "Wo genau liegt der Verstoß – an welcher Fundstelle und welche konkrete Aussage, Gestaltung oder Funktion ist dort beanstandet?",
+    placeholder:
+      "Zum Beispiel: Produktseite unter https://…; der Countdown startet nach Ablauf erneut.",
+  },
+  rechtsgrundlagen: {
+    id: "rechtsgrundlagen",
+    question: "Welche spezifischen Rechtsgrundlagen kommen nach deiner Prüfung in Betracht?",
+    placeholder: "Zum Beispiel: § 5 UWG und § 8 Abs. 1 UWG – oder: noch rechtlich zu prüfen.",
+  },
+};
+
 export const modeCommands: ModeCommand[] = [
   {
     id: "sachverhalt",
@@ -80,6 +105,59 @@ export function assessCompleteness(text: string): Completeness {
           ? "Was genau soll das Unternehmen künftig unterlassen?"
           : null;
   return { complete: missing.length === 0, missing, nextQuestion };
+}
+
+export function hasConcreteViolationLocation(text: string, fallgruppe: string) {
+  if (/Hochgeladenes Vertragsdokument:/i.test(text)) return true;
+  if (fallgruppe === "agb_klausel") {
+    return /[„‚"].{8,}[“‘"]|\bklausel\s*:\s*.{8,}/is.test(text);
+  }
+  return (
+    /https?:\/\//i.test(text) ||
+    /\b(?:auf|in|unter|bei)\s+(?:der|dem|den|einer|einem)?\s*(?:website|webseite|app|produktseite|checkout|newsletter|anschreiben|filiale|warenkorb|bestellprozess)\b/i.test(
+      text,
+    )
+  );
+}
+
+export function hasSpecificLegalBasis(text: string) {
+  return /(?:§{1,2}\s*\d+[a-z]?(?:\s*Abs\.\s*\d+)?|Art\.\s*\d+[a-z]?)\s*(?:UWG|BGB|UKlaG|TDDDG|DSGVO|DSA|ZPO|TMG)/i.test(
+    text,
+  );
+}
+
+export function nextRequiredIntakeFact(
+  text: string,
+  fallgruppe: string,
+  answers: RequiredIntakeAnswer[],
+): RequiredIntakeFact | null {
+  const answered = new Set(answers.map((item) => item.id));
+  if (!answered.has("verstossort") && !hasConcreteViolationLocation(text, fallgruppe)) {
+    return requiredIntakeFacts.verstossort;
+  }
+  const combined = `${text}\n${answers.map((item) => item.answer).join("\n")}`;
+  if (!answered.has("rechtsgrundlagen") && !hasSpecificLegalBasis(combined)) {
+    return requiredIntakeFacts.rechtsgrundlagen;
+  }
+  return null;
+}
+
+export function extractLegalBases(text: string) {
+  const matches = text.match(
+    /(?:§{1,2}\s*\d+[a-z]?(?:\s*Abs\.\s*\d+)?|Art\.\s*\d+[a-z]?)\s*(?:UWG|BGB|UKlaG|TDDDG|DSGVO|DSA|ZPO|TMG)/gi,
+  );
+  return [...new Set((matches ?? []).map((item) => item.replace(/\s+/g, " ").trim()))];
+}
+
+export function composeRevisionContext(tenor: string, instruction: string, originalContext = "") {
+  return [
+    "Bestehender Tenor, der überarbeitet werden soll:",
+    tenor.trim(),
+    originalContext.trim() ? `Ursprünglicher Sachverhalt:\n${originalContext.trim()}` : "",
+    `Änderungswunsch:\n${instruction.trim()}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function filterModeCommands(query: string) {

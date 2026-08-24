@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LayoutTemplate, PenLine } from "lucide-react";
 import { useState } from "react";
+import { z } from "zod";
 
 import { MaskTenorView } from "../components/tenor/MaskTenorView";
 import { MinimalTenorView } from "../components/tenor/MinimalTenorView";
 
 export const Route = createFileRoute("/tenorhilfe")({
+  validateSearch: z.object({
+    tenor_id: z.string().min(1).optional(),
+  }),
   head: () => ({
     meta: [
       { title: "Tenorschreibhilfe – Muc Legal Monitoring" },
@@ -30,6 +34,7 @@ export const Route = createFileRoute("/tenorhilfe")({
 type ViewMode = "minimal" | "maske";
 
 function TenorhilfePage() {
+  const { tenor_id: tenorId } = Route.useSearch();
   const [view, setView] = useState<ViewMode>("minimal");
 
   return (
@@ -89,7 +94,7 @@ function TenorhilfePage() {
         aria-labelledby="tenor-tab-minimal"
         hidden={view !== "minimal"}
       >
-        <MinimalTenorView />
+        <MinimalTenorView key={tenorId ?? "new"} initialArchiveId={tenorId} />
       </section>
       <section
         id="tenor-panel-maske"

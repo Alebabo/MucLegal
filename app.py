@@ -55,7 +55,13 @@ app = create_app(
     workflow=WORKFLOW,
     anthropic_ready=ANTHROPIC_READY,
     asset_directory=ROOT / "assets",
-    tenor_analyzer_factory=(AnthropicTenorAnalyzer if ANTHROPIC_READY else DeterministicTenorAnalyzer),
+    tenor_analyzer_factory=(
+        OpenAITenorAnalyzer
+        if OPENAI_READY
+        else AnthropicTenorAnalyzer
+        if ANTHROPIC_READY
+        else DeterministicTenorAnalyzer
+    ),
     tenor_proposal_analyzer_factory=(OpenAITenorAnalyzer if OPENAI_READY else None),
     tenor_question_analyzer_factory=(OpenAITenorQuestionAnalyzer if OPENAI_READY else None),
     monitoring_cases=MONITORING_CASES,

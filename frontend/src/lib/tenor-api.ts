@@ -6,6 +6,7 @@ export type TenorDraftRequest = {
   fundstelle: string;
   beschreibung: string;
   rechtsgrundlagen: string[];
+  fallgruppe?: string;
 };
 
 export type TenorDraft = {
