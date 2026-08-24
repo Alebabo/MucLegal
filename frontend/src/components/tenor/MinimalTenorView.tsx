@@ -29,7 +29,11 @@ import {
   mergeDictationSegments,
   type DictationSegments,
 } from "@/lib/dictation";
-import { createTenorProposals, type TenorProposalResponse } from "@/lib/tenor-api";
+import {
+  createTenorProposals,
+  saveTenorArchiveEntry,
+  type TenorProposalResponse,
+} from "@/lib/tenor-api";
 
 const baseProfile: Profile = {
   profilId: "V-2026-014",
@@ -198,6 +202,8 @@ export function MinimalTenorView() {
   const [neutralText, setNeutralText] = useState("");
   const [proposalResponse, setProposalResponse] = useState<TenorProposalResponse | null>(null);
   const [generationError, setGenerationError] = useState("");
+  const [archiveError, setArchiveError] = useState("");
+  const [savingArchive, setSavingArchive] = useState(false);
   const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
   const [suggestion, setSuggestion] = useState<ReturnType<typeof nextAutofillBlock>>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -407,17 +413,43 @@ export function MinimalTenorView() {
     setSelected(null);
     setProposalResponse(null);
     setGenerationError("");
+    setArchiveError("");
+    setSavingArchive(false);
     setAcceptedIds([]);
     setSuggestion(null);
   };
 
-  const adoptSelected = () => {
-    if (!selected) return;
+  const adoptSelected = async () => {
+    if (!selected || savingArchive) return;
     const draft = selected === "precise" ? preciseDraft : neutralDraft;
-    setContext(selected === "precise" ? preciseText : neutralText);
-    setAcceptedIds(draft.blockIds);
-    setGenerated(false);
-    setSelected(null);
+    const text = selected === "precise" ? preciseText : neutralText;
+    const proposal = proposalResponse?.proposals.find((item) => item.strategy === selected);
+    const schuldner = debtorFromContext(context);
+    setArchiveError("");
+    setSavingArchive(true);
+    try {
+      await saveTenorArchiveEntry({
+        fall_id: selectedCase?.fall_id ?? "TENOR-ENTWURF",
+        schuldner,
+        title: selectedCase?.title ?? schuldner,
+        text,
+        context: context.trim(),
+        strategy: selected,
+        model: proposalResponse?.model ?? "Lokale Bausteinlogik",
+        reference_version: proposalResponse?.reference_version ?? "Lokales Tenorregister",
+        source_ids: proposal?.source_ids ?? draft.blockIds,
+      });
+      setContext(text);
+      setAcceptedIds(draft.blockIds);
+      setGenerated(false);
+      setSelected(null);
+    } catch (error) {
+      setArchiveError(
+        error instanceof Error ? error.message : "Der Tenor konnte nicht archiviert werden.",
+      );
+    } finally {
+      setSavingArchive(false);
+    }
   };
 
   return (
@@ -766,13 +798,23 @@ export function MinimalTenorView() {
                 />
               </div>
               <div className="mt-4 flex min-h-11 items-center justify-center">
-                <button
-                  type="button"
-                  onClick={adoptSelected}
-                  className="rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white"
-                >
-                  Entwurf übernehmen
-                </button>
+                <div className="text-center">
+                  {archiveError && (
+                    <p role="alert" className="mb-3 text-xs text-red-600">
+                      {archiveError}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void adoptSelected()}
+                    disabled={savingArchive}
+                    aria-busy={savingArchive}
+                    className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {savingArchive && <Loader2 className="size-4 animate-spin" />}
+                    {savingArchive ? "Wird archiviert …" : "Entwurf übernehmen"}
+                  </button>
+                </div>
               </div>
             </>
           ) : (

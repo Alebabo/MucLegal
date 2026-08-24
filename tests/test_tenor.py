@@ -199,6 +199,60 @@ class TenorDraftTests(unittest.TestCase):
             self.assertEqual(502, response.status_code, response.text)
             self.assertIn("API-Guthaben ist aufgebraucht", response.json()["detail"])
 
+    def test_tenor_archive_persists_minimal_and_mask_drafts(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            database = root / "reviews.sqlite3"
+            app = create_app(root / "latest-case.json", database)
+            archived_payload = {
+                "fall_id": "VZ-ARCHIV-001",
+                "schuldner": "Synthetische Beispiel GmbH",
+                "title": "Rabattfrist auf der Angebotsseite",
+                "text": "Der Antragsgegnerin wird untersagt, mit einer falschen Frist zu werben.",
+                "context": "Die Rabattfrist auf der Website bestand tatsächlich nicht.",
+                "strategy": "precise",
+                "model": "test-model",
+                "reference_version": "test-reference",
+                "source_ids": ["KW-002"],
+            }
+            with TestClient(app) as client:
+                archived = client.post("/api/v1/tenor-archive", json=archived_payload)
+                self.assertEqual(201, archived.status_code, archived.text)
+                mask = client.post("/api/v1/tenor-drafts", json=tenor_payload())
+                self.assertEqual(201, mask.status_code, mask.text)
+                listed = client.get("/api/v1/tenor-archive")
+            self.assertEqual(200, listed.status_code, listed.text)
+            records = listed.json()["tenors"]
+            self.assertEqual({"minimal", "maske"}, {item["source"] for item in records})
+            minimal = next(item for item in records if item["source"] == "minimal")
+            self.assertEqual("VZ-ARCHIV-001", minimal["fall_id"])
+            self.assertEqual(["KW-002"], minimal["source_ids"])
+
+            restarted = create_app(root / "latest-case.json", database)
+            with TestClient(restarted) as client:
+                persisted = client.get("/api/v1/tenor-archive")
+            self.assertEqual(2, len(persisted.json()["tenors"]))
+
+    def test_tenor_archive_rejects_unknown_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(root / "latest-case.json", root / "reviews.sqlite3")
+            payload = {
+                "fall_id": "VZ-ARCHIV-002",
+                "schuldner": "Synthetische Beispiel GmbH",
+                "title": "Test",
+                "text": "Ein gespeicherter Tenor.",
+                "context": "Ein synthetischer Sachverhalt.",
+                "strategy": "neutral",
+                "model": "test-model",
+                "reference_version": "test-reference",
+                "source_ids": [],
+                "freigabe_durch_mensch": "freigegeben",
+            }
+            with TestClient(app) as client:
+                response = client.post("/api/v1/tenor-archive", json=payload)
+            self.assertEqual(422, response.status_code)
+
     def test_tenor_api_rejects_unknown_fields(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             root = Path(output)

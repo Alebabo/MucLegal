@@ -57,6 +57,27 @@ export type TenorProposalResponse = {
   proposals: [TenorProposal, TenorProposal];
 };
 
+export type TenorArchiveRequest = {
+  fall_id: string;
+  schuldner: string;
+  title: string;
+  text: string;
+  context: string;
+  strategy: "precise" | "neutral";
+  model: string;
+  reference_version: string;
+  source_ids: string[];
+};
+
+export type TenorArchiveRecord = Omit<TenorArchiveRequest, "strategy"> & {
+  tenor_id: string;
+  created_at: string;
+  source: "minimal" | "maske";
+  strategy: string;
+  decision: TenorDecision | null;
+  decided_at: string | null;
+};
+
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -99,6 +120,19 @@ export function createTenorProposals(payload: TenorProposalRequest) {
   return requestJson<TenorProposalResponse>("/api/v1/tenor-proposals", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function saveTenorArchiveEntry(payload: TenorArchiveRequest) {
+  return requestJson<TenorArchiveRecord>("/api/v1/tenor-archive", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listTenorArchiveEntries() {
+  return requestJson<{ tenors: TenorArchiveRecord[] }>("/api/v1/tenor-archive", {
+    method: "GET",
   });
 }
 

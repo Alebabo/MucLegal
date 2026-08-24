@@ -1,8 +1,8 @@
 # Tenorschreibhilfe – Implementierungsstand
 
-Stand: 22.08.2026
+Stand: 24.08.2026
 
-Route: `http://127.0.0.1:8080/tenorhilfe`
+Route: `http://127.0.0.1:4173/tenorhilfe`
 
 Branch: `agent/live-url-ui`
 
@@ -79,6 +79,22 @@ Bearbeitungsansicht. `Beide Entwürfe` führt zum Vergleich zurück;
 `Entwurf übernehmen` bleibt eine gesonderte Bestätigung. In der Maskenansicht
 verschwindet nach der Erzeugung die Eingabespalte vollständig und der Prüfentwurf
 nutzt die gesamte Inhaltsbreite. Der frühere große Erklärungskopf wurde entfernt.
+
+### Tenorarchiv
+
+`Entwurf übernehmen` speichert die gewählte und gegebenenfalls zuvor bearbeitete
+Minimal-Fassung zuerst serverseitig in der vorhandenen SQLite-Datei
+`.muclegal-ui/reviews.sqlite3`. Erst nach erfolgreicher Speicherung kehrt sie in die
+Schreibfläche zurück. Dadurch führt ein Speicherfehler nicht zu einem unbemerkten
+Verlust des ausgewählten Texts.
+
+Unter `/archiv` gibt es neben `Fälle` den eigenen Bereich `Tenore`. Er zeigt die
+übernommenen Minimal-Fassungen sowie die bereits in derselben Datenbank gespeicherten
+Entwürfe aus der strukturierten Maskenansicht, jeweils mit Fall-ID, Variante, Status
+und Zeitpunkt. Ein Eintrag öffnet eine breite Leseansicht mit dem vollständigen
+Tenor, dem zugrunde liegenden Sachverhalt und vorhandenen Quellenankern. Die API
+hierfür lautet `GET/POST /api/v1/tenor-archive`; API-Schlüssel oder Rohantworten des
+Modells werden nicht gespeichert.
 
 ## Daten und Build-Sicherung
 

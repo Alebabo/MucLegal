@@ -160,6 +160,19 @@ class TenorProposalRequest(BaseModel):
     rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
 
 
+class TenorArchiveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    fall_id: str = Field(min_length=1, max_length=200)
+    schuldner: str = Field(min_length=1, max_length=500)
+    title: str = Field(min_length=1, max_length=500)
+    text: str = Field(min_length=1, max_length=12000)
+    context: str = Field(min_length=1, max_length=4000)
+    strategy: Literal["precise", "neutral"]
+    model: str = Field(min_length=1, max_length=200)
+    reference_version: str = Field(min_length=1, max_length=500)
+    source_ids: list[str] = Field(default_factory=list, max_length=50)
+
+
 @dataclass
 class RunState:
     run_id: str
@@ -808,6 +821,14 @@ class TenorDraftRepository:
             ).fetchone()
         return self._decode(row) if row else None
 
+    def list(self, *, limit: int = 500) -> list[dict]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM tenor_drafts ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [self._decode(row) for row in rows]
+
     def get(self, draft_id: str) -> dict:
         if not re.fullmatch(r"[a-f0-9]{32}", draft_id):
             raise ValueError("Tenor-Entwurf nicht gefunden.")
@@ -847,6 +868,93 @@ class TenorDraftRepository:
         }
 
 
+class TenorArchiveRepository:
+    def __init__(self, database_path: str | Path) -> None:
+        self.database_path = Path(database_path).resolve()
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connection() as connection:
+            connection.execute("""CREATE TABLE IF NOT EXISTS tenor_archive (
+                tenor_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                fall_id TEXT NOT NULL,
+                schuldner TEXT NOT NULL,
+                title TEXT NOT NULL,
+                text TEXT NOT NULL,
+                context TEXT NOT NULL,
+                strategy TEXT NOT NULL,
+                model TEXT NOT NULL,
+                reference_version TEXT NOT NULL,
+                source_ids_json TEXT NOT NULL)""")
+
+    @contextmanager
+    def _connection(self):
+        connection = sqlite3.connect(self.database_path)
+        connection.row_factory = sqlite3.Row
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
+    def save(self, value: dict) -> dict:
+        record = {
+            "tenor_id": uuid.uuid4().hex,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source": "minimal",
+            **value,
+            "decision": None,
+            "decided_at": None,
+        }
+        with self._connection() as connection:
+            connection.execute(
+                """INSERT INTO tenor_archive(
+                    tenor_id, created_at, fall_id, schuldner, title, text, context,
+                    strategy, model, reference_version, source_ids_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    record["tenor_id"],
+                    record["created_at"],
+                    record["fall_id"],
+                    record["schuldner"],
+                    record["title"],
+                    record["text"],
+                    record["context"],
+                    record["strategy"],
+                    record["model"],
+                    record["reference_version"],
+                    json.dumps(record["source_ids"], ensure_ascii=False),
+                ),
+            )
+        return record
+
+    def list(self, *, limit: int = 500) -> list[dict]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM tenor_archive ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [self._decode(row) for row in rows]
+
+    @staticmethod
+    def _decode(row: sqlite3.Row) -> dict:
+        return {
+            "tenor_id": row["tenor_id"],
+            "created_at": row["created_at"],
+            "source": "minimal",
+            "fall_id": row["fall_id"],
+            "schuldner": row["schuldner"],
+            "title": row["title"],
+            "text": row["text"],
+            "context": row["context"],
+            "strategy": row["strategy"],
+            "model": row["model"],
+            "reference_version": row["reference_version"],
+            "source_ids": json.loads(row["source_ids_json"]),
+            "decision": None,
+            "decided_at": None,
+        }
+
+
 def create_app(case_path: str | Path, review_database: str | Path, *,
                workflow: LiveMonitorWorkflow | None = None, anthropic_ready: bool = True,
                asset_directory: str | Path | None = None,
@@ -860,6 +968,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "templates")
     reviews = HumanReviewRepository(review_database)
     tenor_drafts = TenorDraftRepository(review_database)
+    tenor_archive = TenorArchiveRepository(review_database)
     coordinator = RunCoordinator(
         workflow,
         case_repository=monitoring_cases,
@@ -992,6 +1101,41 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                     r"sk-[A-Za-z0-9_-]+", "[API_KEY_REDACTED]", raw_message
                 )
             raise HTTPException(502, safe_message[:1_000]) from exc
+
+    @app.post("/api/v1/tenor-archive", status_code=201)
+    async def save_tenor_archive_entry(payload: TenorArchiveRequest):
+        if any(not source_id.strip() or len(source_id) > 200 for source_id in payload.source_ids):
+            raise HTTPException(422, "Quellenanker müssen nichtleer und höchstens 200 Zeichen lang sein.")
+        return tenor_archive.save(payload.model_dump())
+
+    @app.get("/api/v1/tenor-archive")
+    async def list_tenor_archive_entries():
+        minimal_entries = tenor_archive.list()
+        mask_entries = [
+            {
+                "tenor_id": record["draft_id"],
+                "created_at": record["created_at"],
+                "source": "maske",
+                "fall_id": record["draft"]["fall_id"],
+                "schuldner": record["draft"]["schuldner"],
+                "title": record["draft"]["charakteristischer_kern"],
+                "text": record["draft"]["entwurf"],
+                "context": record["input"]["beschreibung"],
+                "strategy": record["mode"],
+                "model": record["model"],
+                "reference_version": "Strukturierte Tenormaske",
+                "source_ids": [],
+                "decision": record["decision"],
+                "decided_at": record["decided_at"],
+            }
+            for record in tenor_drafts.list()
+        ]
+        entries = sorted(
+            [*minimal_entries, *mask_entries],
+            key=lambda item: item["created_at"],
+            reverse=True,
+        )
+        return {"tenors": entries}
 
     @app.post("/tenor-draft")
     async def create_tenor_form(request: Request):
