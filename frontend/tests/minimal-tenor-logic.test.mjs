@@ -12,6 +12,7 @@ import { composeDictationText, mergeDictationSegments } from "../src/lib/dictati
 import {
   answeredQuestions,
   composeClarifiedContext,
+  composePdfContext,
   formatSliderAnswer,
 } from "../src/lib/tenor-questions.ts";
 
@@ -50,6 +51,16 @@ test("recognizes common advertising word forms", () => {
       "Die GmbH soll es unterlassen, gegenüber Verbrauchern auf ihrer Website mit einer falschen Frist zu werben.",
     ).complete,
     true,
+  );
+});
+
+test("treats an uploaded contract as an AGB clause case", () => {
+  assert.equal(
+    inferFallgruppe(
+      "Vertrag mit einer automatischen Laufzeitverlängerung und einer schriftlichen Kündigungsfrist",
+      true,
+    ),
+    "agb_klausel",
   );
 });
 
@@ -146,4 +157,32 @@ test("preserves a selected or custom choice with its unique topic", () => {
   assert.equal(selected[0].answer, "Verbraucher");
   assert.equal(custom[0].answer, "Vereinsmitglieder");
   assert.equal(custom[0].answer_type, "single_choice");
+});
+
+test("includes extracted contract text and later answers in the tenor context", () => {
+  const extraction = {
+    filename: "vertrag.pdf",
+    text: `Klausel: ${"Verlängerung ".repeat(3_000)}`,
+    page_count: 18,
+    extracted_pages: 18,
+    truncated: false,
+  };
+  const documentContext = composePdfContext("Der Vertrag gilt für Verbraucher.", extraction);
+  assert.match(documentContext, /Hochgeladenes Vertragsdokument: vertrag\.pdf/);
+  assert.match(documentContext, /Klausel: Verlängerung/);
+
+  const question = {
+    question_id: "q-pdf",
+    topic_id: "schuldner",
+    text: "Wer verwendet die Klausel?",
+    answer_type: "text",
+    placeholder: null,
+    slider: null,
+    options: [],
+  };
+  const clarified = composeClarifiedContext(documentContext, [
+    { question, answer: "Synthetische Beispiel GmbH" },
+  ]);
+  assert.ok(clarified.length <= 60_000);
+  assert.match(clarified, /Antwort: Synthetische Beispiel GmbH/);
 });

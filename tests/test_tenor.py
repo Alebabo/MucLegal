@@ -310,9 +310,10 @@ class TenorDraftTests(unittest.TestCase):
         open_topic_ids = {
             item["topic_id"] for item in model_input["erlaubte_offene_themen"]
         }
+        self.assertEqual({"sachlicher_anwendungsbereich"}, open_topic_ids)
         self.assertEqual(
-            {"schuldner", "adressatenkreis", "klauselwortlaut", "sachlicher_anwendungsbereich"},
-            open_topic_ids,
+            {"schuldner", "adressatenkreis", "klauselwortlaut"},
+            set(model_input["bereits_im_sachverhalt_abgedeckte_topic_ids"]),
         )
         self.assertNotIn("fundstelle_werbung", open_topic_ids)
         analyzer = SequenceQuestionAnalyzer(
@@ -320,12 +321,17 @@ class TenorDraftTests(unittest.TestCase):
                 topic_id="fundstelle_werbung",
                 text="Auf welcher Website wird die Klausel verwendet?",
             ),
+            question_value(
+                topic_id="sachlicher_anwendungsbereich",
+                text="Auf welcher Website wird die Klausel verwendet?",
+            ),
             {"ready_to_generate": True, "question": None},
         )
         result = create_tenor_question(model_input, analyzer)
         self.assertTrue(result["ready_to_generate"])
-        self.assertEqual(2, len(analyzer.inputs))
+        self.assertEqual(3, len(analyzer.inputs))
         self.assertIn("Fallgruppe", analyzer.inputs[1]["abgelehnte_vorschlaege"][0]["grund"])
+        self.assertIn("Verwendungskontext", analyzer.inputs[2]["abgelehnte_vorschlaege"][1]["grund"])
 
     def test_duplicate_topic_is_rejected_and_retried(self) -> None:
         model_input = build_tenor_question_input(
@@ -384,7 +390,7 @@ class TenorDraftTests(unittest.TestCase):
 
     def test_either_or_question_requires_choices_instead_of_yes_no(self) -> None:
         model_input = build_tenor_question_input(
-            context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer unklaren Rabattfrist.",
+            context="Die Beispiel GmbH wirbt mit einer unklaren Rabattfrist.",
             fallgruppe="irrefuehrende_werbung",
             answered_questions=[],
         )
@@ -412,7 +418,7 @@ class TenorDraftTests(unittest.TestCase):
 
     def test_slider_is_rejected_for_non_numeric_topic(self) -> None:
         model_input = build_tenor_question_input(
-            context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer unklaren Rabattfrist.",
+            context="Die Beispiel GmbH wirbt mit einer unklaren Rabattfrist.",
             fallgruppe="irrefuehrende_werbung",
             answered_questions=[],
         )

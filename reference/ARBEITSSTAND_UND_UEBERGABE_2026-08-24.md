@@ -231,18 +231,32 @@ Zusätzlich wurden lokal und über den temporären Tunnel geprüft:
 | `frontend/src/components/AppSidebar.tsx` | Logo in der Navigation |
 | `muclegal/templates/evidence_lab.html` | kompakte Grey-Mode-BeweisLab-Oberfläche |
 | `muclegal/evidence/suitability.py` | technische Eignung nach Erfassungsqualität |
+| `reference/HETZNER_DEMO_UPDATE_RUNBOOK.md` | reproduzierbares Hetzner-Update und Rollback |
 | `reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md` | Fehlerbilder, Ursachen und Lösungen |
 
 ## 9. Bekannte Grenzen und nächste Schritte
 
-- Der temporäre ngrok-Tunnel ist kein dauerhaftes Deployment und hat derzeit ohne
-  zusätzliche Konfiguration keinen Zugriffsschutz.
-- Der OpenAI-Schlüssel bleibt serverseitig, dennoch kann jeder mit Zugriff auf einen
-  offenen Demo-Link Generierungsaufrufe auslösen.
+- Die temporäre Hetzner-Demo ist durch Caddy Basic Auth geschützt und wird am
+  28.08.2026 um 23:59 Uhr Berliner Zeit automatisch abgeschaltet. Der Server bleibt
+  danach kostenpflichtig, bis er in der Hetzner-Konsole gelöscht wird.
+- Der OpenAI-Schlüssel liegt root-only außerhalb der Releases. Dennoch kann jeder mit
+  gültigen Demo-Zugangsdaten Generierungsaufrufe auslösen.
 - Die internen `god_mode`-Bezeichner sollten erst in einer getrennten, vollständig
   migrationsfähigen Änderung umbenannt werden.
 - Die sechs ESLint-Warnungen liegen in generischen UI-Komponenten und blockieren den
   Build nicht.
 - Vor der finalen Vorführung: Prozesse neu starten, `/tenorhilfe` einmal generieren,
-  `/beweis-labor` mit `https://example.com` prüfen, ngrok-Link am Mobilgerät testen
-  und den Tunnel nach der Demo beenden.
+  `/beweis-labor` mit `https://example.com` prüfen, die geschützte HTTPS-Adresse am
+  Mobilgerät testen und nach der Demo den Server löschen oder bewusst abschalten.
+
+## 10. Hetzner-Demo und Aktualisierungen
+
+Der am 24.08.2026 geprüfte Stand läuft als getrennte Backend- und Frontend-Dienste
+hinter Caddy. Beide Anwendungsports sind nur an Loopback gebunden; öffentlich sind
+nur SSH, HTTP und HTTPS geöffnet. Quellcode-Releases liegen unter
+`/opt/muclegal/releases`, während `/var/lib/muclegal-demo` und
+`/etc/muclegal/muclegal.env` bei Updates unverändert bleiben.
+
+Der verbindliche Update- und Rollback-Ablauf einschließlich lokaler Tests, GitHub-
+Push, Releasearchiv, atomarer Aktivierung, Dienstprüfung und Entire-Abschluss steht in
+[`HETZNER_DEMO_UPDATE_RUNBOOK.md`](HETZNER_DEMO_UPDATE_RUNBOOK.md).

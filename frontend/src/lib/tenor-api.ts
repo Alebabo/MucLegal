@@ -118,6 +118,14 @@ export type TenorQuestionResponse = {
   question: TenorQuestion | null;
 };
 
+export type TenorPdfExtraction = {
+  filename: string;
+  text: string;
+  page_count: number;
+  extracted_pages: number;
+  truncated: boolean;
+};
+
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -171,6 +179,17 @@ export function createTenorQuestion(payload: {
   return requestJson<TenorQuestionResponse>("/api/v1/tenor-questions", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function extractTenorPdf(file: File) {
+  return requestJson<TenorPdfExtraction>("/api/v1/tenor-pdf-text", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      "X-File-Name": encodeURIComponent(file.name),
+    },
+    body: file,
   });
 }
 

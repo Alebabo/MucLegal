@@ -1325,3 +1325,115 @@ HMR ist nur eine Entwicklungsfunktion; bei erneut überlappenden Dateiänderunge
 der Dev-Prozess vor einer Demo sauber neu gestartet werden. Ein erfolgreicher
 Produktions-Build allein repariert den Speicherzustand eines bereits laufenden
 Dev-Prozesses nicht.
+
+# Tenor-Rückfragen wiederholen sich oder verlassen die Fallgruppe
+
+### Symptom
+
+Die Tenorschreibhilfe konnte dieselbe Tatsache mehrfach und paraphrasiert abfragen.
+Entweder-oder-Fragen erschienen als Ja/Nein-Fragen. Bei eigenständig zu beurteilenden
+AGB-Klauseln waren außerdem Fragen nach URL, Fundort, Nutzungskanal oder konkreter
+Verwendung möglich, obwohl diese Angaben für den Klauseltenor nicht tragend sind.
+
+### Ursache und Diagnose
+
+Die frühere Rückfragelogik stützte sich im Wesentlichen auf freie
+Modellformulierungen. Den Fragen fehlte eine serverseitig kontrollierte Themen-ID;
+es gab weder fallgruppenabhängige Themenkataloge noch eine Ähnlichkeitsprüfung gegen
+bereits gestellte Fragen. Die drei bisherigen Antworttypen konnten echte
+Auswahlfragen nicht korrekt abbilden.
+
+### Lösung
+
+Jede Rückfrage trägt nun eine validierte `topic_id`. Bereits im Sachverhalt enthaltene,
+gestellte oder beantwortete Themen werden aus dem fallgruppenabhängigen Katalog
+entfernt; eine normalisierte Textähnlichkeit fängt zusätzlich falsch etikettierte
+Paraphrasen ab. Ungültige Modellvorschläge werden höchstens zweimal neu angefordert,
+danach erscheint ein Fehler statt einer stillen Vollständigkeitsannahme.
+`single_choice` liefert zwei bis fünf konkrete Optionen, während die Oberfläche immer
+`Andere Angabe …` mit Freitext ergänzt. Ja/Nein bleibt binären Tatsachenfragen und
+Slider bleiben quantifizierbaren Angaben vorbehalten. Für AGB-Klauseln sperrt der
+Server insbesondere Fragen nach URL, Fundort, Kanal, Verwendungsdauer und
+Verwendungsnachweis; die üblichen Formeln zum Verwenden, Berufen und inhaltsgleichen
+Klauseln werden als Tenorstandard behandelt. Der eingefrorene Prompt der eigentlichen
+Tenorerzeugung blieb unverändert.
+
+### Verifikation und verbleibende Grenze
+
+Backendtests prüfen doppelte Themen, paraphrasierte Wiederholungen, irrelevante
+AGB-Fragen, falsch typisierte Alternativen, ungeeignete Slider und drei gescheiterte
+Korrekturversuche. Frontendtests prüfen Themenübertragung sowie gewählte und freie
+Auswahlantworten. Im Browser führte eine vollständige synthetische AGB-Klausel ohne
+Rückfrage direkt zur Generierung. Ein synthetischer Kündigungsbutton-Fall zeigte
+Auswahlbuttons und `Andere Angabe …`; die Freitextantwort blieb unter der Frage stehen
+und führte zu einer anderen Anschlussfrage. Themenkatalog und Erkennung bereits
+enthaltener Tatsachen bleiben bewusst deterministische Prototyp-Logik; die
+Tenorerzeugung unterliegt weiterhin der menschlichen Freigabe.
+
+# Vertrags-PDF wird trotz geringer Dateigröße als zu groß abgelehnt
+
+### Symptom
+
+Der erste echte Browser-Smoke-Test des neuen Vertragsuploads lehnte das vorhandene,
+nur 132 KB große Challenge-PDF mit HTTP 413 und `Anfrage ist zu groß.` ab. Die UI
+zeigte deshalb `nicht ausgelesen`, obwohl der PDF-Endpunkt selbst 10 MB erlaubte.
+
+### Ursache und Diagnose
+
+Die allgemeine HTTP-Sicherheitsmiddleware begrenzte alle schreibenden Endpunkte außer
+dem Fallupload pauschal auf 64 KB. Diese Prüfung lief vor dem neuen
+`/api/v1/tenor-pdf-text`-Handler und verhinderte deshalb dessen eigene, strengere
+PDF-Prüfung. Ein direkter `curl`-Abruf reproduzierte denselben 413-Fehler; die
+abweichende Fehlermeldung ordnete ihn eindeutig der Middleware zu.
+
+### Lösung
+
+Die Middleware verwendet für den Tenor-PDF-Endpunkt nun dasselbe Limit von 10 MB wie
+die nachgelagerte PDF-Extraktion. Größen-, PDF-Signatur-, Seiten-, Verschlüsselungs-
+und Textprüfungen im Handler bleiben unverändert bestehen. Ein API-Regressionstest
+lädt bewusst eine gültige synthetische PDF mit mehr als 64 KB und weniger als 10 MB.
+
+### Verifikation und verbleibende Grenze
+
+Der Regressionstest besteht. Nach einem vollständigen Backend-Neustart beantwortete
+der reale Upload des 132-KB-PDFs den Endpoint mit HTTP 200. Die Minimalansicht zeigte
+`2 Seiten · im Tenor berücksichtigt` und bot ohne zusätzliche Texteingabe
+`KI-Rückfragen starten` an; Browserkonsole und Fehlerliste blieben leer. Bildbasierte
+Scan-PDFs werden weiterhin nicht per OCR verarbeitet, sondern mit einem sichtbaren
+OCR-Hinweis abgelehnt.
+
+# Hetzner-Frontend installiert unter Debian nur Node 20 statt der benötigten Node-22-Laufzeit
+
+### Symptom
+
+Beim ersten Hetzner-Deployment installierte Debian 13 über `apt` Node 20.19.2. Das
+anschließende `npm install` lief zwar durch, meldete aber für mehrere
+`@tanstack/react-start`-Pakete `EBADENGINE` und die Anforderung `node >=22.12.0`.
+Ein Dienststart auf dieser nicht unterstützten Laufzeit wäre trotz erfolgreicher
+Paketinstallation nicht belastbar gewesen.
+
+### Ursache und Diagnose
+
+Die Debian-Paketquelle und die im Frontend aufgelösten TanStack-Pakete haben
+unterschiedliche Laufzeitzyklen. Entscheidend war nicht die erfolgreiche npm-
+Installation, sondern die in den Paketmetadaten ausgewiesene Engine-Anforderung.
+`node --version`, `npm --version` und die `EBADENGINE`-Zeilen ordneten den Fehler
+eindeutig der Serverlaufzeit und nicht dem Anwendungscode zu.
+
+### Lösung
+
+Node 22.23.2 wurde als offizielles Linux-x64-Archiv geladen, vor dem Entpacken gegen
+die offizielle `SHASUMS256.txt` geprüft und unter `/opt/node` versioniert eingebunden.
+Der Frontenddienst verwendet ausdrücklich `/opt/node/bin/npm`; damit hängt er nicht
+von der älteren Debian-Version unter `/usr/bin` ab. Nach dem Laufzeitwechsel wurden
+die npm-Abhängigkeiten erneut abgeglichen und der Frontend-Build neu erzeugt.
+
+### Verifikation und verbleibende Grenze
+
+Der Server meldete Node 22.23.2 und npm 10.9.8. `npm run build` erzeugte Client-, SSR-
+und Nitro-Ausgaben ohne Engine-Warnung; der systemd-Dienst startete anschließend auf
+`127.0.0.1:4173` und antwortete mit HTTP 200. Playwright Chromium startete separat
+erfolgreich. Die Node-Laufzeit wird nicht automatisch durch `apt upgrade`
+aktualisiert. Vor einem späteren Versionswechsel müssen Archiv, SHA-256-Prüfung,
+Frontend-Build und Browser-Smoke-Test erneut durchgeführt werden; nicht ungeprüft auf
+die jeweils neueste Hauptversion springen.

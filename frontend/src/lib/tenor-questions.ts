@@ -1,4 +1,6 @@
-import type { AnsweredTenorQuestion, TenorQuestion } from "./tenor-api";
+import type { AnsweredTenorQuestion, TenorPdfExtraction, TenorQuestion } from "./tenor-api";
+
+export const MAX_TENOR_CONTEXT_CHARS = 60_000;
 
 export type ClarificationTurn = {
   question: TenorQuestion;
@@ -16,11 +18,33 @@ export function answeredQuestions(turns: ClarificationTurn[]): AnsweredTenorQues
 
 export function composeClarifiedContext(context: string, turns: ClarificationTurn[]) {
   const base = context.trim();
-  if (turns.length === 0) return base;
+  if (turns.length === 0) return base.slice(0, MAX_TENOR_CONTEXT_CHARS);
   const additions = turns
     .map((turn) => `Rückfrage: ${turn.question.text}\nAntwort: ${turn.answer}`)
     .join("\n\n");
-  return `${base}\n\nErgänzende Angaben:\n${additions}`.slice(0, 4_000);
+  const suffix = `Ergänzende Angaben:\n${additions}`;
+  const availableForBase = Math.max(0, MAX_TENOR_CONTEXT_CHARS - suffix.length - 2);
+  return `${base.slice(0, availableForBase)}\n\n${suffix}`.slice(0, MAX_TENOR_CONTEXT_CHARS);
+}
+
+export function composePdfContext(context: string, extraction: TenorPdfExtraction | null) {
+  const userContext = context.trim();
+  if (!extraction) return userContext.slice(0, MAX_TENOR_CONTEXT_CHARS);
+  const documentContext = [
+    `Hochgeladenes Vertragsdokument: ${extraction.filename}`,
+    `Umfang: ${extraction.page_count} Seiten; Text aus ${extraction.extracted_pages} Seiten extrahiert.`,
+    extraction.truncated
+      ? "Hinweis: Der extrahierte Dokumenttext wurde wegen der Längenbegrenzung gekürzt."
+      : "",
+    "Dokumentinhalt:",
+    extraction.text,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const combined = userContext
+    ? `Nutzerangaben:\n${userContext}\n\n${documentContext}`
+    : documentContext;
+  return combined.slice(0, MAX_TENOR_CONTEXT_CHARS);
 }
 
 export function formatSliderAnswer(question: TenorQuestion, value: number) {

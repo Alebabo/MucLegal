@@ -31,13 +31,16 @@ import {
 import {
   createTenorProposals,
   createTenorQuestion,
+  extractTenorPdf,
   saveTenorArchiveEntry,
+  type TenorPdfExtraction,
   type TenorProposalResponse,
   type TenorQuestion,
 } from "@/lib/tenor-api";
 import {
   answeredQuestions,
   composeClarifiedContext,
+  composePdfContext,
   formatSliderAnswer,
   type ClarificationTurn,
 } from "@/lib/tenor-questions";
@@ -81,9 +84,9 @@ function caseContext(selectedCase: DemoCase) {
   return `${selectedCase.fall_id}: ${selectedCase.title}. ${selectedCase.secondary}. ${selectedCase.explanation} Fundstelle: ${selectedCase.evidence.fundstelle}.`;
 }
 
-function profileFromContext(context: string): Profile {
+function profileFromContext(context: string, uploadedContract = false): Profile {
   const lower = context.toLowerCase();
-  const fallgruppe = inferFallgruppe(lower);
+  const fallgruppe = inferFallgruppe(lower, uploadedContract);
   const verstossModus =
     fallgruppe === "agb_klausel"
       ? "klausel_verwendet"
@@ -200,6 +203,9 @@ export function MinimalTenorView() {
   const [commandIndex, setCommandIndex] = useState(0);
   const [caseIndex, setCaseIndex] = useState(0);
   const [pdf, setPdf] = useState<File | null>(null);
+  const [pdfExtraction, setPdfExtraction] = useState<TenorPdfExtraction | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState("");
   const [dragging, setDragging] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [dictationNotice, setDictationNotice] = useState("");
@@ -228,18 +234,26 @@ export function MinimalTenorView() {
   const dictationBase = useRef("");
   const dictationSegments = useRef<DictationSegments>({});
   const dictationSession = useRef(0);
+  const pdfSession = useRef(0);
   const questionSession = useRef(0);
-  const previousContext = useRef(context);
+  const sourceContext = useMemo(
+    () => composePdfContext(context, pdfExtraction),
+    [context, pdfExtraction],
+  );
+  const previousSourceContext = useRef(sourceContext);
 
   const clarifiedContext = useMemo(
-    () => composeClarifiedContext(context, clarificationTurns),
-    [clarificationTurns, context],
+    () => composeClarifiedContext(sourceContext, clarificationTurns),
+    [clarificationTurns, sourceContext],
   );
-  const profile = useMemo(() => profileFromContext(clarifiedContext), [clarifiedContext]);
+  const profile = useMemo(
+    () => profileFromContext(clarifiedContext, Boolean(pdfExtraction)),
+    [clarifiedContext, pdfExtraction],
+  );
   const preciseDraft = useMemo(() => composeDraft(profile, "eng"), [profile]);
   const neutralDraft = useMemo(() => composeDraft(profile, "kerngleich"), [profile]);
-  const contextLength = context.trim().length;
-  const correctionMode = mode === "tenor" || isTenor(context);
+  const contextLength = sourceContext.length;
+  const correctionMode = mode === "tenor" || isTenor(sourceContext);
   const slashMatch = context.match(/(?:^|\s)\/([^\s]*)$/);
   const slashQuery = slashMatch?.[1]?.toLocaleLowerCase("de") ?? "";
   const showModeMenu = Boolean(slashMatch);
@@ -259,9 +273,13 @@ export function MinimalTenorView() {
     !showModeMenu &&
     (mode !== "fälle" || Boolean(selectedCase)) &&
     contextLength >= 20 &&
+    !pdfLoading &&
     !clarificationReady;
   const canGenerate =
-    !showModeMenu && clarificationReady && (Boolean(selectedCase) || clarifiedContext.length >= 20);
+    !showModeMenu &&
+    !pdfLoading &&
+    clarificationReady &&
+    (Boolean(selectedCase) || clarifiedContext.length >= 20);
 
   useEffect(() => {
     if (!correctionMode || generated || context.trim().length < 4) {
@@ -291,8 +309,8 @@ export function MinimalTenorView() {
   }, [context, pdf]);
 
   useEffect(() => {
-    if (previousContext.current === context) return;
-    previousContext.current = context;
+    if (previousSourceContext.current === sourceContext) return;
+    previousSourceContext.current = sourceContext;
     questionSession.current += 1;
     setClarificationTurns([]);
     setCurrentQuestion(null);
@@ -301,22 +319,61 @@ export function MinimalTenorView() {
     setQuestionError("");
     setTextAnswer("");
     setCustomChoiceOpen(false);
-  }, [context]);
+  }, [sourceContext]);
 
   useEffect(
     () => () => {
       dictationSession.current += 1;
+      pdfSession.current += 1;
       speech.current?.stop();
     },
     [],
   );
 
-  const acceptPdf = (file?: File) => {
-    if (!file || (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")))
+  const acceptPdf = async (file?: File) => {
+    if (!file) return;
+    const session = pdfSession.current + 1;
+    pdfSession.current = session;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setPdf(null);
+      setPdfExtraction(null);
+      setPdfLoading(false);
+      setPdfError("Bitte eine PDF-Datei auswählen.");
       return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setPdf(file);
+      setPdfExtraction(null);
+      setPdfLoading(false);
+      setPdfError("Die PDF-Datei darf höchstens 10 MB groß sein.");
+      return;
+    }
     setPdf(file);
+    setPdfExtraction(null);
+    setPdfLoading(true);
+    setPdfError("");
     setGenerated(false);
     setGenerationError("");
+    try {
+      const extraction = await extractTenorPdf(file);
+      if (pdfSession.current !== session) return;
+      setPdfExtraction(extraction);
+    } catch (error) {
+      if (pdfSession.current !== session) return;
+      setPdfError(
+        error instanceof Error ? error.message : "Der PDF-Text konnte nicht gelesen werden.",
+      );
+    } finally {
+      if (pdfSession.current === session) setPdfLoading(false);
+    }
+  };
+
+  const removePdf = () => {
+    pdfSession.current += 1;
+    setPdf(null);
+    setPdfExtraction(null);
+    setPdfLoading(false);
+    setPdfError("");
   };
 
   const selectMode = (nextMode: WritingMode) => {
@@ -399,7 +456,7 @@ export function MinimalTenorView() {
   };
 
   const requestClarificationQuestion = async (turns = clarificationTurns) => {
-    if (context.trim().length < 20 || questionLoading) return;
+    if (sourceContext.length < 20 || questionLoading || pdfLoading) return;
     const session = questionSession.current + 1;
     questionSession.current = session;
     setQuestionLoading(true);
@@ -407,7 +464,7 @@ export function MinimalTenorView() {
     setCurrentQuestion(null);
     try {
       const response = await createTenorQuestion({
-        context: context.trim(),
+        context: sourceContext,
         fallgruppe: profile.fallgruppe,
         answered_questions: answeredQuestions(turns),
       });
@@ -458,7 +515,9 @@ export function MinimalTenorView() {
         fundstelle:
           selectedCase?.url ??
           clarifiedContext.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
-          "Vom Nutzer beschriebene Fundstelle",
+          (pdfExtraction
+            ? `Hochgeladenes Vertragsdokument: ${pdfExtraction.filename}`
+            : "Vom Nutzer beschriebene Fundstelle"),
         context: clarifiedContext,
         fallgruppe: profile.fallgruppe,
         rechtsgrundlagen: legalBasesFor(profile.fallgruppe),
@@ -487,7 +546,11 @@ export function MinimalTenorView() {
     setSelectedCase(null);
     setCommandIndex(0);
     setCaseIndex(0);
+    pdfSession.current += 1;
     setPdf(null);
+    setPdfExtraction(null);
+    setPdfLoading(false);
+    setPdfError("");
     setGenerated(false);
     setSelected(null);
     setProposalResponse(null);
@@ -552,7 +615,7 @@ export function MinimalTenorView() {
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
-        acceptPdf(event.dataTransfer.files[0]);
+        void acceptPdf(event.dataTransfer.files[0]);
       }}
     >
       <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -577,19 +640,41 @@ export function MinimalTenorView() {
       {!generated ? (
         <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col px-6 pb-28 pt-[8vh]">
           {pdf && (
-            <div className="mb-8 flex items-center gap-3 text-sm text-slate-500">
-              <FileUp className="size-4" />
-              <span className="truncate">{pdf.name}</span>
-              <span className="text-[10px] text-slate-300">lokal · noch ohne Texterkennung</span>
-              <button
-                type="button"
-                onClick={() => setPdf(null)}
-                aria-label="PDF entfernen"
-                className="ml-auto text-slate-300 hover:text-slate-700"
-              >
-                <X className="size-4" />
-              </button>
+            <div className="mb-8">
+              <div className="flex items-center gap-3 text-sm text-slate-500">
+                {pdfLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileUp className="size-4" />
+                )}
+                <span className="truncate">{pdf.name}</span>
+                <span className="text-[10px] text-slate-300" aria-live="polite">
+                  {pdfLoading
+                    ? "Vertragstext wird lokal ausgelesen …"
+                    : pdfExtraction
+                      ? `${pdfExtraction.page_count} Seiten · im Tenor berücksichtigt${pdfExtraction.truncated ? " · gekürzt" : ""}`
+                      : "nicht ausgelesen"}
+                </span>
+                <button
+                  type="button"
+                  onClick={removePdf}
+                  aria-label="PDF entfernen"
+                  className="ml-auto text-slate-300 hover:text-slate-700"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              {pdfError && (
+                <p role="alert" className="mt-2 text-xs text-red-600">
+                  {pdfError}
+                </p>
+              )}
             </div>
+          )}
+          {!pdf && pdfError && (
+            <p role="alert" className="mb-8 text-xs text-red-600">
+              {pdfError}
+            </p>
           )}
           <div
             className="min-h-[calc(100vh-17rem)] w-full flex-1 cursor-text"
@@ -841,7 +926,9 @@ export function MinimalTenorView() {
                               value={textAnswer}
                               maxLength={1_000}
                               rows={1}
-                              placeholder={currentQuestion.placeholder ?? "Andere Angabe ergänzen …"}
+                              placeholder={
+                                currentQuestion.placeholder ?? "Andere Angabe ergänzen …"
+                              }
                               onChange={(event) => setTextAnswer(event.target.value)}
                               className="min-h-10 flex-1 resize-y border-b border-slate-200 bg-transparent py-2 font-serif text-base leading-7 text-slate-700 outline-none placeholder:text-slate-300 focus:border-slate-500"
                             />
@@ -992,7 +1079,11 @@ export function MinimalTenorView() {
                   type="file"
                   accept="application/pdf,.pdf"
                   className="hidden"
-                  onChange={(event) => acceptPdf(event.target.files?.[0])}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    void acceptPdf(file);
+                  }}
                 />
                 {correctionMode && (
                   <span className="ml-2 text-[10px] uppercase tracking-wider text-slate-300">

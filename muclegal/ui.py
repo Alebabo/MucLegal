@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Literal
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (
@@ -49,6 +49,11 @@ from muclegal.llm.tenor_questions import (
     TenorQuestionAnalyzer,
     build_tenor_question_input,
     create_tenor_question,
+)
+from muclegal.tenor_pdf import (
+    MAX_TENOR_PDF_BYTES,
+    TenorPdfError,
+    extract_tenor_pdf_text,
 )
 
 
@@ -160,7 +165,7 @@ class TenorProposalRequest(BaseModel):
     fall_id: str = Field(min_length=1, max_length=200)
     schuldner: str = Field(min_length=1, max_length=500)
     fundstelle: str = Field(min_length=1, max_length=2048)
-    context: str = Field(min_length=20, max_length=4000)
+    context: str = Field(min_length=20, max_length=60000)
     fallgruppe: str = Field(min_length=1, max_length=100)
     rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
 
@@ -175,7 +180,7 @@ class AnsweredTenorQuestionRequest(BaseModel):
 
 class TenorQuestionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    context: str = Field(min_length=10, max_length=4000)
+    context: str = Field(min_length=10, max_length=60000)
     fallgruppe: str = Field(min_length=1, max_length=100)
     answered_questions: list[AnsweredTenorQuestionRequest] = Field(
         default_factory=list, max_length=8
@@ -188,7 +193,7 @@ class TenorArchiveRequest(BaseModel):
     schuldner: str = Field(min_length=1, max_length=500)
     title: str = Field(min_length=1, max_length=500)
     text: str = Field(min_length=1, max_length=12000)
-    context: str = Field(min_length=1, max_length=4000)
+    context: str = Field(min_length=1, max_length=60000)
     strategy: Literal["precise", "neutral"]
     model: str = Field(min_length=1, max_length=200)
     reference_version: str = Field(min_length=1, max_length=500)
@@ -1017,7 +1022,12 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     async def security_headers(request: Request, call_next):
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             content_length = request.headers.get("content-length")
-            size_limit = 14 * 1024 * 1024 if request.url.path == "/api/v1/cases" else 64 * 1024
+            if request.url.path == "/api/v1/cases":
+                size_limit = 14 * 1024 * 1024
+            elif request.url.path == "/api/v1/tenor-pdf-text":
+                size_limit = MAX_TENOR_PDF_BYTES
+            else:
+                size_limit = 64 * 1024
             if content_length and content_length.isdigit() and int(content_length) > size_limit:
                 return JSONResponse({"detail": "Anfrage ist zu groß."}, status_code=413)
             origin = request.headers.get("origin")
@@ -1090,6 +1100,34 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         try:
             return JSONResponse(generate_tenor(payload), status_code=201)
         except (ValueError, RuntimeError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.post("/api/v1/tenor-pdf-text")
+    async def extract_tenor_pdf(request: Request):
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+        if media_type != "application/pdf":
+            raise HTTPException(415, "Für die Tenorschreibhilfe ist eine PDF-Datei erforderlich.")
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_TENOR_PDF_BYTES:
+                    raise HTTPException(413, "Die PDF-Datei darf höchstens 10 MB groß sein.")
+            except ValueError as exc:
+                raise HTTPException(400, "Ungültige Content-Length-Angabe.") from exc
+
+        data = bytearray()
+        async for chunk in request.stream():
+            data.extend(chunk)
+            if len(data) > MAX_TENOR_PDF_BYTES:
+                raise HTTPException(413, "Die PDF-Datei darf höchstens 10 MB groß sein.")
+
+        encoded_filename = request.headers.get("x-file-name", "vertrag.pdf")
+        filename = Path(unquote(encoded_filename).replace("\\", "/")).name.strip()
+        if not filename or len(filename) > 255 or any(character in filename for character in "\r\n\x00"):
+            raise HTTPException(422, "Ungültiger PDF-Dateiname.")
+        try:
+            return extract_tenor_pdf_text(bytes(data), filename=filename).to_dict()
+        except TenorPdfError as exc:
             raise HTTPException(422, str(exc)) from exc
 
     @app.post("/api/v1/tenor-proposals")

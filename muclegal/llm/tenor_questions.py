@@ -224,6 +224,56 @@ ALL_TOPIC_IDS = sorted(
     {topic_id for topics in QUESTION_TOPICS.values() for topic_id in topics}
 )
 
+
+def _topics_covered_by_context(context: str, fallgruppe: str) -> set[str]:
+    text = context.casefold()
+    covered: set[str] = set()
+    if re.search(r"\b(beklagte|antragsgegnerin|schuldnerin)\b|\b(gmbh|ag|ug|se|kg|e\.\s?k\.)\b", text):
+        covered.add("schuldner")
+    if re.search(r"\b(verbraucher\w*|kund\w*|nutzer\w*|unternehmer\w*|adressat\w*)\b", text):
+        covered.add("adressatenkreis")
+
+    if fallgruppe == "agb_klausel":
+        if re.search(r"[„‚\"].{8,}[“‘\"]|\bklausel\s*:\s*.{8,}", context, re.DOTALL | re.IGNORECASE):
+            covered.add("klauselwortlaut")
+        if re.search(r"\b(vertrag|abonnement|abo|tarif|mitgliedschaft|bahncard|produkt)\w*\b", text):
+            covered.add("sachlicher_anwendungsbereich")
+    elif fallgruppe == "irrefuehrende_werbung":
+        if re.search(r"\b(werb\w*|rabatt|countdown|frist|preis|knappheit|nur heute)\b", text):
+            covered.add("beanstandete_werbeaussage")
+        if re.search(r"\b(falsch|irreführ|vorgetäuscht)\w*\b|\bnicht\s+(bestand|besteht|zutraf|zutrifft)\b", text):
+            covered.add("taeuschungstatsache")
+        if re.search(r"https?://|\b(website|webseite|app|newsletter|anschreiben|filiale|produktseite)\b", text):
+            covered.add("fundstelle_werbung")
+        if re.search(r"\b(tatsächlich zutreffend|echte befristung|realer hintergrund|nachweisbar)\b", text):
+            covered.add("nicht_umfasster_gegenfall")
+        if re.search(r"\b\d+\s*(sekunden?|minuten?|stunden?|tage?|stück|prozent|%)\b", text):
+            covered.add("quantifizierbare_dauer_oder_anzahl")
+    elif fallgruppe == "kuendigungsbutton":
+        if re.search(r"\b(fehlt|fehlend|vorhanden|unzureichend)\w*\b", text):
+            covered.add("umsetzungsart")
+        if re.search(r"\b(login|passwort|versteckt|nicht sichtbar|falsche zielseite|hürde)\b", text):
+            covered.add("konkrete_huerde")
+        if re.search(r"\b(vertrag|abonnement|abo|mitgliedschaft|dauerschuld)\w*\b", text):
+            covered.add("vertragstyp")
+    elif fallgruppe == "consent_gestaltung":
+        if re.search(r"\b(akzeptieren|ablehnen|einstellungen|consent|cookie)\b", text):
+            covered.add("erste_ebene_optionen")
+        if re.search(r"\b(farbe|hervorgehoben|unauffällig|größe|klicktiefe|zweite ebene)\b", text):
+            covered.add("gestaltungsunterschied")
+        if re.search(r"\b(tracking|nicht erforderlich|nicht notwendig|tc string|speicher)\w*\b", text):
+            covered.add("nicht_erforderliche_verarbeitung")
+        if re.search(r"\b(nach klick|anschließend|danach|erst nach|zweite ebene)\b", text):
+            covered.add("interaktionsfolge")
+    elif fallgruppe == "dark_pattern_dsa":
+        if re.search(r"\b(kombination|hervorgehoben|pop-?up|erneut|farbe|platzierung)\b", text):
+            covered.add("gestaltungskombination")
+        if re.search(r"\b(checkout|warenkorb|kasse|entscheidung|abschluss)\b", text):
+            covered.add("entscheidungssituation")
+        if re.search(r"\b(beeinfluss|nachteil|kostenpflichtig|abschließen|risiko)\w*\b", text):
+            covered.add("nachteilige_wirkung")
+    return covered
+
 TENOR_QUESTION_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -382,7 +432,7 @@ def build_tenor_question_input(
     cleaned_fallgruppe = fallgruppe.strip()
     if len(cleaned_context) < 10:
         raise ValueError("Für eine KI-Rückfrage werden mindestens 10 Zeichen benötigt.")
-    if len(cleaned_context) > 4000:
+    if len(cleaned_context) > 60000:
         raise ValueError("Der Sachverhalt überschreitet die zulässige Länge.")
     if cleaned_fallgruppe not in QUESTION_TOPICS:
         raise ValueError(
@@ -393,7 +443,7 @@ def build_tenor_question_input(
         raise ValueError("Es wurden mehr Rückfragen als zulässige Tenorthemen übermittelt.")
 
     cleaned_answers: list[dict[str, str]] = []
-    used_topics: set[str] = set()
+    answered_topics: set[str] = set()
     for item in answered_questions:
         topic_id = item.get("topic_id", "").strip()
         question = item.get("question", "").strip()
@@ -406,11 +456,11 @@ def build_tenor_question_input(
             or answer_type not in ANSWER_TYPES
         ):
             raise ValueError("Beantwortete Rückfragen sind unvollständig oder fachlich unzulässig.")
-        if topic_id in used_topics:
+        if topic_id in answered_topics:
             raise ValueError("Eine Tenor-Tatsache darf nur einmal beantwortet werden.")
         if len(question) > 500 or len(answer) > 1000:
             raise ValueError("Eine beantwortete Rückfrage ist zu lang.")
-        used_topics.add(topic_id)
+        answered_topics.add(topic_id)
         cleaned_answers.append(
             {
                 "topic_id": topic_id,
@@ -419,6 +469,8 @@ def build_tenor_question_input(
                 "answer_type": answer_type,
             }
         )
+    covered_by_context = _topics_covered_by_context(cleaned_context, cleaned_fallgruppe)
+    used_topics = answered_topics | covered_by_context
     open_topics = [
         spec.to_prompt_dict(topic_id)
         for topic_id, spec in catalog.items()
@@ -428,6 +480,7 @@ def build_tenor_question_input(
         "sachverhalt": cleaned_context,
         "fallgruppe": cleaned_fallgruppe,
         "beantwortete_rueckfragen": cleaned_answers,
+        "bereits_im_sachverhalt_abgedeckte_topic_ids": sorted(covered_by_context),
         "bereits_verwendete_topic_ids": sorted(used_topics),
         "erlaubte_offene_themen": open_topics,
         "fallgruppen_grenzen": (
@@ -498,8 +551,25 @@ def validate_tenor_question(
         raise TenorQuestionValidationError(
             "Die Rückfrage ist für den Faktenkatalog dieser Fallgruppe fachlich nicht zulässig."
         )
+    if topic_id in set(model_input["bereits_verwendete_topic_ids"]):
+        raise TenorQuestionValidationError(
+            "Diese Tenor-Tatsache ist bereits im Sachverhalt oder in einer Antwort enthalten."
+        )
     if not isinstance(text, str) or not text.strip() or len(text.strip()) > 500:
         raise TenorQuestionValidationError("Die Rückfrage muss ein kurzer Text sein.")
+    if model_input["fallgruppe"] == "agb_klausel" and (
+        re.search(
+            r"\b(wo|website|webseite|url|fundort|kanal|seit wann|wie lange)\b",
+            text.casefold(),
+        )
+        or re.search(
+            r"\b(ob|wurde|wird)\b.{0,60}\b(verwendet|eingesetzt)\b",
+            text.casefold(),
+        )
+    ):
+        raise TenorQuestionValidationError(
+            "Bei einer AGB-Klausel ist die Frage nach Verwendungskontext oder Fundort nicht tenorbezogen."
+        )
     if answer_type not in ANSWER_TYPES:
         raise TenorQuestionValidationError("Unbekannter Rückfragetyp.")
     if answer_type not in catalog[topic_id].answer_types:

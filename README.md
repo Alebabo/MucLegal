@@ -281,6 +281,18 @@ python -m pytest -q
 
 Die Tests decken unter anderem stabile Hashes, Countdown- und Cookie-Rauschen, relevante Änderungen, HTTP-Fehler, Timeouts, Login-/CAPTCHA-Abbruch, Schemafehler, TSA-Ausfälle, WARC-Validierung, PDF-Bericht, UI-Freigabe und Eval-Gates ab.
 
+## Temporäre Hetzner-Demo aktualisieren
+
+Die passwortgeschützte Hackathon-Demo verwendet unveränderliche Release-Verzeichnisse,
+einen atomar gewechselten `/opt/muclegal/current`-Symlink und getrennte persistente
+Pfade für Demo-Daten und Servergeheimnisse. Der vollständige Ablauf für Prüfung,
+GitHub-Push, Upload, Aktivierung, Verifikation, Rollback und Entire-Checkpoint steht in
+[`reference/HETZNER_DEMO_UPDATE_RUNBOOK.md`](reference/HETZNER_DEMO_UPDATE_RUNBOOK.md).
+
+Lokale `.env`-Dateien und Beweisartefakte sind nie Teil eines Deployments. Die Demo
+bleibt zeitlich begrenzt; der Hetzner-Server muss unabhängig davon manuell gelöscht
+werden, damit keine weiteren Kosten entstehen.
+
 ## Projektstruktur
 
 ```text

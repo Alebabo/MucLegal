@@ -35,9 +35,11 @@ export function isTenor(text: string) {
   );
 }
 
-export function inferFallgruppe(text: string) {
+export function inferFallgruppe(text: string, uploadedContract = false) {
   const normalized = text.toLocaleLowerCase("de");
-  return /klausel|agb|altvertrag/.test(normalized)
+  return /klausel|agb|altvertrag|vertragsbedingung/.test(normalized) ||
+    (uploadedContract &&
+      /vertrag|vereinbarung|laufzeit|kündigungsfrist|schriftform/.test(normalized))
     ? "agb_klausel"
     : /cookie|consent|tracking/.test(normalized)
       ? "consent_gestaltung"

@@ -23,6 +23,17 @@ Der Hinweis verschwindet mit der ersten Eingabe. Upload und Diktat bleiben in
 einer festen Fußleiste am unteren Fensterrand. Die Texthöhe wächst mit dem Inhalt;
 die Schreibfläche selbst wird nicht verkleinert.
 
+Ein hochgeladenes Vertrags-PDF wird ausschließlich an den lokalen Backend-Endpunkt
+`POST /api/v1/tenor-pdf-text` übertragen. `pypdf` extrahiert den Text seitenweise;
+Dateiname, Seitenzahl und Seitenmarker werden gemeinsam mit zusätzlichen
+Nutzerangaben in den Sachverhalt übernommen. Dieser kombinierte Inhalt steuert
+Fallgruppenerkennung, Rückfragen, beide Tenorvarianten und den Archiveintrag. Ein
+Vertrag wird bei passenden Vertragsmerkmalen als AGB-Klauselfall behandelt. Die UI
+zeigt sichtbar, ob der Text berücksichtigt, wegen der Längenbegrenzung gekürzt oder
+mangels maschinenlesbarem Text abgelehnt wurde. Zulässig sind höchstens 10 MB,
+100 Seiten und 40.000 extrahierte Zeichen; der gesamte Modellkontext ist auf 60.000
+Zeichen begrenzt.
+
 ### Slash-Modi
 
 `/` öffnet eine kompakte Inline-Auswahl:
@@ -51,8 +62,10 @@ Die Minimalansicht bietet nach einer ersten Sachverhaltsbeschreibung den Schritt
 eingegebenen Sachverhalts und aller bisherigen Antworten genau eine passende Form:
 
 - Ja/Nein für echte binäre Tatsachenfragen,
+- Einzelauswahl mit zwei bis fünf fallbezogenen Optionen und zusätzlicher
+  Freitextoption `Andere Angabe …`,
 - Freitext für offene Sachverhaltsangaben,
-- Slider nur für sinnvoll begrenzbare Zahlen oder Abstufungen.
+- Slider ausschließlich für tenortragende, sinnvoll begrenzbare Zahlen oder Dauern.
 
 Frage und Antwort bleiben grau eingerückt beziehungsweise als dunkler Antworttext
 direkt im Schreibfluss sichtbar. Nach jeder Antwort wird die nächste Rückfrage aus dem
@@ -60,6 +73,18 @@ gesamten bisherigen Verlauf erzeugt. Sobald keine weitere Frage erforderlich ist
 werden Sachverhalt, Fragen und Antworten gemeinsam an die unveränderte, eingefrorene
 Tenorgenerierung übergeben. Das Rückfrageschema wird serverseitig strikt validiert;
 der Browser erhält weiterhin keinen API-Schlüssel.
+
+Jede Frage trägt eine validierte `topic_id`. Bereits im Ausgangstext erkannte oder
+beantwortete Themen werden aus dem fallgruppenabhängigen Faktenkatalog entfernt;
+zusätzlich blockiert ein Ähnlichkeitsvergleich paraphrasierte Wiederholungen. Eine
+doppelte, irrelevante oder falsch typisierte Modellfrage wird höchstens zweimal neu
+angefordert und führt danach sichtbar zum Fehler, niemals still zur Freigabe.
+
+Für AGB-Klauseln beschränkt sich der Katalog auf Klauselwortlaut, Verwender,
+Adressatenkreis und einen nur klauselinhaltsbedingt erforderlichen Vertrags- oder
+Produktbezug. Fundort, Kanal, Nutzungsdauer und Nachweis der konkreten Verwendung sind
+keine Rückfragen. Die Formeln zum Verwenden, Sich-Berufen und zu inhaltsgleichen
+Klauseln gehören als Tenorstandard in die spätere Komposition.
 
 ### Entwurf und Autofill
 
@@ -142,8 +167,9 @@ Die Zwei-Button-Lösung bleibt vom Original T-002 nicht erfasst.
   Arbeitsbewertungen.
 - Nur T-001 bis T-004 haben `zitat_geprueft: true`.
 - Vorschlagsbausteine ohne Tenorbeleg dürfen nicht wie belegte Formeln erscheinen.
-- PDF-Texterkennung ist noch nicht implementiert; der Dateiname wird lokal
-  angezeigt, der Inhalt aber nicht extrahiert.
+- Bildbasierte Scan-PDFs benötigen weiterhin eine vorgelagerte OCR. Sie werden nicht
+  stillschweigend als leerer Vertrag behandelt, sondern mit einem sichtbaren Hinweis
+  abgelehnt.
 - Die Vollständigkeitsprüfung arbeitet mit sichtbarer Schlüsselwortlogik und kann
   Synonyme übersehen. Sie ist keine juristische Bewertung.
 - Die Demo komprimiert die ursprünglich geplanten drei Reichweitenvarianten auf

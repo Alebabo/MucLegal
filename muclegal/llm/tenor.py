@@ -131,8 +131,10 @@ def build_tenor_input(
     }
     if any(not value for value in fields.values()):
         raise ValueError("Fall-ID, Schuldner, Fundstelle und Beschreibung sind erforderlich.")
-    if any(len(value) > 4000 for value in fields.values()):
+    if any(len(fields[name]) > 4000 for name in ("fall_id", "schuldner", "fundstelle")):
         raise ValueError("Ein Eingabefeld überschreitet die zulässige Länge.")
+    if len(fields["beschreibung"]) > 60000:
+        raise ValueError("Der Sachverhalt überschreitet die zulässige Länge.")
     legal_bases = [item.strip() for item in rechtsgrundlagen if item.strip()]
     if not legal_bases:
         raise ValueError("Mindestens eine belegte Rechtsgrundlage ist erforderlich.")
