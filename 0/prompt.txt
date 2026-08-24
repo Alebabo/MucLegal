@@ -1,0 +1,89 @@
+Implementiere diese Logik beim god mode, ich werde dir dazu den APi key von openai gebe. Bitte achte auch darauf, dass ich die ki kosten minimal halten will.
+
+
+
+\## So habe ich die Screenshots erstellt
+
+
+
+Ich habe den eingebauten Browser mit einer Playwright-kompatiblen Steuerung verwendet:
+
+
+
+1. \`[https://www.adidas.de/](https://www.adidas.de/)\` geöffnet und auf \`DOMContentLoaded\` gewartet.
+2. Den sichtbaren DOM beziehungsweise die Accessibility-Struktur geprüft.
+3. Den Cookie-Hinweis über „Alle ablehnen“ geschlossen.
+4. Such- und Informationsfenster geschlossen, damit sie den Screenshot nicht verdecken.
+5. Mit \`screenshot({ fullPage: true })\` die komplette Startseite aufgenommen.
+6. Anschließend die Produktseite \`[https://www.adidas.de/jabbar-schuh/KI8573.html](https://www.adidas.de/jabbar-schuh/KI8573.html)\` geöffnet.
+7. Weil adidas bei der anfänglichen schmalen Browserbreite eine seitliche Suchansicht öffnete, habe ich vorübergehend einen Desktop-Viewport von 1024 × 768 Pixeln verwendet.
+8. Nach dem Laden der Produktbilder wurde wieder ein Ganzseiten-Screenshot erstellt.
+9. Die PNG-Dateien wurden unmittelbar lokal gespeichert.
+
+
+
+Es wurden keine Zugangssperren, CAPTCHAs oder Logins umgangen. Allerdings besitzen die Dateien keinen qualifizierten Zeitstempel, keine Signatur und keinen vollständigen Netzwerk- beziehungsweise HAR-Mitschnitt.
+
+
+
+\## So habe ich die Seite normalisiert
+
+
+
+Für den Markdown-Text habe ich nicht den Screenshot per OCR ausgewertet, sondern den gerenderten Seitentext direkt aus dem Browser gelesen:
+```
+document.body.innerText
+```
+
+
+
+Das ergab ungefähr 8.838 Zeichen beziehungsweise 1.236 Wörter. Danach habe ich den Text inhaltlich normalisiert:
+
+
+
+- Navigation, Footer und Schaltflächenbeschriftungen entfernt
+- doppelte und dynamische Produktempfehlungen reduziert
+- Produktname, Artikelnummer, Farbe und Kategorie übernommen
+- Preise und Rabatt strukturiert
+- Größen in verfügbar und nicht verfügbar getrennt
+- Beschreibung sprachlich verdichtet und paraphrasiert
+- Produktdetails als Liste dargestellt
+- Bewertungen zusammengefasst, nicht vollständig kopiert
+- unmittelbar passende Produkte als Tabelle aufgeführt
+- Quell-URL, Erfassungsdatum und einen Änderungsvorbehalt ergänzt
+
+
+
+Die Markdown-Datei ist deshalb keine wortgetreue Archivkopie, sondern eine redaktionell bereinigte Zusammenfassung des sichtbaren Seiteninhalts.
+
+
+
+\## Einordnung der \`robots.txt\`
+
+
+
+Die aktuelle [adidas-robots.txt]\([https://www.adidas.de/robots.txt](https://www.adidas.de/robots.txt)) enthält für \`User-agent: \*\` verschiedene Sperren, etwa für Suchseiten, Konten, APIs und bestimmte URL-Parameter. Die konkrete Produktadresse \`/jabbar-schuh/KI8573.html\` wird nach meiner Auslegung von keiner dieser \`Disallow\`-Regeln getroffen; außerdem werden bestimmte HTML-Pfade ausdrücklich erlaubt. Rein nach der \`robots.txt\` erscheint diese konkrete Produktseite daher abrufbar.
+
+
+
+Das ist aber keine rechtliche Erlaubnis. Der technische Standard stellt ausdrücklich klar, dass \`robots.txt\` keine Zugangsautorisierung darstellt. [RFC 9309, Abschnitt 1]\([https://www.rfc-editor.org/rfc/rfc9309.html#section-1](https://www.rfc-editor.org/rfc/rfc9309.html#section-1)).
+
+
+
+Entscheidend ist hier der Widerspruch zu den [adidas-Nutzungsbedingungen]\([https://www.adidas.de/terms\_and\_conditions](https://www.adidas.de/terms_and_conditions)): Dort wird der Einsatz von Software, Robots, Crawlern, Page-Scrapern oder anderen automatisierten Mitteln zum Zugriff, Kopieren oder Überwachen der Plattform ausdrücklich untersagt.
+
+
+
+Kurz eingeordnet:
+
+
+
+- \*\*Gemäß&#x20;\*\*\*\*\`robots.txt\`\*\*\*\*:\*\* Die konkrete Produktseite scheint nicht gesperrt.
+- \*\*Gemäß adidas-Nutzungsbedingungen:\*\* Der automatisierte Zugriff mit Playwright ist dem Wortlaut nach untersagt.
+- \*\*Strafrechtlich:\*\* Ein einmaliger Abruf einer öffentlich erreichbaren Seite ohne Umgehung einer Sicherung ist nicht allein wegen Playwright automatisch strafbar.
+- \*\*Vertraglich:\*\* Es besteht trotzdem ein Risiko wegen eines möglichen Verstoßes gegen die Nutzungsbedingungen.
+- \*\*Urheberrechtlich:\*\* Private beziehungsweise verfahrensbezogene Einzelkopien sind anders zu bewerten als Veröffentlichung oder kommerzielle Weiterverwendung. Für Gerichts- und Behördenverfahren erlaubt [§ 45 UrhG]\([https://www.gesetze-im-internet.de/urhg/\_\_45.html](https://www.gesetze-im-internet.de/urhg/__45.html)) grundsätzlich einzelne erforderliche Vervielfältigungen.
+
+
+
+Für eine tägliche Playwright-Überwachung wäre daher eine schriftliche Zustimmung von adidas die rechtlich sauberste Lösung. Für eine einmalige Beweissicherung kann eine gesetzliche Rechtfertigung eher in Betracht kommen, sollte bei einem tatsächlichen Streit aber anwaltlich geprüft werden.
