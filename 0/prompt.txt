@@ -1,0 +1,1 @@
+bei der tenorschreibhilfe muss die ki Nachfragen basieren auf den eingegebene Sachen Fragen Stellen. Darunter Ja/Nein oder Textfragen oder slider fragen, je nachdem was past. Sie sollen dann in Grau darunterstehen und wenn man antwortets soll man darunter weitershrieben, sodass am ende dann der geammte text mit den eingerückten fragen dort steht
