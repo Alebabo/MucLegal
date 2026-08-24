@@ -1,0 +1,1 @@
+1. die shriftgröße muss kleiner sein und wenn man nur wenig eingibt, dann soll direkt auf der weißen seite in grauer schrift nach mehr kontext gfragt werden
