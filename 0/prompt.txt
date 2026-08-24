@@ -1,0 +1,4 @@
+dieser ganze disclaimer ist noch da **Nicht als Beleg verwendbar – nur Hinweis**
+**Was wurde festgestellt?** Die Zielseite zeigte dem automatischen Browser keinen zuverlässig auswertbaren Inhalt. Der sichtbare Fehler- oder Schutzzustand wurde gespeichert.
+**Was bedeutet das?** Die Aufnahme kann auf eine Veränderung oder ein Zugriffsproblem hinweisen, belegt aber nicht den dahinterliegenden Seiteninhalt.
+**Was sollte ein Mensch jetzt tun?** Für einen rechtssicheren Nachweis muss ein Mensch die Seite zusätzlich manuell sichern.
