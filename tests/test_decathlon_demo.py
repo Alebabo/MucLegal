@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from muclegal.decathlon_demo import (
+    DEMO_BASELINE_ID,
+    DEMO_CURRENT_ID,
+    DEMO_NOTICE,
+)
+from muclegal.monitoring_cases import MonitoringCaseRepository
+from muclegal.ui import create_app
+
+
+def test_local_decathlon_demo_replays_manual_baseline_and_difference_flow() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        repository = MonitoringCaseRepository(
+            root / "reviews.sqlite3", root / "case-intake"
+        )
+        app = create_app(
+            root / "latest-case.json",
+            root / "reviews.sqlite3",
+            anthropic_ready=False,
+            monitoring_cases=repository,
+        )
+        with TestClient(app) as client:
+            page = client.get("/beweis-labor")
+            prepared = client.post("/api/v1/demo/decathlon")
+            payload = prepared.json()
+            baseline = client.get(f"/api/v1/cases/{DEMO_BASELINE_ID}")
+            attached = client.post(
+                f"/api/v1/cases/{payload['monitoring_case_id']}/baseline-evidence",
+                json={"evidence_case_id": DEMO_BASELINE_ID},
+            )
+            prepared_again = client.post("/api/v1/demo/decathlon")
+            current = client.get(f"/api/v1/cases/{DEMO_CURRENT_ID}")
+            compared = client.post(
+                f"/api/v1/cases/{payload['monitoring_case_id']}/evidence-comparisons",
+                json={"evidence_case_id": DEMO_CURRENT_ID},
+            )
+            download = client.get(f"/api/v1/cases/{DEMO_CURRENT_ID}/download")
+
+    assert prepared.status_code == 200
+    assert payload["demo_only"] is True
+    assert payload["baseline_attached"] is False
+    assert payload["next_case_id"] == DEMO_BASELINE_ID
+    assert 'id="decathlon-demo"' in page.text
+    assert "keine Live-Beweise" in page.text
+
+    assert baseline.status_code == 200
+    assert baseline.json()["demo_only"] is True
+    assert baseline.json()["demo_notice"] == DEMO_NOTICE
+    assert baseline.json()["demo_next_case_id"] == DEMO_CURRENT_ID
+    assert "Webarchiv" in baseline.json()["capture_galleries"]["agb"]["title"]
+
+    assert attached.status_code == 201
+    assert attached.json()["baseline_evidence"]["demo_only"] is True
+    assert prepared_again.json()["baseline_attached"] is True
+    assert prepared_again.json()["next_case_id"] == DEMO_CURRENT_ID
+
+    assert current.status_code == 200
+    assert current.json()["demo_only"] is True
+    assert current.json()["evidence_suitability"] == "synthetische_demo"
+    assert "synthetischer Demo-Vergleichsstand" in current.json()["capture_galleries"]["agb"]["title"]
+
+    assert compared.status_code == 201
+    comparison = compared.json()["comparison"]
+    assert comparison["status"] == "technische_aenderung_erkannt"
+    assert comparison["demo_only"] is True
+    assert comparison["demo_notice"] == DEMO_NOTICE
+    assert comparison["differences"]
+    assert download.status_code == 200
+    assert download.headers["content-type"] == "application/zip"

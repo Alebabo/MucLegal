@@ -2099,3 +2099,149 @@ Die Autovervollständigung überspringt nun die Segmente `verpflichtungsformel` 
 `ordnungsmittelandrohung`. Ein Frontendtest weist gerichtliche Verurteilungs- und
 Ordnungsmittelformeln in Vorschlägen zurück. Die übrigen sachverhaltsbezogenen
 Bausteine des Korrekturmodus bleiben verfügbar.
+
+# Download lieferte ein nachträglich beschädigtes Beweispaket aus
+
+### Symptom
+
+Eine nach der Erfassung veränderte oder beschädigte manifestierte Datei konnte über
+den ZIP-Endpunkt weiterhin mit HTTP 200 als reguläres Beweispaket heruntergeladen
+werden. Die enthaltene Manifestprüfung hätte die Abweichung zwar nachträglich gezeigt,
+der Download selbst wies aber nicht auf den Integritätsbruch hin.
+
+### Ursache und Diagnose
+
+`CaseArchive.build_download` prüfte nur, ob die in `case.json` genannten Artefaktpfade
+innerhalb des Fallverzeichnisses lagen. Vor dem Verpacken wurde weder `manifest.json`
+gegen die aktuellen Dateien noch dessen Hash gegen `case.json` und
+`manifest.sha256` geprüft. `verify_manifest` berücksichtigte außerdem deklarierte
+Dateigrößen, Manifeststruktur und doppelte Einträge nicht und konnte bei einer
+fehlerhaften Artefaktliste mit einer Ausnahme abbrechen.
+
+### Lösung
+
+Der Download wird nun gesperrt, wenn Manifest, Digestdatei oder der in `case.json`
+verankerte Manifest-Hash fehlen beziehungsweise abweichen. Die Manifestprüfung
+validiert Version, Hashalgorithmus, SHA-256-Felder, Dateigrößen, eindeutige Labels und
+Pfade sowie die Hashkette und liefert Strukturfehler als `valid=False` zurück. Das ZIP
+wird über eine fallbezogene temporäre Datei atomar ersetzt; aufgelöste Dateipfade
+dürfen das Fallverzeichnis auch über Verknüpfungen nicht verlassen.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests verändern ein bereits manifestiertes Roh-HTML, manipulieren
+Dateigröße und Digestdatei und übergeben ein strukturell ungültiges Manifest. Der
+Download antwortet in diesen Fällen mit HTTP 409, während ein unverändertes Paket
+weiterhin als gültiges ZIP ausgeliefert wird. Die Prüfung schützt den lokalen
+Downloadzeitpunkt; gegen eine gleichzeitige Änderung exakt zwischen Verifikation und
+Dateilesen ist keine systemweite Dateisperre eingerichtet. Der isolierte lokale
+Demo-Store und die atomare ZIP-Erzeugung begrenzen dieses verbleibende Risiko.
+
+# Archiv-Link im direkt gestarteten BeweisLab führte auf eine FastAPI-404-Seite
+
+### Symptom
+
+Im unter `http://127.0.0.1:8000/beweis-labor` geöffneten BeweisLab führte der
+Navigationspunkt „Archiv“ auf `http://127.0.0.1:8000/archiv` und antwortete mit
+HTTP 404, obwohl das Archiv im lokal laufenden React-Frontend vorhanden war.
+
+### Ursache und Diagnose
+
+Die BeweisLab-Seitenleiste verwendete für alle Ziele relative Links. Das ist auf der
+gemeinsamen Deployment-URL korrekt, weil dort der Reverse Proxy `/archiv` an das
+Frontend weitergibt. Beim ausdrücklich unterstützten direkten lokalen FastAPI-Aufruf
+blieb der Browser jedoch auf Port 8000. FastAPI stellt nur `/` und `/beweis-labor`
+als HTML-Seiten bereit; das React-Archiv antwortete gleichzeitig unter
+`http://127.0.0.1:4173/archiv` mit HTTP 200.
+
+### Lösung
+
+Das BeweisLab kennzeichnet die vier React-Navigationsziele jetzt ausdrücklich und
+setzt deren Origin ausschließlich bei `127.0.0.1` beziehungsweise `localhost` und
+einem direkten Backend-Aufruf auf Port 4173. Auf der gemeinsamen Produktions-URL
+bleiben die relativen Links unverändert. Zusätzlich besitzt FastAPI lokale
+307-Weiterleitungen für `/hinweise`, `/archiv`, `/neu` und `/tenorhilfe`; sie dienen
+als Fallback für direkt eingegebene Backend-URLs und erhalten Query-Parameter.
+
+### Verifikation und verbleibende Grenze
+
+Der Regressionstest prüft alle vier Weiterleitungen sowie einen Archiv-Query-String.
+Im Browser führte der Klick aus dem laufenden BeweisLab zu
+`http://127.0.0.1:4173/archiv`; Überschrift, Fälle-/Tenore-Reiter und zwei vorhandene
+Fälle waren sichtbar. Die Browserkonsole meldete keine Fehler oder Warnungen. Lokal
+muss das dokumentierte React-Frontend auf Port 4173 laufen, damit dessen Seiten
+verfügbar sind; das reine technische BeweisLab auf Port 8000 bleibt unabhängig davon
+weiter nutzbar.
+
+# Decathlon-Beweisvergleich meldet eine Änderung, zeigt aber keinen Unterschied
+
+### Symptom
+
+Nach der manuellen Zuordnung eines aktuellen BeweisLab-Pakets zu einem bereits
+vorhandenen Webarchiv-Ausgangsbeweis wurde zwar eine technische Änderung gespeichert.
+Die Benachrichtigung führte lokal jedoch auf den nicht verwendeten Port `8080` oder
+öffnete nur eine allgemeine Beweiskette mit Paket-IDs und Hashes. Der konkrete
+Vorher-/Nachher-Unterschied und die ausgeführten Vergleichsschritte waren nicht
+sichtbar.
+
+### Ursache und Diagnose
+
+Der lokale Übergabepfad der BeweisLab-Vorlage stammte aus einer älteren
+Frontendkonfiguration und war nicht auf den verbindlichen Vite-Port `4173`
+umgestellt worden. Der Backendvergleich speicherte außerdem nur Text-Hashes. Aus
+abweichenden Hashes ließ sich zwar ein technischer Status ableiten, aber keine für
+die Demo nachvollziehbare Fundstelle anzeigen. Der Klickpfad wartete pauschal 400 ms;
+bei einem noch laufenden Fallabruf konnte das Ziel zu diesem Zeitpunkt fehlen.
+
+### Lösung
+
+Die lokale Übergabe verwendet jetzt denselben, zentral in der BeweisLab-Vorlage
+ermittelten Frontend-Ursprung auf Port `4173`; auf einer gemeinsamen Deployment-URL
+bleibt der Pfad relativ. Bei einem vollständigen, manifestgeprüften Vergleich erzeugt
+das Backend zusätzlich höchstens sechs begrenzte wortbasierte Textausschnitte mit
+`Vorher · Webarchiv` und `Aktueller Stand`. Methode, Zusammenfassung und Ausschnitte
+werden schema-validiert zusammen mit dem rein technischen Vergleich gespeichert.
+Die Hinweise-Seite zeigt ein dauerhaftes Pop-up `Differenz erkannt`; dessen Klick
+wartet bei Bedarf auf die geladenen Falldaten, öffnet den Fall und fokussiert direkt
+die Vergleichsstelle. Dort dokumentiert `Was wurde gemacht?` die Manifestprüfung,
+die verglichene Dokumentrolle und die technische Grenze ohne juristische Aussage.
+
+### Verifikation und verbleibende Grenze
+
+Backendtests prüfen geänderte, unveränderte und unvollständige Pakete sowie die
+gespeicherten Ausschnitte. Frontendtests prüfen die exakte Pop-up-Beschriftung;
+TypeScript-Typprüfung und gezieltes ESLint bestanden. Ein isolierter synthetischer
+Decathlon-Demo-Store wurde im Browser vollständig durchlaufen: aktuelles Paket
+auswählen, dem vorhandenen Webarchiv-Ausgangsbeweis zuordnen, Pop-up anklicken und
+drei sichtbare Vorher-/Nachher-Ausschnitte öffnen; die Browserkonsole blieb ohne
+Fehler. Der echte reguläre Abruf sowohl des bisherigen als auch des aktuellen
+Decathlon-AGB-Pfads lieferte am 25.08.2026 eine Cloudflare-Blockseite und wurde
+korrekt als unvollständiger Schutzbefund gespeichert. Dieser Schutz wird nicht
+umgangen und löst bewusst keine scheinbar belastbare Änderungsbenachrichtigung aus.
+
+Damit die Bühnenvorführung nicht vom externen Schutzstatus abhängt, besitzt das
+lokale BeweisLab zusätzlich den Button `Decathlon-Demo vorbereiten`. Der zugehörige
+POST-Endpunkt ist ausschließlich für `127.0.0.1`, `localhost` und den Testhost
+freigeschaltet. Er erzeugt idempotent zwei manifestgeprüfte lokale Pakete. Bei einem
+leeren Store wird zuerst der Webarchiv-Demo-Ausgangsstand geöffnet und muss weiterhin
+manuell als Ausgangsbeweis zugeordnet werden; anschließend führt ein Link zum
+synthetischen aktuellen Stand. Ist – wie im bestehenden Decathlon-Demo-Store – schon
+ein echter Webarchiv-Ausgangsbeweis vorhanden, öffnet der Button direkt den aktuellen
+synthetischen Demo-Snapshot zur manuellen Zuordnung und zum Vergleich.
+
+Jede Stufe weist unübersehbar `SYNTHETISCHE DEMO · KEIN LIVE-BEWEIS` aus: im
+BeweisLab, im herunterladbaren Paket, im Manifest-Hinweis, im Pop-up und in der
+Vergleichsansicht. Backend und Frontend führen `demo_only` und `demo_notice` durch
+die gespeicherte Beweiskette. Der reale lokale Browser-Smoke-Test startete den Preset
+aus dem laufenden BeweisLab, öffnete `demo-decathlon-aktuell`, verglich ihn manuell
+mit dem vorhandenen manifestgeprüften Webarchiv-Ausgangsbeweis, zeigte das Pop-up
+`Differenz erkannt` und fokussierte nach dem Klick die sechs begrenzten
+Vorher-/Nachher-Ausschnitte sowie `Was wurde gemacht?`. Die Browserkonsole enthielt
+keine Fehler oder Warnungen.
+
+Auf der zeitlich begrenzten Hetzner-Demo bleibt der Endpoint ebenfalls nur über die
+geschützte Frontend-Strecke verwendbar: Caddy verlangt Basic Auth, das Vite-Frontend
+leitet `/api` mit geändertem Origin und internem Loopback-Host an FastAPI weiter, und
+FastAPI selbst bleibt ausschließlich an `127.0.0.1:8000` gebunden. Eine direkte
+öffentliche Freischaltung des Demo-Endpoints oder des Backend-Ports wurde nicht
+eingeführt.

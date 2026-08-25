@@ -1297,6 +1297,37 @@ class LiveWorkflowTests(unittest.TestCase):
 
 
 class LiveUiTests(unittest.TestCase):
+    def test_standalone_backend_redirects_react_navigation_to_local_frontend(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                anthropic_ready=False,
+                asset_directory=ROOT / "assets",
+            )
+            with TestClient(app) as client:
+                evidence_lab = client.get("/beweis-labor")
+                responses = {
+                    path: client.get(path, follow_redirects=False)
+                    for path in ("/hinweise", "/archiv", "/neu", "/tenorhilfe")
+                }
+                archive_with_query = client.get(
+                    "/archiv?bereich=tenore", follow_redirects=False
+                )
+
+        for path, response in responses.items():
+            self.assertEqual(307, response.status_code)
+            self.assertEqual(f"http://127.0.0.1:4173{path}", response.headers["location"])
+            self.assertIn(f'data-react-route="{path}"', evidence_lab.text)
+        self.assertIn("localFrontendOrigin", evidence_lab.text)
+        self.assertIn("`${localFrontendOrigin}${path}`", evidence_lab.text)
+        self.assertNotIn(":8080", evidence_lab.text)
+        self.assertEqual(
+            "http://127.0.0.1:4173/archiv?bereich=tenore",
+            archive_with_query.headers["location"],
+        )
+
     def test_evidence_lab_authorization_checkbox_starts_explicit_god_mode(self) -> None:
         class GodModeWorkflow:
             tenor = json.loads((FIXTURES / "tenor.json").read_text(encoding="utf-8"))
@@ -1671,6 +1702,15 @@ class LiveUiTests(unittest.TestCase):
 
                 bundle_case = Path(output) / "bundles" / case_id / "case.json"
                 record = json.loads(bundle_case.read_text(encoding="utf-8"))
+                manifest_sha256 = record["evidence"].pop("manifest_sha256")
+                bundle_case.write_text(json.dumps(record), encoding="utf-8")
+                unanchored_download = client.get(f"/api/v1/cases/{case_id}/download")
+                record["evidence"]["manifest_sha256"] = manifest_sha256
+                bundle_case.write_text(json.dumps(record), encoding="utf-8")
+                Path(record["artifacts"]["raw_html"]).write_text(
+                    "nachträglich manipuliert", encoding="utf-8"
+                )
+                invalid_download = client.get(f"/api/v1/cases/{case_id}/download")
                 record["artifacts"]["raw_html"] = str(FIXTURES / "baseline.html")
                 bundle_case.write_text(json.dumps(record), encoding="utf-8")
                 outside = client.get(f"/artifact/{case_id}/raw_html")
@@ -1693,6 +1733,10 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn("<html", preview.json()["content"].lower())
         self.assertEqual(415, binary_preview.status_code)
         self.assertEqual(404, traversal.status_code)
+        self.assertEqual(409, unanchored_download.status_code)
+        self.assertIn("Manifest-Hash fehlt", unanchored_download.text)
+        self.assertEqual(409, invalid_download.status_code)
+        self.assertIn("Integritätsprüfung", invalid_download.text)
         self.assertEqual(404, outside.status_code)
 
     def test_invalid_anthropic_output_is_not_published_as_result(self) -> None:

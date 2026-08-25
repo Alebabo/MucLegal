@@ -8,8 +8,9 @@ export type MonitoringChangeNotification = {
 
 const CHANGE_NOTIFICATIONS: Record<string, MonitoringChangeNotification> = {
   technische_aenderung_erkannt: {
-    title: "Technische Änderung erkannt",
-    description: "Der aktuelle Beweis weicht vom Webarchiv-Ausgangsbeweis ab.",
+    title: "Differenz erkannt",
+    description:
+      "Der aktuelle Beweis weicht vom Webarchiv-Ausgangsbeweis ab. Anklicken, um den Unterschied zu sehen.",
     tone: "warning",
   },
   beseitigt: {
@@ -43,6 +44,7 @@ export type StoredEvidenceComparisonNotification = {
   case_id: string;
   fall_id: string;
   status: "technische_aenderung_erkannt";
+  demo_only?: boolean;
 };
 
 export function parseStoredEvidenceComparisonNotification(
@@ -59,7 +61,8 @@ export function parseStoredEvidenceComparisonNotification(
       typeof candidate.case_id !== "string" ||
       !candidate.case_id ||
       typeof candidate.fall_id !== "string" ||
-      !candidate.fall_id
+      !candidate.fall_id ||
+      (candidate.demo_only !== undefined && typeof candidate.demo_only !== "boolean")
     ) {
       return null;
     }

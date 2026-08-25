@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -94,18 +93,9 @@ class UiSecurityTests(unittest.TestCase):
                 artifact = client.get(f"/artifact/{case_id}/raw_html")
                 download = client.get(f"/api/v1/cases/{case_id}/download")
 
-            archive_path = root / "download.zip"
-            archive_path.write_bytes(download.content)
-            with zipfile.ZipFile(archive_path) as archive:
-                packaged_names = archive.namelist()
-                packaged_content = b"".join(
-                    archive.read(name) for name in packaged_names
-                )
-
         self.assertEqual(404, artifact.status_code)
-        self.assertEqual(200, download.status_code)
-        self.assertNotIn("artefakte/raw_html.html", packaged_names)
-        self.assertNotIn(b"GOD MODE FOREIGN CONTENT", packaged_content)
+        self.assertEqual(409, download.status_code)
+        self.assertIn("Integritätsprüfung", download.text)
 
     def test_run_api_rejects_excessive_and_unknown_input(self) -> None:
         with tempfile.TemporaryDirectory() as output:

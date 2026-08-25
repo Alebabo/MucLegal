@@ -111,18 +111,35 @@ function HinweisePage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<Record<string, string>>({});
   const notifiedRunIds = useRef(new Set<string>());
+  const pendingEvidenceId = useRef<string | null>(null);
 
   const openEvidence = useCallback((caseId: string) => {
+    pendingEvidenceId.current = caseId;
     setOpenId(caseId);
-    window.setTimeout(() => {
-      const evidence = document.getElementById(`beweisfuehrung-${caseId}`);
-      evidence?.scrollIntoView({ behavior: "smooth", block: "center" });
-      evidence?.focus({ preventScroll: true });
-    }, 400);
   }, []);
 
+  useEffect(() => {
+    const caseId = pendingEvidenceId.current;
+    if (!caseId || openId !== caseId) return;
+    const target =
+      document.getElementById(`differenz-${caseId}`) ??
+      document.getElementById(`beweisfuehrung-${caseId}`);
+    if (!target) return;
+    pendingEvidenceId.current = null;
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus({ preventScroll: true });
+    });
+  }, [cases, openId]);
+
   const showChangeNotification = useCallback(
-    (runId: string, caseId: string, fallId: string, notification: MonitoringChangeNotification) => {
+    (
+      runId: string,
+      caseId: string,
+      fallId: string,
+      notification: MonitoringChangeNotification,
+      demoOnly = false,
+    ) => {
       toast.custom(
         (toastId) => {
           const Icon = notification.tone === "success" ? CheckCircle2 : AlertTriangle;
@@ -151,7 +168,9 @@ function HinweisePage() {
                     {notification.title}
                   </span>
                   <span className="mt-1 block text-sm text-muted-foreground">
-                    {notification.description}
+                    {demoOnly
+                      ? "Synthetischer Demo-Vergleich – kein Live-Beweis. Anklicken, um den Unterschied zu sehen."
+                      : notification.description}
                   </span>
                 </span>
                 <ChevronRight
@@ -193,7 +212,13 @@ function HinweisePage() {
       notifiedRunIds.current,
     );
     if (notification) {
-      showChangeNotification(stored.notification_id, stored.case_id, stored.fall_id, notification);
+      showChangeNotification(
+        stored.notification_id,
+        stored.case_id,
+        stored.fall_id,
+        notification,
+        stored.demo_only === true,
+      );
     }
   }, [showChangeNotification]);
 
@@ -366,6 +391,90 @@ function HinweisePage() {
                         <p className="font-serif text-lg tracking-tight text-foreground">
                           Beweisführung
                         </p>
+
+                        {c.latestEvidenceComparison?.status === "technische_aenderung_erkannt" && (
+                          <section
+                            className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4"
+                            aria-labelledby={`differenz-${c.case_id}`}
+                            tabIndex={-1}
+                          >
+                            <p
+                              id={`differenz-${c.case_id}`}
+                              className="text-xs font-semibold tracking-wider text-warning uppercase"
+                            >
+                              Differenz erkannt
+                            </p>
+                            {c.latestEvidenceComparison.demo_only && (
+                              <div className="mt-3 rounded-lg border border-warning/50 bg-background p-3 text-sm text-foreground">
+                                <strong>Synthetische Demo · kein Live-Beweis.</strong>{" "}
+                                {c.latestEvidenceComparison.demo_notice ??
+                                  "Dieser Vergleich dient ausschließlich der Vorführung des lokalen Ablaufs."}
+                              </div>
+                            )}
+                            <p className="mt-2 text-sm leading-relaxed text-foreground">
+                              {c.latestEvidenceComparison.difference_summary ??
+                                "Die gespeicherten Text-Prüfwerte unterscheiden sich."}
+                            </p>
+                            <div className="mt-4 space-y-4">
+                              {(c.latestEvidenceComparison.differences ?? []).map(
+                                (difference, index) => (
+                                  <article
+                                    key={`${difference.change_type}-${index}`}
+                                    className="overflow-hidden rounded-lg border border-border bg-card"
+                                  >
+                                    <p className="border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground">
+                                      {difference.label} · Ausschnitt {index + 1}
+                                    </p>
+                                    <div className="grid gap-px bg-border sm:grid-cols-2">
+                                      <div className="bg-danger/5 p-4">
+                                        <p className="text-xs font-semibold tracking-wider text-danger uppercase">
+                                          Vorher · Webarchiv
+                                        </p>
+                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                                          {difference.before || "— Kein entsprechender Text —"}
+                                        </p>
+                                      </div>
+                                      <div className="bg-success/5 p-4">
+                                        <p className="text-xs font-semibold tracking-wider text-success uppercase">
+                                          Aktueller Stand
+                                        </p>
+                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                                          {difference.after || "— Text entfernt —"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </article>
+                                ),
+                              )}
+                            </div>
+                            <div className="mt-4 rounded-lg bg-background p-4">
+                              <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                                Was wurde gemacht?
+                              </p>
+                              <ol className="mt-2 space-y-1 text-sm leading-6 text-foreground">
+                                <li>
+                                  1. Der manuell zugeordnete Webarchiv-Ausgangsbeweis wurde geladen.
+                                </li>
+                                <li>
+                                  2. Beide SHA-256-Manifeste wurden vor dem Vergleich geprüft.
+                                </li>
+                                <li>
+                                  3. Der normalisierte Text der Rolle „
+                                  {c.latestEvidenceComparison.compared_role}“ wurde wortbasiert
+                                  verglichen.
+                                </li>
+                                <li>
+                                  4. Die abweichenden Ausschnitte wurden rein technisch
+                                  gegenübergestellt.
+                                </li>
+                              </ol>
+                              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                                Keine juristische Bewertung: Die Anzeige sagt nichts über
+                                Kerngleichheit oder einen Rechtsverstoß aus.
+                              </p>
+                            </div>
+                          </section>
+                        )}
 
                         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                           <div>

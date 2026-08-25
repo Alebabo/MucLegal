@@ -11,6 +11,8 @@ export type BaselineEvidence = {
   manifest_sha256: string;
   attached_at: string;
   attached_by: "menschliche_zuordnung_im_beweislab";
+  demo_only?: boolean;
+  demo_notice?: string;
 };
 
 export type EvidenceComparison = {
@@ -26,6 +28,16 @@ export type EvidenceComparison = {
   current_text_sha256: string | null;
   compared_role: string;
   compared_at: string;
+  comparison_method?: "manifestgepruefter_wortbasierter_textvergleich";
+  difference_summary?: string;
+  differences?: Array<{
+    change_type: "replace" | "delete" | "insert";
+    label: string;
+    before: string;
+    after: string;
+  }>;
+  demo_only?: boolean;
+  demo_notice?: string;
   technical_only: true;
 };
 

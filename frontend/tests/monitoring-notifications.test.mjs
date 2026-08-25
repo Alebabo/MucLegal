@@ -25,6 +25,12 @@ test("creates a notification for every agreed comparison difference", () => {
   }
 });
 
+test("uses the demo wording for a technical evidence difference", () => {
+  const notification = monitoringChangeNotification("technische_aenderung_erkannt");
+  assert.equal(notification?.title, "Differenz erkannt");
+  assert.match(notification?.description ?? "", /Unterschied zu sehen/);
+});
+
 test("accepts only the versioned BeweisLab comparison handoff", () => {
   const valid = JSON.stringify({
     version: 1,
@@ -32,6 +38,7 @@ test("accepts only the versioned BeweisLab comparison handoff", () => {
     case_id: "case-1",
     fall_id: "VZ-DECATHLON-GESAMTBEWEIS-2026",
     status: "technische_aenderung_erkannt",
+    demo_only: true,
   });
 
   assert.deepEqual(parseStoredEvidenceComparisonNotification(valid), JSON.parse(valid));
@@ -43,6 +50,12 @@ test("accepts only the versioned BeweisLab comparison handoff", () => {
   assert.equal(
     parseStoredEvidenceComparisonNotification(
       JSON.stringify({ ...JSON.parse(valid), status: "unveraendert_fortbestehend" }),
+    ),
+    null,
+  );
+  assert.equal(
+    parseStoredEvidenceComparisonNotification(
+      JSON.stringify({ ...JSON.parse(valid), demo_only: "ja" }),
     ),
     null,
   );

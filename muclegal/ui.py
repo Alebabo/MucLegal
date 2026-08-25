@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import hashlib
 import json
 import re
@@ -34,6 +35,7 @@ from muclegal.live import PIPELINE_STEPS, LiveMonitorWorkflow
 from muclegal.evidence import verify_manifest
 from muclegal.evidence.suitability import classify_technical_evidence
 from muclegal.domain_monitor import CaseDomainMonitor
+from muclegal.decathlon_demo import prepare_decathlon_demo
 from muclegal.monitoring_cases import (
     MonitoringCaseError,
     MonitoringCaseRepository,
@@ -70,6 +72,7 @@ TERMINAL_RUN_STATUSES = {
 }
 MAX_TEXT_PREVIEW_BYTES = 512 * 1024
 CASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+LOCAL_REACT_FRONTEND_ORIGIN = "http://127.0.0.1:4173"
 CAPTURE_ROLE_TITLES = {
     "main": "Hauptseite",
     "requested": "Angefragte Seite",
@@ -145,6 +148,62 @@ def _evidence_subject_host(value: str) -> str | None:
     if original_url.username or original_url.password or not original_url.hostname:
         return host
     return original_url.hostname.lower().rstrip(".")
+
+
+def _clip_diff_excerpt(tokens: list[str], start: int, end: int, *, context: int = 12) -> str:
+    excerpt_start = max(0, start - context)
+    excerpt_end = min(len(tokens), end + context)
+    excerpt = " ".join(tokens[excerpt_start:excerpt_end])
+    if len(excerpt) > 900:
+        excerpt = excerpt[:897].rstrip() + "…"
+    if excerpt_start:
+        excerpt = "… " + excerpt
+    if excerpt_end < len(tokens):
+        excerpt += " …"
+    return excerpt
+
+
+def _technical_text_differences(
+    baseline_text: str, current_text: str, *, max_differences: int = 6
+) -> dict:
+    """Build small human-readable excerpts without treating the diff as legal analysis."""
+
+    baseline_tokens = re.findall(r"\S+", baseline_text)
+    current_tokens = re.findall(r"\S+", current_text)
+    matcher = difflib.SequenceMatcher(
+        None, baseline_tokens, current_tokens, autojunk=True
+    )
+    opcodes = [item for item in matcher.get_opcodes() if item[0] != "equal"]
+    if not opcodes and baseline_text != current_text:
+        opcodes = [("replace", 0, len(baseline_tokens), 0, len(current_tokens))]
+    differences = []
+    labels = {
+        "replace": "Text geändert",
+        "delete": "Text entfernt",
+        "insert": "Text hinzugefügt",
+    }
+    for tag, baseline_start, baseline_end, current_start, current_end in opcodes[
+        :max_differences
+    ]:
+        differences.append(
+            {
+                "change_type": tag,
+                "label": labels[tag],
+                "before": _clip_diff_excerpt(
+                    baseline_tokens, baseline_start, baseline_end
+                ),
+                "after": _clip_diff_excerpt(current_tokens, current_start, current_end),
+            }
+        )
+    count = len(opcodes)
+    summary = (
+        "1 abweichender Textbereich im normalisierten Seitentext erkannt."
+        if count == 1
+        else f"{count} abweichende Textbereiche im normalisierten Seitentext erkannt."
+    )
+    if count > len(differences):
+        summary += f" Gezeigt werden die ersten {len(differences)}."
+    return {"difference_summary": summary, "differences": differences}
 
 
 class ScreenshotInput(BaseModel):
@@ -533,7 +592,8 @@ class CaseArchive:
                 if isinstance(gallery.get("documents"), list) else []
             )
             galleries[role] = {
-                "title": CAPTURE_ROLE_TITLES.get(role, role.replace("_", " ").title()),
+                "title": gallery.get("title")
+                or CAPTURE_ROLE_TITLES.get(role, role.replace("_", " ").title()),
                 "mode": gallery.get("mode"),
                 "capture_completeness": gallery.get("capture_completeness"),
                 "tile_count": len(tiles),
@@ -659,24 +719,74 @@ class CaseArchive:
     def build_download(self, case_id: str) -> Path:
         case_path = self._case_path(case_id)
         record = self._read(case_path)
+        try:
+            manifest_path = self._safe_artifact_path(
+                "manifest", record, case_path.parent
+            )
+        except HTTPException as exc:
+            raise HTTPException(
+                409,
+                "Integritätsprüfung fehlgeschlagen: Manifest ist nicht verfügbar.",
+            ) from exc
+        expected_manifest_sha256 = record.get("evidence", {}).get("manifest_sha256")
+        if not isinstance(expected_manifest_sha256, str):
+            raise HTTPException(
+                409,
+                "Integritätsprüfung fehlgeschlagen: Verankerter Manifest-Hash fehlt.",
+            )
+        verification = verify_manifest(
+            manifest_path,
+            expected_manifest_sha256=expected_manifest_sha256,
+            require_digest_file=True,
+        )
+        if not verification.valid:
+            reasons = "; ".join(verification.errors[:3])
+            raise HTTPException(
+                409,
+                "Integritätsprüfung fehlgeschlagen; Download wurde gesperrt. " + reasons,
+            )
+
         prefix = "grey-mode-beweispaket" if record.get("god_mode") else "beweispaket"
         archive_path = case_path.parent / f"{prefix}-{case_id}.zip"
-        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
-            for path in sorted(case_path.parent.rglob("*")):
-                if not path.is_file() or path.resolve() == archive_path.resolve():
-                    continue
-                relative = path.relative_to(case_path.parent)
-                if ".." in relative.parts:
-                    continue
-                package.write(path, relative.as_posix())
-            for label in ARTIFACT_DEFINITIONS:
-                if not record.get("artifacts", {}).get(label):
-                    continue
-                try:
-                    path = self._safe_artifact_path(label, record, case_path.parent)
-                except HTTPException:
-                    continue
-                package.write(path, f"artefakte/{label}{path.suffix}")
+        temporary_path = archive_path.with_name(
+            f".{archive_path.name}.{uuid.uuid4().hex}.tmp"
+        )
+        package_paths = [
+            path
+            for path in sorted(case_path.parent.rglob("*"))
+            if path.is_file()
+            and path.resolve() != archive_path.resolve()
+            and not (
+                path.name.startswith(f".{archive_path.name}.")
+                and path.name.endswith(".tmp")
+            )
+        ]
+        try:
+            with zipfile.ZipFile(
+                temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+            ) as package:
+                for path in package_paths:
+                    resolved_path = path.resolve()
+                    try:
+                        resolved_path.relative_to(case_path.parent.resolve())
+                    except ValueError:
+                        continue
+                    relative = path.relative_to(case_path.parent)
+                    if ".." in relative.parts:
+                        continue
+                    package.write(resolved_path, relative.as_posix())
+                for label in ARTIFACT_DEFINITIONS:
+                    if not record.get("artifacts", {}).get(label):
+                        continue
+                    try:
+                        path = self._safe_artifact_path(label, record, case_path.parent)
+                    except HTTPException:
+                        continue
+                    package.write(path, f"artefakte/{label}{path.suffix}")
+            temporary_path.replace(archive_path)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
         return archive_path
 
     def _case_path(self, case_id: str) -> Path:
@@ -780,6 +890,9 @@ class CaseArchive:
             "robots_txt_status": record.get("capture_transparency", {}).get("robots_txt"),
             "god_mode": bool(record.get("god_mode")),
             "god_mode_notice": record.get("god_mode_notice"),
+            "demo_only": bool(record.get("demo_only")),
+            "demo_notice": record.get("demo_notice"),
+            "demo_next_case_id": record.get("demo_next_case_id"),
         }
 
 class HumanReviewRepository:
@@ -1116,6 +1229,19 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             "anthropic_ready": anthropic_ready,
         })
 
+    @app.get("/hinweise", include_in_schema=False)
+    @app.get("/archiv", include_in_schema=False)
+    @app.get("/neu", include_in_schema=False)
+    @app.get("/tenorhilfe", include_in_schema=False)
+    async def local_react_frontend(request: Request):
+        """Bridge standalone FastAPI navigation to the local React frontend."""
+        if request.url.hostname not in {"127.0.0.1", "localhost", "testserver"}:
+            raise HTTPException(404, "Frontend-Seite nicht über das Backend verfügbar.")
+        target = f"{LOCAL_REACT_FRONTEND_ORIGIN}{request.url.path}"
+        if request.url.query:
+            target += f"?{request.url.query}"
+        return RedirectResponse(target, status_code=307)
+
     def generate_tenor(payload: TenorDraftRequest) -> dict:
         values = payload.model_dump()
         fallgruppe = values.pop("fallgruppe") or "irrefuehrende_werbung"
@@ -1349,6 +1475,17 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
         return {"cases": [item.to_dict() for item in monitoring_cases.list()]}
 
+    @app.post("/api/v1/demo/decathlon", include_in_schema=False)
+    async def prepare_local_decathlon_demo(request: Request):
+        if request.url.hostname not in {"127.0.0.1", "localhost", "testserver"}:
+            raise HTTPException(404, "Lokale Demo-Vorbereitung ist hier nicht verfügbar.")
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallaufnahme ist nicht konfiguriert.")
+        try:
+            return prepare_decathlon_demo(archive.store_root, monitoring_cases)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+
     @app.get("/api/v1/monitoring-cases/{case_id}")
     async def get_monitoring_case(case_id: str):
         if monitoring_cases is None:
@@ -1369,7 +1506,13 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 422,
                 "Grey-Mode-Pakete bleiben von der juristischen Monitoringstrecke getrennt.",
             )
-        if evidence_detail.get("evidence_suitability") != "regulaer":
+        if (
+            evidence_detail.get("evidence_suitability") != "regulaer"
+            and not (
+                evidence_detail.get("demo_only") is True
+                and evidence_detail.get("evidence_suitability") == "synthetische_demo"
+            )
+        ):
             raise HTTPException(
                 422,
                 "Nur ein regulär geeignetes Beweispaket kann einem Fall zugeordnet werden.",
@@ -1441,6 +1584,8 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             "manifest_sha256": verification.manifest_sha256,
             "capture_completeness": evidence_detail.get("capture_completeness"),
             "documents": documents,
+            "demo_only": bool(evidence_detail.get("demo_only")),
+            "demo_notice": evidence_detail.get("demo_notice"),
         }
 
     def primary_evidence_document(documents: list[dict]) -> dict | None:
@@ -1505,6 +1650,20 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             status = "unveraendert_fortbestehend"
         else:
             status = "technische_aenderung_erkannt"
+        difference_result = (
+            _technical_text_differences(
+                baseline_document["text"], current_document["text"]
+            )
+            if status == "technische_aenderung_erkannt"
+            else {
+                "difference_summary": (
+                    "Kein technischer Textunterschied erkannt."
+                    if status == "unveraendert_fortbestehend"
+                    else "Der Textvergleich ist wegen der unvollständigen Erfassung nicht abschließend."
+                ),
+                "differences": [],
+            }
+        )
         comparison = {
             "comparison_id": uuid.uuid4().hex,
             "status": status,
@@ -1520,6 +1679,13 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 str(current_document.get("role")) if current_document else "nicht_verfuegbar"
             ),
             "compared_at": datetime.now(timezone.utc).isoformat(),
+            "comparison_method": "manifestgepruefter_wortbasierter_textvergleich",
+            **difference_result,
+            "demo_only": bool(baseline.get("demo_only") or current.get("demo_only")),
+            "demo_notice": (
+                current.get("demo_notice")
+                or baseline.get("demo_notice")
+            ),
             "technical_only": True,
         }
         try:

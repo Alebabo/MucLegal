@@ -27,6 +27,8 @@ SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 BASELINE_EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MAX_BASELINE_TEXT_BYTES = 2 * 1024 * 1024
+MAX_COMPARISON_DIFFERENCES = 6
+MAX_COMPARISON_EXCERPT_CHARS = 1000
 EVIDENCE_COMPARISON_STATUSES = {
     "technische_aenderung_erkannt",
     "unveraendert_fortbestehend",
@@ -466,6 +468,17 @@ def _validate_baseline_evidence(value: dict) -> dict:
     if not SHA256_PATTERN.fullmatch(cleaned["manifest_sha256"].lower()):
         raise MonitoringCaseError("Manifest-Prüfwert des Ausgangsbeweises ist ungültig.")
     cleaned["manifest_sha256"] = cleaned["manifest_sha256"].lower()
+    demo_only = value.get("demo_only", False)
+    if not isinstance(demo_only, bool):
+        raise MonitoringCaseError("Demo-Kennzeichnung des Ausgangsbeweises ist ungültig.")
+    demo_notice = value.get("demo_notice")
+    if demo_only:
+        if not isinstance(demo_notice, str) or not demo_notice.strip() or len(demo_notice) > 1000:
+            raise MonitoringCaseError("Demo-Hinweis des Ausgangsbeweises ist ungültig.")
+        cleaned["demo_notice"] = demo_notice.strip()
+    elif demo_notice is not None:
+        raise MonitoringCaseError("Regulärer Ausgangsbeweis darf keinen Demo-Hinweis tragen.")
+    cleaned["demo_only"] = demo_only
     documents = value.get("documents")
     if not isinstance(documents, list) or not documents:
         raise MonitoringCaseError("Ausgangsbeweis enthält keinen normalisierten Seitentext.")
@@ -530,6 +543,53 @@ def _validate_evidence_comparison(value: dict) -> dict:
             cleaned[field] = digest.lower()
         else:
             raise MonitoringCaseError("Text-Prüfwert des Beweisvergleichs ist ungültig.")
+    method = value.get("comparison_method")
+    if method != "manifestgepruefter_wortbasierter_textvergleich":
+        raise MonitoringCaseError("Vergleichsmethode des Beweisvergleichs ist ungültig.")
+    cleaned["comparison_method"] = method
+    summary = value.get("difference_summary")
+    if not isinstance(summary, str) or not summary.strip() or len(summary) > 1000:
+        raise MonitoringCaseError("Zusammenfassung des Beweisvergleichs ist ungültig.")
+    cleaned["difference_summary"] = summary.strip()
+    differences = value.get("differences")
+    if not isinstance(differences, list) or len(differences) > MAX_COMPARISON_DIFFERENCES:
+        raise MonitoringCaseError("Textdifferenzen des Beweisvergleichs sind ungültig.")
+    cleaned_differences = []
+    for difference in differences:
+        if not isinstance(difference, dict):
+            raise MonitoringCaseError("Textdifferenz des Beweisvergleichs ist ungültig.")
+        if set(difference) != {"change_type", "label", "before", "after"}:
+            raise MonitoringCaseError("Textdifferenz enthält unbekannte Felder.")
+        change_type = difference.get("change_type")
+        if change_type not in {"replace", "delete", "insert"}:
+            raise MonitoringCaseError("Änderungsart der Textdifferenz ist ungültig.")
+        cleaned_difference = {"change_type": change_type}
+        for field in ("label", "before", "after"):
+            item = difference.get(field)
+            if not isinstance(item, str) or len(item) > MAX_COMPARISON_EXCERPT_CHARS:
+                raise MonitoringCaseError("Textausschnitt des Beweisvergleichs ist ungültig.")
+            cleaned_difference[field] = item.strip()
+        if not cleaned_difference["label"] or (
+            not cleaned_difference["before"] and not cleaned_difference["after"]
+        ):
+            raise MonitoringCaseError("Textdifferenz ist unvollständig.")
+        cleaned_differences.append(cleaned_difference)
+    if cleaned["status"] == "technische_aenderung_erkannt" and not cleaned_differences:
+        raise MonitoringCaseError("Erkannte Änderung benötigt einen sichtbaren Textunterschied.")
+    if cleaned["status"] != "technische_aenderung_erkannt" and cleaned_differences:
+        raise MonitoringCaseError("Nur erkannte Änderungen dürfen Textunterschiede enthalten.")
+    cleaned["differences"] = cleaned_differences
+    demo_only = value.get("demo_only", False)
+    if not isinstance(demo_only, bool):
+        raise MonitoringCaseError("Demo-Kennzeichnung des Beweisvergleichs ist ungültig.")
+    demo_notice = value.get("demo_notice")
+    if demo_only:
+        if not isinstance(demo_notice, str) or not demo_notice.strip() or len(demo_notice) > 1000:
+            raise MonitoringCaseError("Demo-Hinweis des Beweisvergleichs ist ungültig.")
+        cleaned["demo_notice"] = demo_notice.strip()
+    elif demo_notice is not None:
+        raise MonitoringCaseError("Regulärer Beweisvergleich darf keinen Demo-Hinweis tragen.")
+    cleaned["demo_only"] = demo_only
     cleaned["technical_only"] = True
     return cleaned
 

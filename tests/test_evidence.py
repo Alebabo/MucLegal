@@ -17,6 +17,7 @@ from muclegal.evidence import (
     capture_warc,
     capture_snapshot_warc,
     create_manifest,
+    sha256_file,
     verify_manifest,
 )
 from muclegal.evidence.wayback import WaybackClient
@@ -114,6 +115,76 @@ class EvidenceTests(unittest.TestCase):
             verification = verify_manifest(manifest.manifest_path)
             self.assertFalse(verification.valid)
             self.assertTrue(any("Hash weicht ab" in error for error in verification.errors))
+
+    def test_manifest_verification_rejects_wrong_size_with_consistent_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            artifact = root / "raw.html"
+            artifact.write_bytes(b"<p>Original</p>")
+            manifest = create_manifest({"raw_html": artifact}, root)
+            manifest_path = Path(manifest.manifest_path)
+            document = json.loads(manifest_path.read_text(encoding="utf-8"))
+            document["artifacts"][0]["size_bytes"] += 1
+            manifest_path.write_text(
+                json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+                newline="\n",
+            )
+            Path(manifest.digest_path).write_text(
+                f"{sha256_file(manifest_path)}  manifest.json\n",
+                encoding="ascii",
+                newline="\n",
+            )
+
+            verification = verify_manifest(manifest_path)
+
+        self.assertFalse(verification.valid)
+        self.assertTrue(any("Größe weicht ab" in error for error in verification.errors))
+
+    def test_manifest_verification_rejects_invalid_structure_without_raising(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "hash_algorithm": "sha256",
+                        "artifacts": "kein-array",
+                        "chain_head_sha256": "0" * 64,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "manifest.sha256").write_text(
+                f"{sha256_file(manifest_path)}  manifest.json\n",
+                encoding="ascii",
+            )
+
+            verification = verify_manifest(manifest_path)
+
+        self.assertFalse(verification.valid)
+        self.assertTrue(any("Artefaktliste" in error for error in verification.errors))
+
+    def test_manifest_verification_checks_digest_sidecar_and_expected_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            artifact = root / "raw.html"
+            artifact.write_bytes(b"<p>Original</p>")
+            manifest = create_manifest({"raw_html": artifact}, root)
+            Path(manifest.digest_path).write_text(
+                f"{'0' * 64}  manifest.json\n", encoding="ascii"
+            )
+
+            verification = verify_manifest(
+                manifest.manifest_path,
+                expected_manifest_sha256="f" * 64,
+                require_digest_file=True,
+            )
+
+        self.assertFalse(verification.valid)
+        self.assertTrue(any("Manifest-Digest" in error for error in verification.errors))
+        self.assertTrue(any("Erwarteter Manifest-Hash" in error for error in verification.errors))
 
     def test_tsa_outage_leaves_query_and_pending_status(self) -> None:
         with tempfile.TemporaryDirectory() as output:

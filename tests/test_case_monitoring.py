@@ -726,6 +726,22 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual("technische_aenderung_erkannt", changed.json()["comparison"]["status"])
         self.assertTrue(changed.json()["comparison"]["technical_only"])
         self.assertEqual(
+            "manifestgepruefter_wortbasierter_textvergleich",
+            changed.json()["comparison"]["comparison_method"],
+        )
+        self.assertIn("1 abweichender", changed.json()["comparison"]["difference_summary"])
+        self.assertEqual(
+            [
+                {
+                    "change_type": "replace",
+                    "label": "Text geändert",
+                    "before": "Alte AGB-Klausel",
+                    "after": "Neue AGB-Klausel",
+                }
+            ],
+            changed.json()["comparison"]["differences"],
+        )
+        self.assertEqual(
             baseline_id,
             loaded_after_change["baseline_evidence"]["evidence_case_id"],
         )
@@ -734,8 +750,13 @@ class MonitoringCaseTests(unittest.TestCase):
             loaded_after_change["latest_evidence_comparison"]["current_evidence_case_id"],
         )
         self.assertEqual(
+            changed.json()["comparison"]["differences"],
+            loaded_after_change["latest_evidence_comparison"]["differences"],
+        )
+        self.assertEqual(
             "unveraendert_fortbestehend", unchanged.json()["comparison"]["status"]
         )
+        self.assertEqual([], unchanged.json()["comparison"]["differences"])
         self.assertEqual(
             "pruefung_unvollstaendig", incomplete.json()["comparison"]["status"]
         )
