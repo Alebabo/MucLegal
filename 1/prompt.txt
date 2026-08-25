@@ -1,0 +1,70 @@
+die aktuelle tenorlogik ist nicht ugt. Bitte nutze diese tenore als beipsile und diesen prompt zur erzeugnung. Auch die fragen üssen sinnvoll gestelt sein. Bei fragen melde dich bei mir.&#x20;
+
+Die links zu den urteilen findest du hier: [https://docs.google.com/document/d/REDACTED/edit?tab=t.0](https://docs.google.com/document/d/REDACTED/edit?tab=t.0)
+
+und den genauen prompt hier: [https://docs.google.com/document/d/REDACTED/edit?tab=t.0](https://docs.google.com/document/d/REDACTED/edit?tab=t.0)
+
+---
+
+PLEASE IMPLEMENT THIS PLAN:
+# UE-konforme Tenorlogik mit verifiziertem Referenzkorpus
+
+## Zusammenfassung
+
+- Die Tenorhilfe behält Namen und Route, erzeugt künftig aber genau **einen** vollständigen UE-Entwurf.
+- Der Inhalt des bereitgestellten [Erzeugungsprompts](https://docs.google.com/document/d/REDACTED/edit?tab=t.0) wird unverändert als versionierter Systemprompt übernommen. Das JSON-Schema wird ausschließlich über die Modell-API erzwungen.
+- Alle 49 Links und die ausgeschriebenen Tenore aus der [Beispielsammlung](https://docs.google.com/document/d/REDACTED/edit?tab=t.0) werden inventarisiert. Nur verifizierte, zum Aktenzeichen passende Texte dürfen als Modellbeispiele dienen.
+- Die bisherige „Präzise/Technikneutral“-Logik, erfundene Standardangaben und jede Urteilsformel werden aus dem Erzeugungspfad entfernt.
+
+## Implementierungsänderungen
+
+### Prompt und Referenzkorpus
+
+- Neue Promptversion `2026-08-25-ue-draft-2` mit aktualisiertem SHA-256-Hash einführen; die explizit angeordnete Änderung ersetzt den bisherigen eingefrorenen Prompt.
+- Ein kompaktes, versioniertes UE-Beispielregister anlegen. Jeder Eintrag enthält Quelle, Gericht/Aktenzeichen, Ast A/B/C, originalen Tenor, daraus nachvollziehbar abgeleitetes UE-Stilbeispiel, Prüfhistorie und `prompt_eligible`.
+- Gerichtliche Einleitungs- und Ordnungsmittelformeln bleiben zur Provenienz gespeichert, werden aber niemals als Musterantwort an das Modell gegeben.
+- Verifikation erfolgt gegen maschinenlesbare Primärquellen; Link-/Aktenzeichenfehler, unvollständige Auslassungen und nicht prüfbare Scan-PDFs werden mit Grund quarantänisiert. Es wird keine OCR- oder Screenshotanalyse ergänzt.
+- Pro Generierung werden deterministisch höchstens drei passende, verifizierte Beispiele nach Ast, Fallgruppe und Schlüsselwortnähe ausgewählt. Damit ist das gesamte verifizierte Korpus nutzbar, ohne alle Entscheidungen in jeden Modellaufruf zu laden.
+- Die Monitoring-Wissensbasis bleibt für Kerngleichheitsprüfungen bestehen, wird aber nicht mehr als Ersatz für UE-Formulierungsbeispiele in die Tenorerzeugung eingespeist.
+
+### Fragen und Astlogik
+
+- Die Rückfragelogik klassifiziert zuerst Ast A, B oder C. Nur bei echter Unsicherheit erscheint eine Auswahlfrage zwischen „vollständig textlich beschreibbar“, „nur mit Screenshot/Klickpfad verständlich“ und „wörtliche Vertrags-/AGB-Klausel“.
+- Danach wird höchstens eine noch fehlende, tenortragende Tatsache gefragt:
+
+  - Ast A: Adressatenkreis, gattungsmäßiger oder konkreter Anwendungsbereich, vollständige Handlung und alle beobachteten Varianten.
+  - Ast B: konkrete URL, vollständiger Bedienpfad, Button-/Linktexte, erscheinende Elemente, Varianten und Anlage-/Screenshotbezeichnung.
+  - Ast C: vollständiger wörtlicher Klauseltext sowie nur bei inhaltlicher Erforderlichkeit der Vertrags- oder Produktbereich.
+
+- Fundort, Kanal und Verwendungsdauer werden bei Klauseln nicht abgefragt. Rechtsgrundlagen sind optional und blockieren die Erzeugung nicht.
+- Slider werden aus dem neuen Katalog nicht verwendet; Ja/Nein bleibt echten binären Tatsachen vorbehalten, Alternativen verwenden Einzelauswahl, exakte Texte und Abläufe Freitext.
+- Wiederholungen, paraphrasierte Fragen, unpassende Themen und bereits im Kontext beantwortete Fragen bleiben serverseitig gesperrt.
+- Fehlen nach den Rückfragen weiterhin für Bestimmtheit notwendige Informationen, wird kein verkürzter Entwurf erzeugt. Die UI zeigt stattdessen die konkret fehlenden Angaben.
+- Rohtexte, PDF-Inhalte und Antworten bleiben unvertraute Daten; darin enthaltene Anweisungen beeinflussen weder Systemprompt noch Quellenwahl.
+
+### Erzeugung, API und Oberfläche
+
+- Beide Erzeugungsendpunkte verwenden denselben UE-Generator und dieselben Validatoren; auch der lokale Demo-Fallback beginnt mit `…es zu unterlassen,`.
+- `POST /api/v1/tenor-questions` liefert zusätzlich `violation_branch` und `missing_information`.
+- `POST /api/v1/tenor-proposals` akzeptiert eine optionale Astangabe, eine leere Liste von Rechtsgrundlagen und eine bei Ast A/C optionale Fundstelle. Die Antwort enthält `status`, `violation_branch`, genau ein Feld `proposal` sowie `missing_information`; `proposal` ist bei fehlenden Pflichtangaben `null`.
+- Der Validator verlangt den exakten Beginn `…es zu unterlassen,`, weist Urteilsformeln und Ordnungsmittelformeln zurück und prüft branchenspezifisch insbesondere den wörtlichen Klauseltext beziehungsweise Bedienpfad, sichtbare Beschriftungen und Anlagebezug.
+- Beispiel-URL, „die Antragsgegnerin“ und automatisch ergänzte Rechtsgrundlagen werden nicht mehr als Tatsachen an das Modell gesendet.
+- Die Vergleichsansicht und „Beide Entwürfe“ entfallen. Der einzelne bearbeitbare Entwurf behält Quellenanker, Warnhinweis, menschliche Freigabe und Archivübernahme.
+- Neue Archiveinträge verwenden die Variante `complete`; vorhandene Einträge mit `precise` oder `neutral` bleiben ohne Datenmigration lesbar.
+- Die Produktbezeichnung „Tenorhilfe“, `/tenorhilfe`, Slash-Modi, PDF-Upload und Archiv bleiben erhalten.
+
+## Testplan
+
+- Prompttext, Version und Hash gegen die bereitgestellte Fassung prüfen.
+- Für Ast A, B und C jeweils vollständige Erzeugung sowie fehlende Pflichtangaben testen.
+- Negativtests für „Die Beklagte wird verurteilt“, „Es wird untersagt“, Ordnungsgeldformeln, paraphrasierte Klauseln, fehlende Interaktionsschritte und erfundene Rechtsgrundlagen ergänzen.
+- Fragen auf Fallgruppenbezug, sinnvollen Antworttyp, Nichtwiederholung und das Verbot irrelevanter AGB-Fragen testen.
+- Quellenvalidator mit korrekter Entscheidung, Aktenzeichen-/Linkabweichung, Auslassung, Duplikat und nicht lesbarem Scan prüfen; nur `prompt_eligible`-Quellen dürfen den Modellinput erreichen.
+- Einzelausgabe, Bearbeitung, Übernahme, Revision und Rückwärtskompatibilität alter Archive im Frontend testen.
+- Abschließend `compileall`, Gesamttests, Frontend-Minimaltests, Typecheck, Build und Browser-Smoke-Test der vollständigen `/tenorhilfe`-Strecke ausführen.
+
+## Annahmen
+
+- Die verlinkten Urteile sind Stil- und Strukturquellen; sie ersetzen keine menschliche juristische Freigabe.
+- Screenshots werden nicht visuell analysiert. Für Ast B werden vorhandene Interaktionsprotokolle, sichtbare Textangaben und Anlagebezeichnungen verwendet; ein bloßes Bild ohne textliche Beschreibung führt zu einer fehlenden Angabe.
+- Fehlerhafte oder nicht vollständig verifizierbare Quellen bleiben dokumentiert, beeinflussen aber weder Fragen noch Entwürfe.

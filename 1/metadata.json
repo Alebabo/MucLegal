@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0W6X0R4P1M1ES19QD8Y6XT9",
+  "session_id": "01a0380f-9151-7611-b26f-8522b90ec08c",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-25T10:20:46.2509662Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "frontend/src/components/tenor/MaskTenorView.tsx",
+    "frontend/src/components/tenor/MinimalTenorView.tsx",
+    "frontend/src/lib/tenor-api.ts",
+    "frontend/src/routes/archiv.tsx",
+    "muclegal/llm/tenor.py",
+    "muclegal/llm/tenor_examples.py",
+    "muclegal/llm/tenor_questions.py",
+    "muclegal/ui.py",
+    "reference/ue_examples.json",
+    "tests/test_tenor.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "62aedf409899",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 634006,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 20104448,
+    "output_tokens": 86393,
+    "api_call_count": 156
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-25T10:20:45.6751171Z",
+    "agent_lines": 1678,
+    "agent_removed": 435,
+    "human_added": 1678,
+    "human_modified": 9,
+    "human_removed": 0,
+    "total_committed": 3365,
+    "total_lines_changed": 3804,
+    "agent_percentage": 55.54679284963196,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
