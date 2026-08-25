@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0XH5BXSPG9RA5NKXSEMXRKH",
+  "session_id": "01a039e8-f3dd-75a2-9c61-dcb2e22037c8",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-25T22:40:37.0107189Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 7,
+  "save_step_count": 1,
+  "files_touched": [
+    "muclegal/decathlon_demo.py",
+    "muclegal/mueller_demo.py",
+    "muclegal/templates/evidence_lab.html",
+    "muclegal/ui.py",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_mueller_demo.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "8c52d008df9e",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1876032,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 89821696,
+    "output_tokens": 266227,
+    "api_call_count": 666
+  },
+  "session_metrics": {
+    "turn_count": 14
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-25T22:40:33.96823Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 398,
+    "human_modified": 40,
+    "human_removed": 0,
+    "total_committed": 398,
+    "total_lines_changed": 438,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 356,
+      "user_lines_removed": 20,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "muclegal/decathlon_demo.py": 28,
+        "muclegal/netto_demo.py": 175,
+        "muclegal/templates/evidence_lab.html": 3,
+        "muclegal/ui.py": 34,
+        "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md": 41,
+        "tests/test_netto_demo.py": 75
+      },
+      "user_removed_per_file": {
+        "muclegal/decathlon_demo.py": 17,
+        "muclegal/templates/evidence_lab.html": 1,
+        "muclegal/ui.py": 2
+      }
+    }
+  ]
+}
