@@ -27,6 +27,11 @@ SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 BASELINE_EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MAX_BASELINE_TEXT_BYTES = 2 * 1024 * 1024
+EVIDENCE_COMPARISON_STATUSES = {
+    "technische_aenderung_erkannt",
+    "unveraendert_fortbestehend",
+    "pruefung_unvollstaendig",
+}
 
 
 class MonitoringCaseError(ValueError):
@@ -59,6 +64,7 @@ class MonitoringCase:
     created_at: str
     decided_at: str | None
     baseline_evidence: dict | None
+    latest_evidence_comparison: dict | None
 
     @property
     def approved(self) -> bool:
@@ -205,7 +211,11 @@ class MonitoringCaseRepository:
 
     def attach_baseline_evidence(self, case_id: str, evidence: dict) -> MonitoringCase:
         """Link a human-selected technical capture as the case comparison baseline."""
-        self.get(case_id)
+        existing = self.get(case_id)
+        if existing.baseline_evidence is not None:
+            raise MonitoringCaseError(
+                "Ausgangsbeweis ist bereits vorhanden und kann nicht überschrieben werden."
+            )
         cleaned = _validate_baseline_evidence(evidence)
         cleaned["attached_at"] = datetime.now(timezone.utc).isoformat()
         cleaned["attached_by"] = "menschliche_zuordnung_im_beweislab"
@@ -225,6 +235,34 @@ class MonitoringCaseRepository:
                     "element_labels": [],
                 }
             stored_profile["baseline_evidence"] = cleaned
+            connection.execute(
+                "UPDATE monitoring_cases SET relevant_page_types_json = ? WHERE case_id = ?",
+                (json.dumps(stored_profile, ensure_ascii=False), case_id),
+            )
+        return self.get(case_id)
+
+    def record_evidence_comparison(self, case_id: str, comparison: dict) -> MonitoringCase:
+        """Persist a technical BeweisLab comparison without changing the baseline."""
+        existing = self.get(case_id)
+        if existing.baseline_evidence is None:
+            raise MonitoringCaseError("Für diesen Fall ist noch kein Ausgangsbeweis vorhanden.")
+        cleaned = _validate_evidence_comparison(comparison)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT relevant_page_types_json FROM monitoring_cases WHERE case_id = ?",
+                (case_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(case_id)
+            stored_profile = json.loads(row["relevant_page_types_json"])
+            if isinstance(stored_profile, list):
+                stored_profile = {
+                    "page_types": stored_profile,
+                    "target_urls": [],
+                    "nicht_umfasst": [],
+                    "element_labels": [],
+                }
+            stored_profile["latest_evidence_comparison"] = cleaned
             connection.execute(
                 "UPDATE monitoring_cases SET relevant_page_types_json = ? WHERE case_id = ?",
                 (json.dumps(stored_profile, ensure_ascii=False), case_id),
@@ -456,6 +494,46 @@ def _validate_baseline_evidence(value: dict) -> dict:
     return cleaned
 
 
+def _validate_evidence_comparison(value: dict) -> dict:
+    if not isinstance(value, dict):
+        raise MonitoringCaseError("Beweisvergleich ist unvollständig.")
+    required_strings = (
+        "comparison_id",
+        "status",
+        "baseline_evidence_case_id",
+        "current_evidence_case_id",
+        "baseline_requested_url",
+        "current_requested_url",
+        "baseline_manifest_sha256",
+        "current_manifest_sha256",
+        "compared_role",
+        "compared_at",
+    )
+    cleaned: dict = {}
+    for field in required_strings:
+        item = value.get(field)
+        if not isinstance(item, str) or not item.strip():
+            raise MonitoringCaseError(f"Beweisvergleich benötigt {field!r}.")
+        cleaned[field] = item.strip()
+    if cleaned["status"] not in EVIDENCE_COMPARISON_STATUSES:
+        raise MonitoringCaseError("Unbekannter technischer Vergleichsstatus.")
+    for field in ("baseline_manifest_sha256", "current_manifest_sha256"):
+        digest = cleaned[field].lower()
+        if not SHA256_PATTERN.fullmatch(digest):
+            raise MonitoringCaseError("Manifest-Prüfwert des Beweisvergleichs ist ungültig.")
+        cleaned[field] = digest
+    for field in ("baseline_text_sha256", "current_text_sha256"):
+        digest = value.get(field)
+        if digest is None:
+            cleaned[field] = None
+        elif isinstance(digest, str) and SHA256_PATTERN.fullmatch(digest.lower()):
+            cleaned[field] = digest.lower()
+        else:
+            raise MonitoringCaseError("Text-Prüfwert des Beweisvergleichs ist ungültig.")
+    cleaned["technical_only"] = True
+    return cleaned
+
+
 def _row_to_case(row: sqlite3.Row) -> MonitoringCase:
     stored_profile = json.loads(row["relevant_page_types_json"])
     if isinstance(stored_profile, list):
@@ -495,6 +573,11 @@ def _row_to_case(row: sqlite3.Row) -> MonitoringCase:
         baseline_evidence=(
             stored_profile.get("baseline_evidence")
             if isinstance(stored_profile.get("baseline_evidence"), dict)
+            else None
+        ),
+        latest_evidence_comparison=(
+            stored_profile.get("latest_evidence_comparison")
+            if isinstance(stored_profile.get("latest_evidence_comparison"), dict)
             else None
         ),
     )

@@ -605,8 +605,16 @@ class MonitoringCaseTests(unittest.TestCase):
                     f"/api/v1/cases/{created['case_id']}/baseline-evidence",
                     json={"evidence_case_id": regular_id},
                 )
+                grey_case = client.post(
+                    "/api/v1/cases",
+                    json={
+                        **clause_payload(),
+                        "fall_id": "VZ-GREY-REJECTION",
+                        "screenshot": None,
+                    },
+                ).json()
                 grey = client.post(
-                    f"/api/v1/cases/{created['case_id']}/baseline-evidence",
+                    f"/api/v1/cases/{grey_case['case_id']}/baseline-evidence",
                     json={"evidence_case_id": grey_id},
                 )
                 decathlon = client.post(
@@ -623,8 +631,22 @@ class MonitoringCaseTests(unittest.TestCase):
                     f"/api/v1/cases/{decathlon['case_id']}/baseline-evidence",
                     json={"evidence_case_id": wayback_id},
                 )
-                spoofed_wayback = client.post(
+                overwrite = client.post(
                     f"/api/v1/cases/{decathlon['case_id']}/baseline-evidence",
+                    json={"evidence_case_id": regular_id},
+                )
+                spoof_case = client.post(
+                    "/api/v1/cases",
+                    json={
+                        **clause_payload(),
+                        "fall_id": "VZ-DECATHLON-SPOOF",
+                        "domain": "www.decathlon.de",
+                        "source_url": "https://www.decathlon.de/AGB_lp-P7ELHE",
+                        "screenshot": None,
+                    },
+                ).json()
+                spoofed_wayback = client.post(
+                    f"/api/v1/cases/{spoof_case['case_id']}/baseline-evidence",
                     json={"evidence_case_id": spoofed_wayback_id},
                 )
 
@@ -636,8 +658,88 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual(
             wayback_id, wayback.json()["baseline_evidence"]["evidence_case_id"]
         )
+        self.assertEqual(409, overwrite.status_code)
+        self.assertIn("nicht überschrieben", overwrite.json()["detail"])
         self.assertEqual(422, spoofed_wayback.status_code)
         self.assertIn("Domain", spoofed_wayback.json()["detail"])
+
+    def test_api_compares_new_evidence_without_replacing_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            live_root = root / "live"
+            cases = MonitoringCaseRepository(root / "reviews.sqlite3", root / "intake")
+            workflow = LiveMonitorWorkflow(
+                live_root, ROOT / "fixtures" / "tenor.json", fetcher=FakeFetcher({})
+            )
+            app = create_app(
+                workflow.latest_case_path,
+                root / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                monitoring_cases=cases,
+            )
+            baseline_id = _write_baseline_bundle(
+                live_root, "evidence-old", god_mode=False, text="Alte AGB-Klausel"
+            )
+            current_id = _write_baseline_bundle(
+                live_root, "evidence-current", god_mode=False, text="Neue AGB-Klausel"
+            )
+            identical_id = _write_baseline_bundle(
+                live_root, "evidence-identical", god_mode=False, text="Alte AGB-Klausel"
+            )
+            incomplete_id = _write_baseline_bundle(
+                live_root,
+                "evidence-incomplete",
+                god_mode=False,
+                text="Cloudflare-Blockseite",
+                capture_completeness="durch_seitenschutz_begrenzt",
+            )
+            with TestClient(app) as client:
+                created = client.post(
+                    "/api/v1/cases", json={**clause_payload(), "screenshot": None}
+                ).json()
+                attached = client.post(
+                    f"/api/v1/cases/{created['case_id']}/baseline-evidence",
+                    json={"evidence_case_id": baseline_id},
+                )
+                changed = client.post(
+                    f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
+                    json={"evidence_case_id": current_id},
+                )
+                loaded_after_change = client.get(
+                    f"/api/v1/monitoring-cases/{created['case_id']}"
+                ).json()
+                unchanged = client.post(
+                    f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
+                    json={"evidence_case_id": identical_id},
+                )
+                incomplete = client.post(
+                    f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
+                    json={"evidence_case_id": incomplete_id},
+                )
+                self_compare = client.post(
+                    f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
+                    json={"evidence_case_id": baseline_id},
+                )
+
+        self.assertEqual(201, attached.status_code)
+        self.assertEqual("technische_aenderung_erkannt", changed.json()["comparison"]["status"])
+        self.assertTrue(changed.json()["comparison"]["technical_only"])
+        self.assertEqual(
+            baseline_id,
+            loaded_after_change["baseline_evidence"]["evidence_case_id"],
+        )
+        self.assertEqual(
+            current_id,
+            loaded_after_change["latest_evidence_comparison"]["current_evidence_case_id"],
+        )
+        self.assertEqual(
+            "unveraendert_fortbestehend", unchanged.json()["comparison"]["status"]
+        )
+        self.assertEqual(
+            "pruefung_unvollstaendig", incomplete.json()["comparison"]["status"]
+        )
+        self.assertEqual(422, self_compare.status_code)
 
     def test_missing_element_is_only_reported_with_complete_coverage(self) -> None:
         pages = {
@@ -747,13 +849,19 @@ def _poll(client: TestClient, run_id: str) -> dict:
 
 
 def _write_baseline_bundle(
-    root: Path, case_id: str, *, god_mode: bool, url: str = "https://example.test/agb"
+    root: Path,
+    case_id: str,
+    *,
+    god_mode: bool,
+    url: str = "https://example.test/agb",
+    text: str | None = None,
+    capture_completeness: str = "vollstaendig_erfasst",
 ) -> str:
     bundle_parent = root / ("god-mode-bundles" if god_mode else "bundles")
     bundle = bundle_parent / case_id
     role = bundle / "capture" / "agb"
     role.mkdir(parents=True)
-    text = f"Allgemeine Geschäftsbedingungen\n{CLAUSE}"
+    text = text or f"Allgemeine Geschäftsbedingungen\n{CLAUSE}"
     normalized = role / "normalized-text.txt"
     normalized.write_text(text, encoding="utf-8")
     index = role / "index.json"
@@ -769,7 +877,7 @@ def _write_baseline_bundle(
         "god_mode": god_mode,
         "evidence_suitability": "regulaer",
         "snapshot_sha256": hashlib.sha256(text.encode()).hexdigest(),
-        "capture_completeness": "vollstaendig_erfasst",
+        "capture_completeness": capture_completeness,
         "warnings": [],
         "assessment": {},
         "evidence": {"manifest_sha256": manifest.manifest_sha256},
@@ -777,7 +885,12 @@ def _write_baseline_bundle(
             "manifest": manifest.manifest_path,
             "normalized_text": str(normalized),
         },
-        "capture_galleries": {"agb": {"index": "capture/agb/index.json"}},
+        "capture_galleries": {
+            "agb": {
+                "index": "capture/agb/index.json",
+                "capture_completeness": capture_completeness,
+            }
+        },
     }
     (bundle / "case.json").write_text(
         json.dumps(record, ensure_ascii=False), encoding="utf-8"

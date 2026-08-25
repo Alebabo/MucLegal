@@ -1736,3 +1736,73 @@ Beim unmittelbaren Live-Wiederholungslauf blockierte Cloudflare inzwischen gerad
 verbindliche Decathlon-Fundstelle; dieser Lauf wurde deshalb korrekt in 2,186 Sekunden
 als unvollständig dokumentiert und nicht umgangen. Eine spätere Wiederholung nach
 Abkühlung oder eine manuelle Prüfung bleibt für diesen externen Schutz erforderlich.
+
+# Aktueller BeweisLab-Scan überschreibt den Webarchiv-Ausgangsbeweis
+
+### Symptom
+
+Wurde nach einem archivierten Ausgangsbeweis eine aktuelle URL im BeweisLab erfasst
+und demselben Fall zugeordnet, ersetzte der neue Lauf still den vorhandenen
+Ausgangsbeweis. Ein Vergleich zwischen altem und aktuellem Stand fand nicht statt.
+
+### Ursache und Diagnose
+
+Die BeweisLab-Schaltfläche rief unabhängig vom Zustand des Falls immer den
+`baseline-evidence`-Endpunkt auf. Repository und API erlaubten das erneute Schreiben
+von `baseline_evidence`, obwohl die UI den Fall bereits als „Ausgangsbeweis
+vorhanden“ kennzeichnete.
+
+### Lösung
+
+Ein vorhandener Ausgangsbeweis ist nun unveränderlich; ein erneuter Attach-Versuch
+endet mit HTTP 409. Für aktuelle BeweisLab-Pakete gibt es einen getrennten,
+manifestgeprüften und gleich-domainigen Vergleichsendpunkt. Er vergleicht den
+normalisierten Haupttext, speichert nur Beweis-IDs und Hashes als aktuelle
+Beweiskettenstufe und liefert bei Abweichung `technische_aenderung_erkannt`. Die UI
+wechselt dann auf „Mit Ausgangsbeweis vergleichen“ und übergibt eine einmalige,
+versionierte Benachrichtigung an die Hinweise-Seite.
+
+### Verifikation und verbleibende Grenze
+
+Repository-, API- und Frontendtests prüfen Überschreibschutz, Abweichung,
+Unverändertheit, Selbstvergleich und die sichere Übergabe der klickbaren Meldung.
+Der Vergleich ist ausdrücklich rein technisch und keine Aussage zur juristischen
+Kerngleichheit. Er vergleicht den bevorzugten Haupt-/AGB-Text der beiden vollständigen
+Beweispakete; Screenshots, WARC und weitere Unterseiten bleiben separat gehasht im
+jeweiligen Paket erhalten.
+
+# Schutz- oder 404-Aufnahme löst fälschlich eine Änderungsbenachrichtigung aus
+
+### Symptom
+
+Beim realen Decathlon-Demolauf war die angefragte AGB-Seite durch Cloudflare
+begrenzt. Der Rechtstext-Fallback speicherte zusätzlich eine erreichbare
+Datenschutzseite und eine nur teilweise erfasste 404-Seite als AGB-Rolle. Der
+anschließende technische Vergleich meldete dennoch
+`technische_aenderung_erkannt` und zeigte das klickbare Änderungsbanner.
+
+### Ursache und Diagnose
+
+Der Vergleich prüfte bisher nur, ob beide bevorzugten Dokumentrollen Text und
+unterschiedliche Hashes enthielten. Die bereits im Beweispaket dokumentierte
+`capture_completeness` des aktuellen Gesamtstands und der gewählten Rolle wurde
+nicht in die Statusentscheidung übernommen. Dadurch wurde der Text einer
+Schutz-/404-Aufnahme wie ein vollständiger aktueller AGB-Stand behandelt.
+
+### Lösung
+
+Die manifestgeprüfte Vergleichsquelle übernimmt nun die Vollständigkeit des
+Gesamtpakets und jeder Dokumentrolle. Ist der aktuelle Lauf
+`durch_seitenschutz_begrenzt` oder die bevorzugte Haupt-/AGB-Rolle nur
+`teilweise_erfasst`, wird der Vergleich deterministisch als
+`pruefung_unvollstaendig` gespeichert. Dieser Status löst keine
+Änderungsbenachrichtigung aus.
+
+### Verifikation und verbleibende Grenze
+
+Ein API-Test deckt vollständig geänderte, unveränderte und schutzbedingt
+unvollständige Vergleichspakete ab. Der reale Decathlon-Lauf wurde nach dem Fix mit
+demselben Paket erneut verglichen und korrekt als `pruefung_unvollstaendig`
+klassifiziert. Solange Decathlon die verbindliche AGB-URL für den transparenten
+Projektbrowser blockiert, ist diese Live-Demo extern begrenzt; die Anwendung umgeht
+den Schutz nicht und stellt den Lauf nicht als belastbaren Änderungsbeleg dar.

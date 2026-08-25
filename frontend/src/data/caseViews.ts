@@ -5,6 +5,7 @@ export type CaseView = DemoCase & {
   source: "backend" | "demo";
   decision: MonitoringCase["decision"] | null;
   baselineEvidence: MonitoringCase["baseline_evidence"];
+  latestEvidenceComparison: MonitoringCase["latest_evidence_comparison"];
 };
 
 const decisionPresentation: Record<
@@ -66,6 +67,17 @@ function toCaseView(item: MonitoringCase): CaseView {
               `Manuell zugeordneter Ausgangsbeweis: ${item.baseline_evidence.evidence_case_id} · Manifest ${item.baseline_evidence.manifest_sha256.slice(0, 12)}…`,
             ]
           : []),
+        ...(item.latest_evidence_comparison
+          ? [
+              `Aktueller BeweisLab-Vergleich: ${item.latest_evidence_comparison.current_evidence_case_id} gegen ${item.latest_evidence_comparison.baseline_evidence_case_id} · ${
+                item.latest_evidence_comparison.status === "technische_aenderung_erkannt"
+                  ? "technische Abweichung erkannt"
+                  : item.latest_evidence_comparison.status === "unveraendert_fortbestehend"
+                    ? "kein technischer Unterschied erkannt"
+                    : "technischer Vergleich unvollständig"
+              }`,
+            ]
+          : []),
         ...targets.map((target) => `Vorgesehenes technisches Prüfziel: ${target}`),
       ],
       einordnung: item.monitoring_target,
@@ -81,6 +93,7 @@ function toCaseView(item: MonitoringCase): CaseView {
     source: "backend",
     decision: item.decision,
     baselineEvidence: item.baseline_evidence,
+    latestEvidenceComparison: item.latest_evidence_comparison,
   };
 }
 
@@ -89,6 +102,7 @@ const demoViews: CaseView[] = lottoDemoCases.map((item) => ({
   source: "demo",
   decision: null,
   baselineEvidence: null,
+  latestEvidenceComparison: null,
 }));
 
 export function useCaseViews() {

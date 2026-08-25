@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ChevronDown, Clock, HelpCircle, Scale } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  HelpCircle,
+  Scale,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { useCaseViews } from "../data/caseViews";
 import type { Tone } from "../data/lottoDemoCases";
@@ -11,6 +21,13 @@ import {
   reviewMonitoringCase,
   startMonitoringRun,
 } from "../lib/monitoring-api";
+import {
+  claimMonitoringChangeNotification,
+  EVIDENCE_COMPARISON_NOTIFICATION_KEY,
+  EVIDENCE_COMPARISON_NOTIFICATION_QUERY,
+  parseStoredEvidenceComparisonNotification,
+  type MonitoringChangeNotification,
+} from "../lib/monitoring-notifications";
 
 export const Route = createFileRoute("/hinweise")({
   head: () => ({
@@ -55,6 +72,12 @@ const toneLabel: Record<Tone, string> = {
   neutral: "Ausstehend",
 };
 
+const notificationToneClass: Record<MonitoringChangeNotification["tone"], string> = {
+  danger: "border-danger/40 text-danger",
+  success: "border-success/40 text-success",
+  warning: "border-warning/50 text-warning",
+};
+
 const MONITORING_POLL_INTERVAL_MS = 500;
 // The backend domain scan may legitimately use its full ten-minute budget.
 // Keep the UI attached for one additional minute so artifact creation can finish.
@@ -87,6 +110,92 @@ function HinweisePage() {
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<Record<string, string>>({});
+  const notifiedRunIds = useRef(new Set<string>());
+
+  const openEvidence = useCallback((caseId: string) => {
+    setOpenId(caseId);
+    window.setTimeout(() => {
+      const evidence = document.getElementById(`beweisfuehrung-${caseId}`);
+      evidence?.scrollIntoView({ behavior: "smooth", block: "center" });
+      evidence?.focus({ preventScroll: true });
+    }, 400);
+  }, []);
+
+  const showChangeNotification = useCallback(
+    (runId: string, caseId: string, fallId: string, notification: MonitoringChangeNotification) => {
+      toast.custom(
+        (toastId) => {
+          const Icon = notification.tone === "success" ? CheckCircle2 : AlertTriangle;
+          return (
+            <div
+              className={`flex w-[min(92vw,34rem)] overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-xl ${notificationToneClass[notification.tone]}`}
+              role="status"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  toast.dismiss(toastId);
+                  openEvidence(caseId);
+                }}
+                className="group flex min-w-0 flex-1 items-start gap-3 p-4 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                aria-label={`${notification.title} in Fall ${fallId}. Hinweis öffnen.`}
+              >
+                <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-current/10">
+                  <Icon className="size-5" strokeWidth={1.75} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    Fall {fallId}
+                  </span>
+                  <span className="mt-0.5 block font-semibold text-card-foreground">
+                    {notification.title}
+                  </span>
+                  <span className="mt-1 block text-sm text-muted-foreground">
+                    {notification.description}
+                  </span>
+                </span>
+                <ChevronRight
+                  className="mt-2 size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                  strokeWidth={1.75}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => toast.dismiss(toastId)}
+                className="grid w-11 shrink-0 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                aria-label="Benachrichtigung schließen"
+              >
+                <X className="size-4" strokeWidth={1.75} />
+              </button>
+            </div>
+          );
+        },
+        { duration: Infinity, id: `monitoring-change-${runId}` },
+      );
+    },
+    [openEvidence],
+  );
+
+  useEffect(() => {
+    const currentUrl = new URL(window.location.href);
+    const queryHandoff = currentUrl.searchParams.get(EVIDENCE_COMPARISON_NOTIFICATION_QUERY);
+    const raw = window.sessionStorage.getItem(EVIDENCE_COMPARISON_NOTIFICATION_KEY) ?? queryHandoff;
+    const stored = parseStoredEvidenceComparisonNotification(raw);
+    if (raw) window.sessionStorage.removeItem(EVIDENCE_COMPARISON_NOTIFICATION_KEY);
+    if (queryHandoff) {
+      currentUrl.searchParams.delete(EVIDENCE_COMPARISON_NOTIFICATION_QUERY);
+      window.history.replaceState(window.history.state, "", currentUrl);
+    }
+    if (!stored) return;
+    const notification = claimMonitoringChangeNotification(
+      stored.status,
+      stored.notification_id,
+      notifiedRunIds.current,
+    );
+    if (notification) {
+      showChangeNotification(stored.notification_id, stored.case_id, stored.fall_id, notification);
+    }
+  }, [showChangeNotification]);
 
   async function decide(caseId: string, decision: "freigegeben" | "abgelehnt") {
     setActionState((state) => ({ ...state, [caseId]: "Entscheidung wird gespeichert …" }));
@@ -105,7 +214,7 @@ function HinweisePage() {
     }
   }
 
-  async function startRun(caseId: string) {
+  async function startRun(caseId: string, fallId: string) {
     setActionState((state) => ({ ...state, [caseId]: "Monitoringlauf wird gestartet …" }));
     try {
       let run = await startMonitoringRun(caseId);
@@ -131,6 +240,14 @@ function HinweisePage() {
       }
       if (terminal.has(run.status)) {
         await queryClient.invalidateQueries({ queryKey: monitoringCasesQueryKey });
+        const notification = claimMonitoringChangeNotification(
+          run.status,
+          run.run_id,
+          notifiedRunIds.current,
+        );
+        if (notification) {
+          showChangeNotification(run.run_id, caseId, fallId, notification);
+        }
       } else {
         setActionState((state) => ({
           ...state,
@@ -240,7 +357,12 @@ function HinweisePage() {
                         </div>
                       </div>
 
-                      <div className="mt-4 rounded-xl border border-border bg-background p-5">
+                      <div
+                        id={`beweisfuehrung-${c.case_id}`}
+                        className="mt-4 scroll-mt-8 rounded-xl border border-border bg-background p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        tabIndex={-1}
+                        aria-label={`Beweisführung für Fall ${c.fall_id}`}
+                      >
                         <p className="font-serif text-lg tracking-tight text-foreground">
                           Beweisführung
                         </p>
@@ -341,7 +463,7 @@ function HinweisePage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  void startRun(c.case_id);
+                                  void startRun(c.case_id, c.fall_id);
                                 }}
                                 className="bg-primary px-4 py-2 text-sm text-primary-foreground"
                               >

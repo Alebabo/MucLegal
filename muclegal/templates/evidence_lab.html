@@ -4,6 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MucLegal · BeweisLab</title>
+  <script>
+    try {
+      const storedTheme=localStorage.getItem("muclegal-theme");
+      const prefersDark=matchMedia("(prefers-color-scheme: dark)").matches;
+      const theme=storedTheme==="dark"||(storedTheme!=="light"&&prefersDark)?"dark":"light";
+      document.documentElement.classList.toggle("dark",theme==="dark");
+      document.documentElement.style.colorScheme=theme;
+    } catch (_) {}
+  </script>
   <style>
     :root {
       color-scheme:light;
@@ -11,14 +20,23 @@
       --line:oklch(0.90 0 0); --soft:oklch(0.97 0 0);
       --green:oklch(0.13 0 0); --green-dark:oklch(0.13 0 0);
       --amber:oklch(0.50 0.09 62); --red:oklch(0.42 0.14 27);
-      --sidebar:#fff; --sidebar-accent:oklch(0.96 0 0);
+      --background:#fff; --surface:#fff; --sidebar:#fff; --sidebar-accent:oklch(0.96 0 0);
+    }
+    html.dark {
+      color-scheme:dark;
+      --ink:oklch(0.96 0.008 255); --muted:oklch(0.70 0.018 255);
+      --line:oklch(0.31 0.026 262); --soft:oklch(0.20 0.027 262);
+      --green:oklch(0.75 0.15 166); --green-dark:oklch(0.82 0.14 166);
+      --amber:oklch(0.78 0.13 73); --red:oklch(0.70 0.18 25);
+      --background:oklch(0.16 0.025 262); --surface:oklch(0.20 0.027 262);
+      --sidebar:oklch(0.135 0.025 262); --sidebar-accent:oklch(0.23 0.03 262);
     }
     * { box-sizing:border-box; }
-    body { margin:0; background:#fff; color:var(--ink); font:14px/1.5 Manrope,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    body { margin:0; background:var(--background); color:var(--ink); font:14px/1.5 Manrope,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; transition:background-color .16s ease,color .16s ease; }
     p { font-family:Lora,Georgia,serif; line-height:1.65; }
     button,input { font:inherit; }
     button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible { outline:3px solid color-mix(in srgb,var(--green) 40%,transparent); outline-offset:2px; }
-    .aura-shell { min-height:100vh; display:flex; width:100%; background:#fff; }
+    .aura-shell { min-height:100vh; display:flex; width:100%; background:var(--background); }
     .aura-sidebar { position:sticky; top:0; z-index:40; width:248px; height:100vh; flex:0 0 248px; display:flex; flex-direction:column; border-right:1px solid var(--line); background:var(--sidebar); transition:width .2s ease,flex-basis .2s ease; }
     .aura-sidebar.collapsed { width:72px; flex-basis:72px; }
     .aura-brand { height:80px; display:flex; align-items:center; padding:0 16px; color:var(--ink); text-decoration:none; }
@@ -46,7 +64,7 @@
     .kicker { color:var(--green); font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
     h2,p { margin:0; }
     .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; margin-top:10px; }
-    .url-input { width:100%; height:50px; border:1px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); padding:0 15px; box-shadow:0 1px 2px rgb(15 23 42 / .04); }
+    .url-input { width:100%; height:50px; border:1px solid var(--line); border-radius:11px; background:var(--surface); color:var(--ink); padding:0 15px; box-shadow:0 1px 2px rgb(15 23 42 / .04); }
     .start { height:50px; display:inline-flex; align-items:center; justify-content:center; gap:9px; border:0; border-radius:11px; background:var(--green); color:#fff; padding:0 20px; font-weight:760; cursor:pointer; }
     .start:hover { background:var(--green-dark); }
     .grey-mode-control { min-height:50px; display:flex; align-items:center; gap:6px; border:1px solid #a5a5a5; border-radius:11px; background:#f3f3f3; color:#3f3f3f; padding:0 10px 0 12px; }
@@ -56,7 +74,7 @@
     .spinner { width:17px; height:17px; border:2px solid #ffffff66; border-top-color:#fff; border-radius:50%; animation:spin .75s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
     .micro { display:flex; align-items:center; gap:6px; margin-top:9px; color:var(--muted); font-size:11px; }
-    .info { width:19px; height:19px; display:inline-grid; place-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--green); padding:0; font:750 11px/1 Georgia,serif; cursor:pointer; }
+    .info { width:19px; height:19px; display:inline-grid; place-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:50%; background:var(--surface); color:var(--green); padding:0; font:750 11px/1 Georgia,serif; cursor:pointer; }
     .trace { margin-top:20px; border:1px solid var(--line); border-radius:12px; background:var(--soft); overflow:hidden; box-shadow:0 1px 2px rgb(15 23 42 / .03); }
     .trace summary { display:flex; align-items:center; gap:9px; min-height:48px; padding:0 15px; color:var(--ink); cursor:pointer; list-style:none; font-weight:680; }
     .trace summary::-webkit-details-marker { display:none; }
@@ -81,28 +99,28 @@
     .protection strong { display:block; font-size:16px; letter-spacing:.025em; }
     .protection p { margin-top:5px; font-size:13px; }
     .result { margin-top:34px; }
-    .download { justify-self:start; margin-top:3px; border:1px solid #b9cec4; border-radius:8px; background:#fff; color:var(--green-dark); padding:7px 10px; font-size:11px; font-weight:740; text-decoration:none; }
+    .download { justify-self:start; margin-top:3px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--green-dark); padding:7px 10px; font-size:11px; font-weight:740; text-decoration:none; }
     .download:hover { background:#f0f6f3; }
     .pills { display:flex; flex-wrap:wrap; gap:7px; overflow:visible; padding:12px 1px 9px; }
-    .pill-wrap { position:relative; display:flex; align-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:999px; background:#fff; }
+    .pill-wrap { position:relative; display:flex; align-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:999px; background:var(--surface); }
     .pill-wrap.active { border-color:color-mix(in srgb,var(--green) 60%,white); background:color-mix(in srgb,var(--green) 10%,white); }
     .pill-wrap.warning { border-color:#d6a15e; background:#fff6e9; color:#744713; }
     .pill-wrap.unavailable { background:#f5f6f5; color:#98a39e; border-style:dashed; }
     .pill { min-height:34px; border:0; border-radius:999px; background:transparent; color:inherit; padding:0 6px 0 12px; font-size:11px; font-weight:720; cursor:pointer; white-space:nowrap; }
     .pill:disabled { cursor:not-allowed; }
     .pill-wrap .info { width:17px; height:17px; margin-right:8px; border-color:transparent; background:transparent; font-size:10px; }
-    .pill-menu { position:absolute; z-index:30; top:calc(100% + 7px); left:0; min-width:220px; max-width:min(330px,calc(100vw - 34px)); border:1px solid var(--line); border-radius:11px; background:#fff; padding:6px; box-shadow:0 14px 36px rgb(15 23 42 / .16); }
+    .pill-menu { position:absolute; z-index:30; top:calc(100% + 7px); left:0; min-width:220px; max-width:min(330px,calc(100vw - 34px)); border:1px solid var(--line); border-radius:11px; background:var(--surface); padding:6px; box-shadow:0 14px 36px rgb(15 23 42 / .16); }
     .pill-wrap:last-child .pill-menu { right:0; left:auto; }
     .pill-menu button { width:100%; display:block; border:0; border-radius:7px; background:transparent; color:var(--ink); padding:9px 10px; text-align:left; font-size:11px; font-weight:680; cursor:pointer; }
     .pill-menu button:hover,.pill-menu button:focus-visible { background:var(--sidebar-accent); }
     .pill-menu button:disabled { color:#98a39e; cursor:not-allowed; }
     .pill-menu-separator { height:1px; margin:5px 6px; background:var(--line); }
-    .viewer { min-height:430px; margin-top:5px; border:1px solid var(--line); border-radius:13px; background:#fff; overflow:hidden; }
+    .viewer { min-height:430px; margin-top:5px; border:1px solid var(--line); border-radius:13px; background:var(--surface); overflow:hidden; }
     .viewer-head { min-height:45px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid var(--line); }
     .viewer-head strong { font-size:12px; }
     .viewer-head a { margin-left:auto; color:var(--green); font-size:11px; font-weight:750; text-decoration:none; }
     .gallery-controls { display:flex; align-items:center; gap:7px; margin-left:auto; }
-    .gallery-controls button { border:1px solid #cad5d0; background:#fff; border-radius:7px; padding:4px 8px; cursor:pointer; }
+    .gallery-controls button { border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:7px; padding:4px 8px; cursor:pointer; }
     .capture-status { color:var(--muted); font-size:11px; font-weight:760; }
     .viewer-body { min-height:384px; max-height:70vh; overflow:auto; background:var(--soft); }
     .empty { min-height:384px; display:grid; place-items:center; padding:30px; color:var(--muted); text-align:center; }
@@ -111,17 +129,34 @@
     .legal-list { padding:22px; }
     .legal-list section + section { margin-top:24px; }
     .legal-list h3 { margin:0 0 8px; font-size:12px; }
-    .legal-link { display:block; margin:7px 0; padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--green-dark); text-decoration:none; }
+    .legal-link { display:block; margin:7px 0; padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--green-dark); text-decoration:none; }
     .legal-link small { display:block; margin-top:2px; color:var(--muted); word-break:break-all; }
     .case-linker { margin:18px 0; padding:16px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,320px) auto; gap:12px; align-items:end; }
     .case-linker-copy strong { display:block; color:var(--ink); }
     .case-linker-copy small,.case-linker-status { display:block; margin-top:4px; color:var(--muted); line-height:1.45; }
-    .case-linker select { min-height:42px; border:1px solid var(--line); border-radius:9px; background:white; padding:0 11px; color:var(--ink); }
+    .case-linker select { min-height:42px; border:1px solid var(--line); border-radius:9px; background:var(--surface); padding:0 11px; color:var(--ink); }
     .case-linker button { min-height:42px; border:0; border-radius:9px; padding:0 16px; background:#172554; color:white; font-weight:700; cursor:pointer; }
     .case-linker button:disabled { opacity:.45; cursor:not-allowed; }
     .case-linker-status { grid-column:1/-1; margin:0; }
     .case-linker-status a { color:#1d4ed8; font-weight:700; }
-    .popover { position:fixed; z-index:50; width:min(280px,calc(100vw - 24px)); border:1px solid var(--line); border-radius:10px; background:#fff; padding:11px 12px; color:var(--ink); box-shadow:0 14px 38px rgb(15 23 42 / .16); font-size:12px; }
+    .popover { position:fixed; z-index:50; width:min(280px,calc(100vw - 24px)); border:1px solid var(--line); border-radius:10px; background:var(--surface); padding:11px 12px; color:var(--ink); box-shadow:0 14px 38px rgb(15 23 42 / .16); font-size:12px; }
+    .theme-toggle { width:100%; min-height:40px; display:flex; align-items:center; gap:12px; border:0; background:transparent; color:var(--muted); padding:10px 12px; font-size:14px; cursor:pointer; text-align:left; }
+    .theme-toggle:hover { background:var(--sidebar-accent); }
+    .theme-toggle svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .theme-toggle .sun,.dark .theme-toggle .moon { display:none; }
+    .dark .theme-toggle .sun { display:block; }
+    .theme-dark-logo { display:none; }
+    .dark .theme-light-logo { display:none; }
+    .dark .theme-dark-logo { display:block; }
+    .aura-sidebar.collapsed .theme-toggle-label { display:none; }
+    .aura-sidebar.collapsed .theme-toggle { justify-content:center; }
+    .dark .grey-mode-control { border-color:#4b5563; background:#1f2937; color:#d1d5db; }
+    .dark .protection { border-color:#b97724; background:#382712; color:#f8d8a6; }
+    .dark .pill-wrap.warning { border-color:#a66f2c; background:#352712; color:#f3cf9b; }
+    .dark .pill-wrap.unavailable { background:#1b2534; color:#788596; }
+    .dark .case-linker { background:var(--soft); }
+    .dark .case-linker button { background:var(--green); color:#0f172a; }
+    .dark .download:hover { background:var(--sidebar-accent); }
     [class*="pill"],.url-input,.start,.grey-mode-control,.trace,.protection,.download,.viewer,.gallery-controls button,.legal-link,.popover { border-radius:0 !important; box-shadow:none !important; }
     .start,.download { text-transform:uppercase; letter-spacing:.12em; font-size:11px; font-weight:800; }
     .kicker,.text-xs { letter-spacing:.12em; text-transform:uppercase; }
@@ -132,7 +167,7 @@
 <body>
 <div class="aura-shell">
   <aside id="aura-sidebar" class="aura-sidebar" aria-label="Hauptnavigation">
-    <a class="aura-brand" href="/" aria-label="Muc Legal – zum Dashboard"><img class="aura-brand-logo" src="/static/muclegal-logo-light.png" alt="Muc Legal"><span class="aura-mark" aria-hidden="true">MLM</span></a>
+    <a class="aura-brand" href="/" aria-label="Muc Legal – zum Dashboard"><img class="aura-brand-logo theme-light-logo" src="/static/muclegal-logo-light.png" alt="Muc Legal"><img class="aura-brand-logo theme-dark-logo" src="/static/muclegal-logo-dark.png" alt="" aria-hidden="true"><span class="aura-mark" aria-hidden="true">MLM</span></a>
     <nav class="aura-nav">
       <a href="/" title="Home"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-7h6v7"></path></svg><span class="aura-label">Home</span></a>
       <a href="/hinweise" title="Hinweise"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg><span class="aura-label">Hinweise</span></a>
@@ -141,7 +176,7 @@
       <a href="/tenorhilfe" title="Tenorschreibhilfe"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg><span class="aura-label">Tenorschreibhilfe</span></a>
       <a href="/beweis-labor" aria-current="page" title="BeweisLab"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"></path><path d="M8 15h8"></path></svg><span class="aura-label">BeweisLab</span></a>
     </nav>
-    <div class="aura-sidebar-foot"><button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon collapse-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><svg class="aura-icon expand-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m12 9 3 3-3 3"></path></svg><span class="aura-label">Einklappen</span></button></div>
+    <div class="aura-sidebar-foot"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Dark Mode aktivieren" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg><span class="theme-toggle-label aura-label">Dark Mode</span></button><button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon collapse-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><svg class="aura-icon expand-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m12 9 3 3-3 3"></path></svg><span class="aura-label">Einklappen</span></button></div>
   </aside>
   <div class="lab-page">
   <main>
@@ -171,7 +206,7 @@
       <a id="package-download" class="download" href="#">Beweispaket herunterladen</a>
       <nav id="pills" class="pills" aria-label="Beweiselemente"></nav>
       <section id="case-linker" class="case-linker" hidden>
-        <div class="case-linker-copy"><strong>Als Ausgangsbeweis verwenden</strong><small>Ordne diesen technischen Stand manuell einem Fall zu. Der nächste freigegebene Monitoringlauf wird dadurch zum Vergleichslauf. Manipulierbare Demo-Seiten müssen eigene, synthetische oder anderweitig autorisierte Ziele sein.</small></div>
+        <div class="case-linker-copy"><strong>Dem Fall zuordnen oder vergleichen</strong><small>Ohne Ausgangsbeweis wird dieser technische Stand als unveränderliche Grundlage zugeordnet. Ist bereits ein Ausgangsbeweis vorhanden, wird der aktuelle Beweis dagegen verglichen. Manipulierbare Demo-Seiten müssen eigene, synthetische oder anderweitig autorisierte Ziele sein.</small></div>
         <select id="baseline-case" aria-label="Monitoringfall für den Ausgangsbeweis"><option value="">Fall auswählen</option></select>
         <button id="attach-baseline" type="button" disabled>Dem Fall zuordnen</button>
         <p id="case-linker-status" class="case-linker-status" aria-live="polite"></p>
@@ -188,6 +223,10 @@
 
 <script>
 (() => {
+  const themeToggle=document.getElementById("theme-toggle");
+  function syncThemeToggle(){const dark=document.documentElement.classList.contains("dark");themeToggle.setAttribute("aria-pressed",String(dark));themeToggle.setAttribute("aria-label",dark?"Light Mode aktivieren":"Dark Mode aktivieren");themeToggle.querySelector(".theme-toggle-label").textContent=dark?"Light Mode":"Dark Mode"}
+  themeToggle.addEventListener("click",()=>{const dark=!document.documentElement.classList.contains("dark");document.documentElement.classList.toggle("dark",dark);document.documentElement.style.colorScheme=dark?"dark":"light";localStorage.setItem("muclegal-theme",dark?"dark":"light");syncThemeToggle()});
+  syncThemeToggle();
   const auraSidebar=document.getElementById("aura-sidebar"),auraCollapse=document.getElementById("aura-collapse");
   auraCollapse?.addEventListener("click",()=>{const collapsed=auraSidebar.classList.toggle("collapsed");auraCollapse.setAttribute("aria-label",collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen")});
   const terminal=new Set(["completed","completed_with_warnings","failed","protected","baseline_created","unchanged"]);
@@ -204,7 +243,7 @@
   const technicalOrder=["report","legal_pages","protection_report","previous_normalized_text","diff","page_artifacts_index","capture_index","capture_metrics","run_result","screenshot_interactions","capture_transparency","raw_html","response_headers","warc","cdx","warc_status","manifest","manifest_digest","timestamp_query","timestamp_response","wayback_status"];
   const roleOrder=["main","requested","agb","privacy"];
   const form=document.getElementById("run-form"),input=document.getElementById("url"),start=document.getElementById("run-button"),spinner=document.getElementById("spinner"),startLabel=document.getElementById("start-label"),trace=document.getElementById("trace-panel"),events=document.getElementById("events"),result=document.getElementById("result"),pills=document.getElementById("pills"),protection=document.getElementById("protection-warning"),greyMode=document.getElementById("grey-mode"),caseLinker=document.getElementById("case-linker"),baselineCase=document.getElementById("baseline-case"),attachBaseline=document.getElementById("attach-baseline"),caseLinkerStatus=document.getElementById("case-linker-status");
-  let currentEvidenceCaseId="";
+  let currentEvidenceCaseId="",matchingCases=new Map();
   let currentInfo="";
   async function api(url,options){const response=await fetch(url,options);if(!response.ok){let message=`HTTP ${response.status}`;try{message=(await response.json()).detail||message}catch(_){}throw new Error(message)}return response.json()}
   function eventState(run,item,index){if(item.state==="failed")return "failed";if(String(item.state).includes("warning"))return "warning";if(index===(run.audit_log||[]).length-1&&!terminal.has(run.status))return "active";const stepState=(run.steps||{})[item.step];return stepState==="failed"?"failed":(stepState==="warning"?"warning":(stepState==="active"?"active":"done"))}
@@ -221,9 +260,11 @@
   function screenshotChoice(caseId,role,items){const labels={main:"screenshot",requested:"requested_page_screenshot",agb:"agb_screenshot",privacy:"privacy_screenshot"},gallery=galleries[role],item=items.get(labels[role]);if(gallery)return {title:gallery.title||role,available:true,select:wrap=>previewGallery(role,wrap,gallery.title||role)};if(item?.available)return {title:item.title,available:true,select:wrap=>preview(caseId,item,wrap)};return null}
   function renderArtifacts(data){trace.open=false;result.hidden=false;galleries=data.capture_galleries||{};document.getElementById("package-download").href=data.download_url||`/api/v1/cases/${encodeURIComponent(data.case_id)}/download`;pills.replaceChildren();const items=artifactMap(data),screenshots=roleOrder.map(role=>screenshotChoice(data.case_id,role,items)).filter(Boolean);const screenshotWrap=createMenuPill("Screenshots",screenshots,"Alle gesicherten Seitenansichten, getrennt nach Hauptseite und gefundenen Unterseiten.");const privacy=screenshotChoice(data.case_id,"privacy",items),privacyWrap=createDirectPill("Datenschutz-Screenshot",Boolean(privacy),()=>privacy.select(privacyWrap),help.privacy_screenshot,items.get("privacy_screenshot")?.status);const agb=screenshotChoice(data.case_id,"agb",items),agbWrap=createDirectPill("AGB-Screenshot",Boolean(agb),()=>agb.select(agbWrap),help.agb_screenshot,items.get("agb_screenshot")?.status);const texts=roleOrder.map(role=>{const gallery=galleries[role];if(!gallery?.normalized_text_url)return null;return {title:gallery.title||role,available:true,select:wrap=>previewRoleText(gallery,wrap)}}).filter(Boolean);if(!texts.length&&items.get("normalized_text")?.available){const item=items.get("normalized_text");texts.push({title:"Hauptseite",available:true,select:wrap=>preview(data.case_id,item,wrap)})}createMenuPill("Normalisierter Text",texts,"Bereinigter Text jeder erfassten Seite, getrennt nach Hauptseite, AGB und Datenschutz.");const documents=roleOrder.flatMap(role=>{const gallery=galleries[role];return (gallery?.document_urls||[]).map((url,index)=>({title:`${gallery.title||role} · Druckfassung ${index+1}`,available:true,select:wrap=>previewRoleDocument(url,gallery.title||role,wrap)}))});/* Druckfassungen liegen bewusst im Untermenü: createMenuPill("Druckfassungen" */const technical=[...documents,...data.artifacts.filter(item=>item.available&&!hiddenArtifacts.has(item.label)&&!primaryArtifacts.has(item.label)).sort((a,b)=>{const ai=technicalOrder.indexOf(a.label),bi=technicalOrder.indexOf(b.label);return (ai<0?999:ai)-(bi<0?999:bi)}).map(item=>({title:item.title,available:true,select:wrap=>preview(data.case_id,item,wrap)}))];createMenuPill("Technische Details",technical,"Technische Prüf- und Archivdateien für Sachverständige oder eine spätere Integritätskontrolle.");if(screenshots.length)screenshots[0].select(screenshotWrap);prepareCaseLinker(data)}
   function evidenceSubjectHost(value){const parsed=new URL(value);if(parsed.hostname!=="web.archive.org")return parsed.hostname;const match=parsed.pathname.match(/^\/web\/[^/]+\/(.+)$/i);if(!match)return parsed.hostname;try{const embedded=decodeURIComponent(match[1]),original=new URL(embedded);return /^https?:\/\//i.test(embedded)&&!original.username&&!original.password?original.hostname:parsed.hostname}catch(_){return parsed.hostname}}
-  async function prepareCaseLinker(data){caseLinker.hidden=false;currentEvidenceCaseId=data.case_id||"";baselineCase.replaceChildren(new Option("Fall auswählen",""));attachBaseline.disabled=true;caseLinkerStatus.replaceChildren();if(data.god_mode){caseLinkerStatus.textContent="Grey-Mode-Pakete können nicht in die juristische Monitoringstrecke übernommen werden. Nutze für eigene oder synthetische Testseiten den regulären Modus, soweit der Abruf dort zulässig ist.";return}if(data.evidence_suitability&&data.evidence_suitability!=="regulaer"){caseLinkerStatus.textContent="Dieser Lauf ist nicht als regulärer Ausgangsbeweis geeignet.";return}try{const response=await api("/api/v1/monitoring-cases"),requestedHost=evidenceSubjectHost(data.requested_url||data.url),capturedHost=evidenceSubjectHost(data.captured_url||data.url);const cases=(response.cases||[]).filter(item=>{const allowed=new Set([item.domain,...(item.allowed_subdomains||[])]);return allowed.has(requestedHost)&&allowed.has(capturedHost)});cases.forEach(item=>baselineCase.add(new Option(`${item.fall_id} · ${item.domain}${item.baseline_evidence?" · Ausgangsbeweis vorhanden":""}`,item.case_id)));if(!cases.length){caseLinkerStatus.textContent="Lege zuerst einen Monitoringfall für dieselbe Domain an.";const link=document.createElement("a");link.href="/neu";link.textContent=" Fall anlegen";caseLinkerStatus.append(link)}}catch(error){caseLinkerStatus.textContent=error.message}}
-  baselineCase.addEventListener("change",()=>{attachBaseline.disabled=!baselineCase.value||!currentEvidenceCaseId;caseLinkerStatus.textContent=""});
-  attachBaseline.addEventListener("click",async()=>{if(!baselineCase.value||!currentEvidenceCaseId)return;attachBaseline.disabled=true;caseLinkerStatus.textContent="Zuordnung wird geprüft …";try{const updated=await api(`/api/v1/cases/${encodeURIComponent(baselineCase.value)}/baseline-evidence`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({evidence_case_id:currentEvidenceCaseId})});caseLinkerStatus.replaceChildren(document.createTextNode(`Ausgangsbeweis ist ${updated.fall_id} zugeordnet. `));const link=document.createElement("a");link.href="/hinweise";link.textContent="Fall freigeben und Vergleichsscan starten";caseLinkerStatus.append(link)}catch(error){caseLinkerStatus.textContent=error.message;attachBaseline.disabled=false}});
+  function monitoringUiUrl(path){return ["127.0.0.1","localhost"].includes(window.location.hostname)&&window.location.port==="8000"?`${window.location.protocol}//${window.location.hostname}:8080${path}`:path}
+  function openMonitoringNotification(payload){const target=monitoringUiUrl("/hinweise");if(new URL(target,window.location.href).origin===window.location.origin){sessionStorage.setItem("muclegal:evidence-comparison-notification:v1",JSON.stringify(payload));window.location.assign(target);return}const url=new URL(target,window.location.href);url.searchParams.set("beweisvergleich",JSON.stringify(payload));window.location.assign(url)}
+  async function prepareCaseLinker(data){caseLinker.hidden=false;currentEvidenceCaseId=data.case_id||"";matchingCases=new Map();baselineCase.replaceChildren(new Option("Fall auswählen",""));attachBaseline.textContent="Dem Fall zuordnen";attachBaseline.disabled=true;caseLinkerStatus.replaceChildren();if(data.god_mode){caseLinkerStatus.textContent="Grey-Mode-Pakete können nicht in die juristische Monitoringstrecke übernommen werden. Nutze für eigene oder synthetische Testseiten den regulären Modus, soweit der Abruf dort zulässig ist.";return}if(data.evidence_suitability&&data.evidence_suitability!=="regulaer"){caseLinkerStatus.textContent="Dieser Lauf ist nicht als regulärer Ausgangsbeweis geeignet.";return}try{const response=await api("/api/v1/monitoring-cases"),requestedHost=evidenceSubjectHost(data.requested_url||data.url),capturedHost=evidenceSubjectHost(data.captured_url||data.url);const cases=(response.cases||[]).filter(item=>{const allowed=new Set([item.domain,...(item.allowed_subdomains||[])]);return allowed.has(requestedHost)&&allowed.has(capturedHost)});cases.forEach(item=>{matchingCases.set(item.case_id,item);baselineCase.add(new Option(`${item.fall_id} · ${item.domain}${item.baseline_evidence?" · Ausgangsbeweis vorhanden":""}`,item.case_id))});if(!cases.length){caseLinkerStatus.textContent="Lege zuerst einen Monitoringfall für dieselbe Domain an.";const link=document.createElement("a");link.href="/neu";link.textContent=" Fall anlegen";caseLinkerStatus.append(link)}}catch(error){caseLinkerStatus.textContent=error.message}}
+  baselineCase.addEventListener("change",()=>{const selected=matchingCases.get(baselineCase.value);attachBaseline.textContent=selected?.baseline_evidence?"Mit Ausgangsbeweis vergleichen":"Als Ausgangsbeweis zuordnen";attachBaseline.disabled=!selected||!currentEvidenceCaseId;caseLinkerStatus.textContent=""});
+  attachBaseline.addEventListener("click",async()=>{const selected=matchingCases.get(baselineCase.value);if(!selected||!currentEvidenceCaseId)return;const isComparison=Boolean(selected.baseline_evidence),endpoint=isComparison?"evidence-comparisons":"baseline-evidence";attachBaseline.disabled=true;caseLinkerStatus.textContent=isComparison?"Beweise werden technisch verglichen …":"Zuordnung wird geprüft …";try{const response=await api(`/api/v1/cases/${encodeURIComponent(selected.case_id)}/${endpoint}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({evidence_case_id:currentEvidenceCaseId})});if(!isComparison){selected.baseline_evidence=response.baseline_evidence;attachBaseline.textContent="Mit Ausgangsbeweis vergleichen";caseLinkerStatus.replaceChildren(document.createTextNode(`Ausgangsbeweis ist ${response.fall_id} zugeordnet. `));const link=document.createElement("a");link.href=monitoringUiUrl("/hinweise");link.textContent="Fall öffnen";caseLinkerStatus.append(link);return}const comparison=response.comparison;if(comparison.status==="technische_aenderung_erkannt"){openMonitoringNotification({version:1,notification_id:comparison.comparison_id,case_id:response.case_id,fall_id:response.fall_id,status:comparison.status});return}caseLinkerStatus.replaceChildren(document.createTextNode(comparison.status==="unveraendert_fortbestehend"?"Kein technischer Unterschied zum Ausgangsbeweis erkannt. ":"Vergleich konnte nicht vollständig durchgeführt werden. "));const link=document.createElement("a");link.href=monitoringUiUrl("/hinweise");link.textContent="Fall öffnen";caseLinkerStatus.append(link)}catch(error){caseLinkerStatus.textContent=error.message;attachBaseline.disabled=false}});
   function resetViewer(){document.getElementById("empty").hidden=true;document.getElementById("text-view").hidden=true;document.getElementById("legal-view").hidden=true;document.getElementById("image-view").hidden=true;document.getElementById("pdf-view").hidden=true;document.getElementById("gallery-controls").hidden=true}
   async function preview(caseId,item,wrap){closePillMenus();setActive(wrap);resetViewer();document.getElementById("viewer-title").textContent=item.title;const open=document.getElementById("viewer-open"),info=document.getElementById("viewer-info"),fileUrl=item.url||`/artifact/${encodeURIComponent(caseId)}/${encodeURIComponent(item.label)}`;open.href=fileUrl;open.hidden=false;currentInfo=help[item.label]||item.title;info.dataset.info=currentInfo;info.hidden=false;if(item.kind==="image"){const roles={screenshot:"main",requested_page_screenshot:"requested",agb_screenshot:"agb",privacy_screenshot:"privacy"},gallery=galleries[roles[item.label]];if(gallery){showGallery(gallery);return}const image=document.getElementById("image-view");image.src=fileUrl;image.hidden=false;return}if(item.kind==="pdf"){const pdf=document.getElementById("pdf-view");pdf.src=fileUrl;pdf.hidden=false;return}if(item.kind==="text"&&item.preview_available){const content=item.preview_content!==undefined?item.preview_content:(await api(`/api/cases/${encodeURIComponent(caseId)}/preview/${encodeURIComponent(item.label)}`)).content;if(item.label==="legal_pages"){renderLegal(JSON.parse(content));return}const pre=document.getElementById("text-view");pre.textContent=content;pre.hidden=false;return}const empty=document.getElementById("empty");empty.textContent="Für dieses Dateiformat steht eine sichere Download-Datei bereit.";empty.hidden=false}
   function previewGallery(role,wrap,title){closePillMenus();setActive(wrap);resetViewer();const gallery=galleries[role],viewerTitle=document.getElementById("viewer-title"),info=document.getElementById("viewer-info"),open=document.getElementById("viewer-open");viewerTitle.textContent=`Screenshot · ${title}`;info.dataset.info="Gesicherte Ansicht dieser Seite. Bei langen Seiten kann sie aus mehreren lückenlosen Kacheln bestehen.";info.hidden=false;open.hidden=true;showGallery(gallery)}

@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "test:minimal": "node --experimental-strip-types --test tests/minimal-tenor-logic.test.mjs",
+    "test:minimal": "node --experimental-strip-types --test tests/minimal-tenor-logic.test.mjs tests/monitoring-notifications.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write ."

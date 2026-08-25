@@ -12,6 +12,17 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppSidebar } from "../components/AppSidebar";
+import { Toaster } from "../components/ui/sonner";
+
+const themeBootScript = `
+  try {
+    const storedTheme = localStorage.getItem("muclegal-theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const theme = storedTheme === "dark" || (storedTheme !== "light" && prefersDark) ? "dark" : "light";
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  } catch (_) {}
+`;
 
 function NotFoundComponent() {
   return (
@@ -114,8 +125,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
       </head>
       <body>
@@ -138,6 +150,7 @@ function RootComponent() {
           <Outlet />
         </main>
       </div>
+      <Toaster position="top-center" />
     </QueryClientProvider>
   );
 }

@@ -74,6 +74,36 @@
   --sidebar-border: oklch(0.9 0 0);
 }
 
+.dark {
+  --background: oklch(0.16 0.025 262);
+  --foreground: oklch(0.96 0.008 255);
+  --card: oklch(0.2 0.027 262);
+  --card-foreground: oklch(0.96 0.008 255);
+  --popover: oklch(0.2 0.027 262);
+  --popover-foreground: oklch(0.96 0.008 255);
+  --primary: oklch(0.75 0.15 166);
+  --primary-foreground: oklch(0.16 0.025 262);
+  --secondary: oklch(0.25 0.025 262);
+  --secondary-foreground: oklch(0.94 0.008 255);
+  --muted: oklch(0.24 0.025 262);
+  --muted-foreground: oklch(0.7 0.018 255);
+  --accent: oklch(0.27 0.03 262);
+  --accent-foreground: oklch(0.97 0.008 255);
+  --destructive: oklch(0.7 0.18 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.73 0.14 155);
+  --warning: oklch(0.78 0.13 73);
+  --danger: oklch(0.7 0.18 25);
+  --border: oklch(0.31 0.026 262);
+  --input: oklch(0.34 0.026 262);
+  --ring: oklch(0.75 0.15 166);
+  --sidebar: oklch(0.135 0.025 262);
+  --sidebar-foreground: oklch(0.94 0.008 255);
+  --sidebar-accent: oklch(0.23 0.03 262);
+  --sidebar-accent-foreground: oklch(0.97 0.008 255);
+  --sidebar-border: oklch(0.28 0.026 262);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -84,6 +114,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    transition: background-color 160ms ease, color 160ms ease;
   }
 
   h1,
@@ -124,4 +155,46 @@
     font-size: 0.75rem;
     font-weight: 700;
   }
+}
+
+/* The minimal tenor editor predates the semantic color tokens. Keep its
+   slate-based writing canvas legible when the global theme is dark. */
+.dark .bg-white,
+.dark .bg-white\/95 {
+  background-color: var(--color-background);
+}
+
+.dark .bg-slate-100,
+.dark .bg-slate-200,
+.dark .bg-blue-50\/40 {
+  background-color: var(--color-muted);
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: var(--color-foreground);
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-slate-300 {
+  color: var(--color-muted-foreground);
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300,
+.dark .divide-slate-100 > :not(:last-child) {
+  border-color: var(--color-border);
+}
+
+.dark [class*="hover:bg-slate-"]:hover {
+  background-color: var(--color-accent);
+}
+
+.dark [class*="hover:text-slate-"]:hover {
+  color: var(--color-foreground);
 }

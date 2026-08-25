@@ -13,6 +13,22 @@ export type BaselineEvidence = {
   attached_by: "menschliche_zuordnung_im_beweislab";
 };
 
+export type EvidenceComparison = {
+  comparison_id: string;
+  status: "technische_aenderung_erkannt" | "unveraendert_fortbestehend" | "pruefung_unvollstaendig";
+  baseline_evidence_case_id: string;
+  current_evidence_case_id: string;
+  baseline_requested_url: string;
+  current_requested_url: string;
+  baseline_manifest_sha256: string;
+  current_manifest_sha256: string;
+  baseline_text_sha256: string | null;
+  current_text_sha256: string | null;
+  compared_role: string;
+  compared_at: string;
+  technical_only: true;
+};
+
 export type MonitoringCase = {
   case_id: string;
   fall_id: string;
@@ -35,11 +51,17 @@ export type MonitoringCase = {
   created_at: string;
   decided_at: string | null;
   baseline_evidence: BaselineEvidence | null;
+  latest_evidence_comparison: EvidenceComparison | null;
 };
 
 export type MonitoringCaseCreate = Omit<
   MonitoringCase,
-  "case_id" | "decision" | "created_at" | "decided_at" | "baseline_evidence"
+  | "case_id"
+  | "decision"
+  | "created_at"
+  | "decided_at"
+  | "baseline_evidence"
+  | "latest_evidence_comparison"
 >;
 
 export type MonitoringRun = {

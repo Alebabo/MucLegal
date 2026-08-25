@@ -1347,18 +1347,10 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         except KeyError as exc:
             raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
 
-    @app.post("/api/v1/cases/{case_id}/baseline-evidence", status_code=201)
-    async def attach_case_baseline_evidence(
-        case_id: str, payload: BaselineEvidenceAttachRequest
-    ):
-        if monitoring_cases is None:
-            raise HTTPException(404, "Fallaufnahme ist nicht konfiguriert.")
+    def validated_case_evidence(monitoring_case, evidence_case_id: str) -> dict:
+        """Load one regular, manifest-valid evidence bundle for the case domain."""
         try:
-            monitoring_case = monitoring_cases.get(case_id)
-        except KeyError as exc:
-            raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
-        try:
-            evidence_detail = archive.detail(payload.evidence_case_id)
+            evidence_detail = archive.detail(evidence_case_id)
         except HTTPException as exc:
             raise HTTPException(404, "BeweisLab-Lauf nicht gefunden.") from exc
         if evidence_detail.get("god_mode"):
@@ -1369,7 +1361,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if evidence_detail.get("evidence_suitability") != "regulaer":
             raise HTTPException(
                 422,
-                "Nur ein regulär geeignetes Beweispaket kann als Ausgangsbeweis dienen.",
+                "Nur ein regulär geeignetes Beweispaket kann einem Fall zugeordnet werden.",
             )
         allowed_hosts = {monitoring_case.domain, *monitoring_case.allowed_subdomains}
         evidence_hosts = {
@@ -1379,10 +1371,10 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if not evidence_hosts or None in evidence_hosts or not evidence_hosts.issubset(allowed_hosts):
             raise HTTPException(
                 422,
-                "Ausgangsbeweis und Monitoringfall müssen dieselbe freigegebene Domain betreffen.",
+                "Beweispaket und Monitoringfall müssen dieselbe freigegebene Domain betreffen.",
             )
         try:
-            manifest_path = archive.artifact_path(payload.evidence_case_id, "manifest")
+            manifest_path = archive.artifact_path(evidence_case_id, "manifest")
         except HTTPException as exc:
             raise HTTPException(422, "Beweispaket enthält kein prüfbares Manifest.") from exc
         verification = verify_manifest(manifest_path)
@@ -1390,54 +1382,144 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             not verification.valid
             or verification.manifest_sha256 != evidence_detail.get("manifest_sha256")
         ):
-            raise HTTPException(422, "Hash-Manifest des Ausgangsbeweises ist nicht gültig.")
+            raise HTTPException(422, "Hash-Manifest des Beweispakets ist nicht gültig.")
 
         documents: list[dict[str, str]] = []
-        baseline_text_bytes = 0
-        for role in evidence_detail.get("capture_galleries", {}):
+        text_bytes = 0
+        capture_galleries = evidence_detail.get("capture_galleries", {})
+        for role, gallery in capture_galleries.items():
             try:
-                text_path = archive.capture_normalized_text_path(payload.evidence_case_id, role)
+                text_path = archive.capture_normalized_text_path(evidence_case_id, role)
             except HTTPException:
                 continue
-            baseline_text_bytes += text_path.stat().st_size
-            if baseline_text_bytes > 2 * 1024 * 1024:
-                raise HTTPException(422, "Ausgangsbeweis enthält mehr als 2 MiB Vergleichstext.")
+            text_bytes += text_path.stat().st_size
+            if text_bytes > 2 * 1024 * 1024:
+                raise HTTPException(422, "Beweispaket enthält mehr als 2 MiB Vergleichstext.")
             text = text_path.read_text(encoding="utf-8").strip()
-            if not text:
-                continue
-            documents.append({
-                "role": role,
-                "text": text,
-                "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            })
+            if text:
+                documents.append({
+                    "role": role,
+                    "text": text,
+                    "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    "capture_completeness": gallery.get("capture_completeness"),
+                })
         if not documents:
             try:
-                text_path = archive.artifact_path(payload.evidence_case_id, "normalized_text")
+                text_path = archive.artifact_path(evidence_case_id, "normalized_text")
             except HTTPException as exc:
                 raise HTTPException(
                     422, "Beweispaket enthält keinen normalisierten Vergleichstext."
                 ) from exc
             if text_path.stat().st_size > 2 * 1024 * 1024:
-                raise HTTPException(422, "Ausgangsbeweis enthält mehr als 2 MiB Vergleichstext.")
+                raise HTTPException(422, "Beweispaket enthält mehr als 2 MiB Vergleichstext.")
             text = text_path.read_text(encoding="utf-8").strip()
             if text:
                 documents.append({
                     "role": "main",
                     "text": text,
                     "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    "capture_completeness": evidence_detail.get("capture_completeness"),
                 })
+        if not documents:
+            raise HTTPException(422, "Beweispaket enthält keinen normalisierten Vergleichstext.")
+        return {
+            "evidence_case_id": evidence_case_id,
+            "requested_url": evidence_detail["requested_url"],
+            "captured_url": evidence_detail["captured_url"],
+            "captured_at": evidence_detail["erkannt_am"],
+            "manifest_sha256": verification.manifest_sha256,
+            "capture_completeness": evidence_detail.get("capture_completeness"),
+            "documents": documents,
+        }
+
+    def primary_evidence_document(documents: list[dict]) -> dict | None:
+        for preferred_role in ("main", "agb", "requested"):
+            document = next(
+                (item for item in documents if item.get("role") == preferred_role), None
+            )
+            if document is not None:
+                return document
+        return documents[0] if documents else None
+
+    @app.post("/api/v1/cases/{case_id}/baseline-evidence", status_code=201)
+    async def attach_case_baseline_evidence(
+        case_id: str, payload: BaselineEvidenceAttachRequest
+    ):
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallaufnahme ist nicht konfiguriert.")
         try:
-            updated = monitoring_cases.attach_baseline_evidence(case_id, {
-                "evidence_case_id": payload.evidence_case_id,
-                "requested_url": evidence_detail["requested_url"],
-                "captured_url": evidence_detail["captured_url"],
-                "captured_at": evidence_detail["erkannt_am"],
-                "manifest_sha256": verification.manifest_sha256,
-                "documents": documents,
-            })
+            monitoring_case = monitoring_cases.get(case_id)
+        except KeyError as exc:
+            raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
+        if monitoring_case.baseline_evidence is not None:
+            raise HTTPException(
+                409, "Ausgangsbeweis ist bereits vorhanden und kann nicht überschrieben werden."
+            )
+        evidence = validated_case_evidence(monitoring_case, payload.evidence_case_id)
+        try:
+            updated = monitoring_cases.attach_baseline_evidence(case_id, evidence)
         except MonitoringCaseError as exc:
             raise HTTPException(422, str(exc)) from exc
         return updated.to_dict()
+
+    @app.post("/api/v1/cases/{case_id}/evidence-comparisons", status_code=201)
+    async def compare_case_evidence(
+        case_id: str, payload: BaselineEvidenceAttachRequest
+    ):
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallaufnahme ist nicht konfiguriert.")
+        try:
+            monitoring_case = monitoring_cases.get(case_id)
+        except KeyError as exc:
+            raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
+        baseline = monitoring_case.baseline_evidence
+        if baseline is None:
+            raise HTTPException(409, "Für diesen Fall ist noch kein Ausgangsbeweis vorhanden.")
+        if baseline.get("evidence_case_id") == payload.evidence_case_id:
+            raise HTTPException(422, "Ausgangsbeweis kann nicht mit sich selbst verglichen werden.")
+        current = validated_case_evidence(monitoring_case, payload.evidence_case_id)
+        baseline_document = primary_evidence_document(baseline.get("documents", []))
+        current_document = primary_evidence_document(current.get("documents", []))
+        current_incomplete = (
+            current.get("capture_completeness") == "durch_seitenschutz_begrenzt"
+            or (
+                current_document is not None
+                and current_document.get("capture_completeness")
+                in {"teilweise_erfasst", "durch_seitenschutz_begrenzt"}
+            )
+        )
+        if baseline_document is None or current_document is None or current_incomplete:
+            status = "pruefung_unvollstaendig"
+        elif baseline_document["sha256"] == current_document["sha256"]:
+            status = "unveraendert_fortbestehend"
+        else:
+            status = "technische_aenderung_erkannt"
+        comparison = {
+            "comparison_id": uuid.uuid4().hex,
+            "status": status,
+            "baseline_evidence_case_id": baseline["evidence_case_id"],
+            "current_evidence_case_id": current["evidence_case_id"],
+            "baseline_requested_url": baseline["requested_url"],
+            "current_requested_url": current["requested_url"],
+            "baseline_manifest_sha256": baseline["manifest_sha256"],
+            "current_manifest_sha256": current["manifest_sha256"],
+            "baseline_text_sha256": baseline_document.get("sha256") if baseline_document else None,
+            "current_text_sha256": current_document.get("sha256") if current_document else None,
+            "compared_role": (
+                str(current_document.get("role")) if current_document else "nicht_verfuegbar"
+            ),
+            "compared_at": datetime.now(timezone.utc).isoformat(),
+            "technical_only": True,
+        }
+        try:
+            updated = monitoring_cases.record_evidence_comparison(case_id, comparison)
+        except MonitoringCaseError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {
+            "fall_id": updated.fall_id,
+            "case_id": updated.case_id,
+            "comparison": updated.latest_evidence_comparison,
+        }
 
     @app.post("/api/v1/cases/{case_id}/review")
     async def review_monitoring_case(case_id: str, request: Request):

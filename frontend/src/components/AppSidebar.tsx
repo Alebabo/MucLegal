@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { ThemeToggle } from "./ThemeToggle";
+
 const items = [
   { to: "/", label: "Home", icon: Home, exact: true },
   { to: "/hinweise", label: "Hinweise", icon: Info, exact: false },
@@ -24,7 +26,7 @@ export function AppSidebar() {
 
   return (
     <aside
-      className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:flex ${
+      className={`sticky top-0 z-40 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:flex ${
         collapsed ? "w-[72px]" : "w-[248px]"
       }`}
     >
@@ -40,11 +42,19 @@ export function AppSidebar() {
             </span>
           </span>
         ) : (
-          <img
-            src="/muclegal-logo.png"
-            alt="Muc Legal"
-            className="h-16 w-full object-contain object-left"
-          />
+          <>
+            <img
+              src="/muclegal-logo.png"
+              alt="Muc Legal"
+              className="h-16 w-full object-contain object-left dark:hidden"
+            />
+            <img
+              src="/muclegal-logo-dark.png"
+              alt=""
+              aria-hidden="true"
+              className="hidden h-16 w-full object-contain object-left dark:block"
+            />
+          </>
         )}
       </Link>
 
@@ -72,6 +82,7 @@ export function AppSidebar() {
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
+        <ThemeToggle collapsed={collapsed} />
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
