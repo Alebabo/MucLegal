@@ -3,8 +3,9 @@
   "checkpoint_id": "01M0W6X0R4P1M1ES19QD8Y6XT9",
   "strategy": "manual-commit",
   "branch": "agent/live-url-ui",
-  "checkpoints_count": 6,
+  "checkpoints_count": 7,
   "files_touched": [
+    "README.md",
     "frontend/src/components/tenor/MaskTenorView.tsx",
     "frontend/src/components/tenor/MinimalTenorView.tsx",
     "frontend/src/lib/tenor-api.ts",
@@ -16,6 +17,7 @@
     "muclegal/llm/tenor_questions.py",
     "muclegal/templates/evidence_lab.html",
     "muclegal/ui.py",
+    "reference/MUCLEGAL_FUNKTIONSHANDBUCH.md",
     "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
     "reference/ue_examples.json",
     "tests/test_live_ui.py",
@@ -36,13 +38,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1803661,
+    "input_tokens": 2032898,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 66135808,
-    "output_tokens": 231775,
-    "api_call_count": 548
+    "cache_read_tokens": 75711232,
+    "output_tokens": 266961,
+    "api_call_count": 616
   }
 }

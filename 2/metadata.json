@@ -1,0 +1,73 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0W6X0R4P1M1ES19QD8Y6XT9",
+  "session_id": "01a03856-5f10-7fe3-aa7b-1718b7b2f527",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-25T10:20:53.8182316Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "README.md",
+    "frontend/src/components/tenor/MaskTenorView.tsx",
+    "frontend/src/components/tenor/MinimalTenorView.tsx",
+    "frontend/src/lib/tenor-api.ts",
+    "muclegal/llm/tenor.py",
+    "muclegal/llm/tenor_questions.py",
+    "muclegal/ui.py",
+    "reference/MUCLEGAL_FUNKTIONSHANDBUCH.md",
+    "tests/test_tenor.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "663f8547429c",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 229237,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 9575424,
+    "output_tokens": 35186,
+    "api_call_count": 68
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-25T10:20:53.5117954Z",
+    "agent_lines": 1626,
+    "agent_removed": 326,
+    "human_added": 959,
+    "human_modified": 122,
+    "human_removed": 0,
+    "total_committed": 2702,
+    "total_lines_changed": 3037,
+    "agent_percentage": 64.27395456042146,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 575,
+      "user_lines_removed": 109,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "muclegal/llm/tenor.py": 287,
+        "muclegal/llm/tenor_examples.py": 141,
+        "muclegal/llm/tenor_questions.py": 87,
+        "reference/ue_examples.json": 60
+      },
+      "user_removed_per_file": {
+        "muclegal/llm/tenor.py": 96,
+        "muclegal/llm/tenor_questions.py": 13
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3086,
+      "agent_lines_removed": 435
+    }
+  ]
+}
