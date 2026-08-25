@@ -3,13 +3,15 @@
   "checkpoint_id": "01M0W73V6N8EWX34SPJFSEQ24Q",
   "strategy": "manual-commit",
   "branch": "agent/live-url-ui",
-  "checkpoints_count": 6,
+  "checkpoints_count": 7,
   "files_touched": [
+    "README.md",
     "frontend/README.md",
     "frontend/src/components/AppSidebar.tsx",
     "frontend/src/components/tenor/MinimalTenorView.tsx",
     "frontend/src/routes/archiv.tsx",
-    "frontend/src/routes/tenorhilfe.tsx"
+    "frontend/src/routes/tenorhilfe.tsx",
+    "reference/MUCLEGAL_FUNKTIONSHANDBUCH.md"
   ],
   "sessions": [
     {
@@ -25,13 +27,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1835625,
+    "input_tokens": 2097617,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 70185472,
-    "output_tokens": 236368,
-    "api_call_count": 573
+    "cache_read_tokens": 81660160,
+    "output_tokens": 274845,
+    "api_call_count": 650
   }
 }
