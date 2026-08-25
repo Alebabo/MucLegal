@@ -1,0 +1,33 @@
+Überprüfe und überarbeite meinen Code in einem [@GitHub](plugin://github@openai-curated-remote)-Repository. Frag mich zuerst, auf welchen Teil der Codebasis du dich konzentrieren sollst.
+
+---
+
+beweispaket
+
+---
+
+das archiv ist ein toter link
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 1 tab.
+- Current URL: http://127.0.0.1:4173/beweis-labor
+</in-app-browser-context>
+
+## My request:
+nicht nur lokal sondern auch auf hetzner deployen
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 1 tab.
+- Current URL: http://127.0.0.1:4173/beweis-labor
+</in-app-browser-context>
+
+## My request:
+die AGBS und Datenschutzerklärungen werden nochnicht ausgeklappt beim scannen
