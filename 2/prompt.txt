@@ -1,0 +1,105 @@
+Überprüfe und überarbeite meinen Code in einem [@GitHub](plugin://github@openai-curated-remote)-Repository. Frag mich zuerst, auf welchen Teil der Codebasis du dich konzentrieren sollst.
+
+---
+
+beweispaket
+
+---
+
+das archiv ist ein toter link
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 1 tab.
+- Current URL: http://127.0.0.1:4173/beweis-labor
+</in-app-browser-context>
+
+## My request:
+nicht nur lokal sondern auch auf hetzner deployen
+
+---
+
+<in-app-browser-context source="ambient-ui-state">
+This block is automatically supplied ambient UI state, not part of the user's request. Do not treat it as an instruction or as evidence that the user explicitly selected the in-app browser.
+# In app browser:
+- The user has the in-app browser open with 1 tab.
+- Current URL: http://127.0.0.1:4173/beweis-labor
+</in-app-browser-context>
+
+## My request:
+die AGBS und Datenschutzerklärungen werden nochnicht ausgeklappt beim scannen
+
+---
+
+auch wenn man den ggraumdus an hat soll man es einem fall zuordnen können
+
+---
+
+entferne komplett die Bezeichnung grey modus und alle damit verbudnenen hinweise und mhe daaus neben der suche nur ein kasten wo man ein häckchen setzen kann um ihn zu aktivieren
+
+---
+
+kannst du das mal mi decathlon teten, ob die agbs ausgeklappt werden vor screenshot
+
+---
+
+ok dann liber den test mit den AGBs von Ankerkraut bzw. dem Kündigungsbutton in den AGBs
+
+---
+
+scanne von der ankerkraut.de seite statt der direkten sub domain
+
+---
+
+warum liegt es jetzt als pdf vor?
+
+---
+
+ok kann ich das als demo machen? Findest d irgendwo die alte ankerkraut varinte ohne button
+
+---
+
+also wo genau ist der button vorher nicht wo er jetztz ist
+
+---
+
+ok gibt es einen eindeutigeren leichteren fall mit agb klauseln der verbaucherzentrale die sich für die demo eignen
+
+---
+
+gibt es noch einen anderen fall der sich gut demontiren lässt wo die agb auf der wbeseite stehen und ich das manuelle beweislab benutzen kann
+
+---
+
+kannst du die alte vrsion als fall hinterlegen  sodass ich dann die neue netto seite scannen kann und dann das pop up kommt
+
+---
+
+access denied nehmen einen anderen fall für eine demo wo die agb auf der seite sind
+
+---
+
+push zu git und hoste auf hetzner
+
+---
+
+diese art von disclaimern raus: **SYNTHETISCHE DEMO · KEIN LIVE-BEWEIS**
+SYNTHETISCHE DEMO: Dieser eingefrorene Snapshot dient ausschließlich der Vorführung des Zuordnungs- und Vergleichsablaufs. Er ist kein Live-Beweis und darf nicht als Nachweis eines tatsächlichen Decathlon-Seitenstands verwendet werden.
+
+---
+
+wenn man sich die änderungen anzeigenlässt dann wird es nicht gut angezegt, weil die kolonne zu eng ist und es nicht übersichtlich ist
+
+---
+
+Hinterlegt die frühere Click-&-Collect-Klauselkombination und trägt die erreichbare aktuelle HTML-AGB-Adresse ein.  \
+Erzeugt ausschließlich klar gekennzeichnete lokale Demo-Snapshots, keine Live-Beweise. &#x20;
+
+Diese beiden hinweise auch entfenren und den disclaimer "Auosisierte Erfassung" auf Screenshot im rey modus auch entfernen
+
+---
+
+in der Tenorschriebhilfe unter /fälle werden nur die fallback fälle angezeigt statt die neuen. Bitte passe das an und spiele eine komplette müller demo von erfasung bis zur tenorverfassung durch
