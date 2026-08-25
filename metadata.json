@@ -3,7 +3,7 @@
   "checkpoint_id": "01M0W2BH5978660GVYVZMFCVXX",
   "strategy": "manual-commit",
   "branch": "agent/live-url-ui",
-  "checkpoints_count": 6,
+  "checkpoints_count": 7,
   "files_touched": [
     "frontend/package.json",
     "frontend/src/components/AppSidebar.tsx",
@@ -37,13 +37,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 889229,
+    "input_tokens": 1046362,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 37968768,
-    "output_tokens": 126525,
-    "api_call_count": 335
+    "cache_read_tokens": 39896704,
+    "output_tokens": 145425,
+    "api_call_count": 356
   }
 }
