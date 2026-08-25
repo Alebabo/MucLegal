@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0W2BH5978660GVYVZMFCVXX",
+  "strategy": "manual-commit",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "frontend/package.json",
+    "frontend/src/data/caseViews.ts",
+    "frontend/src/lib/monitoring-api.ts",
+    "frontend/src/lib/monitoring-notifications.ts",
+    "frontend/src/routes/__root.tsx",
+    "frontend/src/routes/hinweise.tsx",
+    "frontend/tests/monitoring-notifications.test.mjs",
+    "muclegal/monitoring_cases.py",
+    "muclegal/templates/evidence_lab.html",
+    "muclegal/ui.py",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_case_monitoring.py",
+    "tests/test_live_ui.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 714770,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 32111616,
+    "output_tokens": 102686,
+    "api_call_count": 276
+  }
+}

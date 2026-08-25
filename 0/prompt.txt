@@ -1,0 +1,56 @@
+wenn man manuell einen scan ausführt und einema fall zuordnet und dabei ein unterschied erkannt wird, dann muss ein pop up banner mit der  notification kommen, auf den man dann klicken kann
+
+---
+
+PLEASE IMPLEMENT THIS PLAN:
+# Klickbare Änderungsbenachrichtigung nach manuellem Scan
+
+## Zusammenfassung
+
+Nach einem manuell gestarteten, einem Fall zugeordneten Vergleichsscan erscheint bei erkannter Abweichung ein dauerhaft sichtbares Pop-up-Banner. Ein Klick öffnet den betroffenen Hinweis und scrollt direkt zu dessen Beweisführung.
+
+## Umsetzung
+
+- Den vorhandenen Sonner-Toaster global in der React-Anwendung einbinden; keine neue Abhängigkeit und keine Backendänderung.
+- Nach Abschluss des Pollings genau einmal eine fallbezogene Meldung auslösen bei:
+  - `beseitigt`
+  - `kerngleich_wiederaufgetreten`
+  - `neuer_sachverhalt`
+  - `unsicher`
+- Keine Änderungsmeldung bei `unveraendert_fortbestehend`, `referenzzustand_dokumentiert`, `pruefung_unvollstaendig` oder `failed`; Fehler und unvollständige Läufe behalten ihre separate Statusanzeige.
+- Banner mit Fall-ID, verständlicher Ergebnisbezeichnung und passender Farbwirkung anzeigen. Es bleibt bis zum Klick oder manuellen Schließen sichtbar.
+- Das gesamte Banner klickbar machen. Beim Klick:
+  - Banner schließen,
+  - passende Hinweiskarte aufklappen,
+  - weich zur Beweisführung dieses Falls scrollen.
+- Die Statusklassifikation als kleine deterministische Hilfsfunktion kapseln, damit UI und Tests dieselbe Zuordnung verwenden.
+
+## Schnittstellen
+
+- Die bestehende `MonitoringRun`-Antwort und die vorhandenen Statuswerte bleiben unverändert.
+- Keine Persistenz, Datenbankmigration oder neue API; die Meldung gehört zum unmittelbar im Browser beobachteten manuellen Scan.
+
+## Testplan
+
+- Frontendtest für alle Statuswerte: vier Abweichungsstatus lösen eine Meldung aus, unveränderte, unvollständige und fehlgeschlagene Läufe nicht.
+- Sicherstellen, dass pro abgeschlossenem Lauf trotz Polling nur eine Meldung entsteht.
+- Browser-Smoke-Test: Vergleichsscan starten, Banner prüfen, anklicken, geöffnete Fallkarte und Scrollziel „Beweisführung“ kontrollieren.
+- Gegenprobe mit unverändertem Vergleich und mit fehlgeschlagenem/unvollständigem Lauf.
+- TypeScript-Prüfung, Produktionsbuild, Frontendtests sowie vollständige Python-Tests ausführen.
+
+## Annahmen
+
+- „Unterschied“ bedeutet jede fachlich verwertbare Abweichung gemäß der oben festgelegten Statusliste.
+- Die Benachrichtigung muss nicht über Seitenneuladen oder eine neue Browsersitzung hinweg gespeichert werden.
+
+---
+
+und dann bitte den decthlon fall anlegen mit nur dem webarchiv als grundlage, damit ich dann den aktuwllen link reinposten kann
+
+---
+
+alles in einen decathlon beweis
+
+---
+
+das reciht. Wenn du die ale seite von decthlon hast dann kan nich j aim beweislab die neue scannen und dann dem fall zuordnen oder?
