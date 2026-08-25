@@ -264,7 +264,10 @@ class LiveWorkflowTests(unittest.TestCase):
             "https://www.adidas.de/terms_and_conditions", adidas["agb"][0]["url"]
         )
         self.assertEqual("known_site_public_path", adidas["agb"][0]["source"])
-        self.assertEqual("https://www.decathlon.de/agb", decathlon["agb"][0]["url"])
+        self.assertEqual(
+            "https://www.decathlon.de/c/legal/allgemeine-geschaeftsbedingungen-agb-webshop_917fe9ac-dc2d-4705-a58b-63c393960b57",
+            decathlon["agb"][0]["url"],
+        )
         self.assertEqual(
             "https://www.decathlon.de/c/legal/datenschutz_a20e5c3d-ec34-4893-b9f4-e58ff3144207",
             decathlon["datenschutz"][0]["url"],

@@ -58,7 +58,6 @@ KNOWN_SITE_LEGAL_PATHS: dict[str, dict[str, tuple[str, ...]]] = {
     },
     "decathlon.de": {
         "agb": (
-            "/agb",
             "/c/legal/allgemeine-geschaeftsbedingungen-agb-webshop_917fe9ac-dc2d-4705-a58b-63c393960b57",
             "/AGB_lp-P7ELHE",
         ),
