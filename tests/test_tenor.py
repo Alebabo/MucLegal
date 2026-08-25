@@ -66,6 +66,13 @@ class StrategyTenorAnalyzer(DeterministicTenorAnalyzer):
         return value
 
 
+class EmptyExclusionTenorAnalyzer(StrategyTenorAnalyzer):
+    def analyze(self, model_input: dict) -> dict:
+        value = super().analyze(model_input)
+        value["nicht_umfasst"] = []
+        return value
+
+
 class ContextualQuestionAnalyzer:
     mode = "test_openai"
     model = "test-question-model"
@@ -203,6 +210,51 @@ class TenorDraftTests(unittest.TestCase):
                 self.assertEqual("needs_information", result["status"])
                 self.assertIsNone(result["proposal"])
                 self.assertTrue(result["missing_information"])
+
+    def test_numbered_agb_clause_is_recognized_without_quotes_or_label(self) -> None:
+        clause_wording = (
+            "Jegliche Ansprüche auf Gewährleistung erlöschen, sollte nachweislich "
+            "eine Inbetriebnahme der Anlage durch Privatpersonen und ohne Zuhilfenahme "
+            "eines zertifizierten Fachbetriebes erfolgen."
+        )
+        numbered_clause = f"Abs. 14.5 {clause_wording}"
+        model_input = build_tenor_input(
+            fall_id="VZ-2026-01",
+            schuldner="RT-Specht GmbH",
+            fundstelle="https://rt-specht.de/agb.html",
+            beschreibung=(
+                f"{numbered_clause}\n\n"
+                "Adressatenkreis: gegenüber Verbraucherinnen und Verbrauchern"
+            ),
+            rechtsgrundlagen=["§ 309 Nr. 8 lit. b BGB"],
+            violation_branch="C",
+        )
+
+        result = create_tenor_proposals(
+            model_input,
+            DeterministicTenorAnalyzer(),
+            fallgruppe="agb_klausel",
+        )
+
+        self.assertEqual("ready", result["status"])
+        self.assertIn(clause_wording, result["proposal"]["text"])
+        self.assertNotIn("Adressatenkreis:", result["proposal"]["text"])
+
+    def test_empty_exclusion_is_valid_and_reported_without_inventing_one(self) -> None:
+        model_input = build_tenor_input(**tenor_payload())
+        draft, _, _ = create_tenor_draft(model_input, EmptyExclusionTenorAnalyzer())
+        self.assertEqual((), draft.nicht_umfasst)
+
+        result = create_tenor_proposals(
+            model_input,
+            EmptyExclusionTenorAnalyzer(),
+            fallgruppe="irrefuehrende_werbung",
+        )
+        self.assertEqual("ready", result["status"])
+        self.assertIn(
+            "Keine Abgrenzung zu nicht erfassten Verhaltensweisen belegt.",
+            result["proposal"]["warnings"],
+        )
 
     def test_validator_rejects_judgment_formulas_and_incomplete_branch_content(self) -> None:
         branch_b = build_tenor_input(
@@ -343,6 +395,39 @@ class TenorDraftTests(unittest.TestCase):
             self.assertEqual("A", record["input"]["violation_branch"])
             self.assertEqual("irrefuehrende_werbung", record["input"]["fallgruppe"])
             self.assertIn("referenzbeispiele", record["input"])
+
+    def test_mask_api_accepts_numbered_agb_clause_from_form(self) -> None:
+        clause_wording = (
+            "Jegliche Ansprüche auf Gewährleistung erlöschen, sollte nachweislich "
+            "eine Inbetriebnahme der Anlage durch Privatpersonen und ohne Zuhilfenahme "
+            "eines zertifizierten Fachbetriebes erfolgen."
+        )
+        numbered_clause = f"Abs. 14.5 {clause_wording}"
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                tenor_analyzer_factory=StrategyTenorAnalyzer,
+            )
+            payload = {
+                "fall_id": "VZ-2026-01",
+                "schuldner": "RT-Specht GmbH",
+                "fundstelle": "https://rt-specht.de/agb.html",
+                "beschreibung": (
+                    f"{numbered_clause}\n\n"
+                    "Adressatenkreis: gegenüber Verbraucherinnen und Verbrauchern"
+                ),
+                "rechtsgrundlagen": ["§ 309 Nr. 8 lit. b BGB"],
+                "fallgruppe": "agb_klausel",
+            }
+            with TestClient(app) as client:
+                response = client.post("/api/v1/tenor-drafts", json=payload)
+
+        self.assertEqual(201, response.status_code, response.text)
+        record = response.json()
+        self.assertIn(clause_wording, record["draft"]["entwurf"])
+        self.assertNotIn("Adressatenkreis:", record["draft"]["entwurf"])
 
     def test_openai_analyzer_uses_frozen_prompt_and_structured_output(self) -> None:
         class FakeResponses:

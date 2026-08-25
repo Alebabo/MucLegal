@@ -273,9 +273,22 @@ def missing_tenor_information(
         if not re.search(r"\b(anlage|screenshot|abbildung|bildschirmansicht)\b", lowered):
             missing.append("Anlage- oder Screenshotbezeichnung")
     else:
-        if not re.search(r"[„‚\"].{8,}[“‘\"]|\bklausel\s*:\s*.{8,}", text, re.DOTALL | re.IGNORECASE):
+        if _extract_clause_text(text) is None:
             missing.append("vollständiger wörtlicher Klauseltext")
     return missing
+
+
+_NUMBERED_CLAUSE_PREFIX = re.compile(
+    r"^(?:(?:abs(?:atz)?|ziff(?:er)?|nr)\.?\s*\d+(?:[.-]\d+)*[.)]?|"
+    r"§\s*\d+(?:[.-]\d+)*[.)]?|"
+    r"\d+(?:[.-]\d+)+[.)]?|\d+[.)])\s+(?=\S)",
+    re.IGNORECASE,
+)
+_CLAUSE_METADATA_PREFIX = re.compile(
+    r"^(?:adressatenkreis|fundstelle|rechtsgrundlage(?:n)?|sachverhalt|"
+    r"schuldner|fall(?:-id|gruppe))\s*:",
+    re.IGNORECASE,
+)
 
 
 def _extract_clause_text(value: str) -> str | None:
@@ -287,9 +300,30 @@ def _extract_clause_text(value: str) -> str | None:
     if quoted:
         return quoted.group(1).strip()
     match = re.search(r"\bklausel\s*:\s*([^\r\n]{8,})", value, re.IGNORECASE)
-    if not match:
-        return None
-    return match.group(1).strip()
+    if match:
+        return match.group(1).strip()
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"(?:\r?\n)\s*(?:\r?\n)", value.strip())
+        if paragraph.strip()
+    ]
+    for index, paragraph in enumerate(paragraphs):
+        numbered_prefix = _NUMBERED_CLAUSE_PREFIX.match(paragraph)
+        if not numbered_prefix:
+            continue
+        clause_parts = [paragraph[numbered_prefix.end() :].strip()]
+        for continuation in paragraphs[index + 1 :]:
+            if _CLAUSE_METADATA_PREFIX.match(continuation):
+                break
+            clause_parts.append(continuation)
+        return "\n\n".join(clause_parts)
+    return None
+
+
+def _wording_is_preserved(wording: str, draft_text: str) -> bool:
+    normalized_wording = re.sub(r"\s+", " ", wording).strip()
+    normalized_draft = re.sub(r"\s+", " ", draft_text).strip()
+    return normalized_wording in normalized_draft
 
 
 def validate_tenor_draft(
@@ -315,7 +349,7 @@ def validate_tenor_draft(
             isinstance(item, str) and item.strip() for item in raw
         ):
             raise TenorDraftValidationError(f"{field} muss eine Liste nichtleerer Texte sein.")
-        if field in {"kerngleich_umfasst", "nicht_umfasst"} and not raw:
+        if field == "kerngleich_umfasst" and not raw:
             raise TenorDraftValidationError(f"{field} darf nicht leer sein.")
         lists[field] = tuple(item.strip() for item in raw)
     allowed = set(allowed_legal_bases)
@@ -343,7 +377,7 @@ def validate_tenor_draft(
         description = str(model_input.get("beschreibung", ""))
         if branch == "C":
             clause = _extract_clause_text(description)
-            if not clause or clause not in draft_text:
+            if not clause or not _wording_is_preserved(clause, draft_text):
                 raise TenorDraftValidationError(
                     "Der vollständige Klauselwortlaut wurde nicht wörtlich übernommen."
                 )
@@ -592,6 +626,11 @@ def create_tenor_proposals(
         "source_ids": source_ids,
         "warnings": [
             "Nicht juristisch freigegeben; menschliche Prüfung erforderlich.",
+            *(
+                ["Keine Abgrenzung zu nicht erfassten Verhaltensweisen belegt."]
+                if not draft.nicht_umfasst
+                else []
+            ),
             *draft.offene_fragen,
         ],
         "human_approval_required": True,

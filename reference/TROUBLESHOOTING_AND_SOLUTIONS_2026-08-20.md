@@ -1925,3 +1925,40 @@ weiterhin nur deterministisch als Rechtstext-Steuerung klassifizierte Elemente i
 Rechtstextcontainer geöffnet, höchstens 100 pro Seite. Externe Navigation wird
 nicht ausgelöst, und Inhalte, die erst nach mehr als zwei Sekunden erscheinen,
 werden als unvollständige Erweiterung erkennbar statt unbegrenzt abgewartet.
+
+# Nummerierte AGB-Klausel wird in der Tenormaske nicht als Wortlaut erkannt
+
+### Symptom
+
+Eine vollständig eingefügte Klausel wie `Abs. 14.5 Jegliche Ansprüche ...` wurde
+in der Fallgruppe „AGB-Klausel“ mit „vollständiger wörtlicher Klauseltext fehlt“
+zurückgewiesen, wenn sie weder in Anführungszeichen stand noch ausdrücklich mit
+`Klausel:` eingeleitet wurde. Unabhängig davon konnte ein strukturell gültiger
+Modelloutput mit `nicht_umfasst: []` als HTTP-502-Fehler enden.
+
+### Ursache und Diagnose
+
+Erkennung und Extraktion akzeptierten ausschließlich Anführungszeichen oder den
+Marker `Klausel:`. Die sichtbare Absatznummer aus dem Vertragsdokument war noch
+kein deterministisches Erkennungsmerkmal. Beim zweiten Fehler erlaubte das
+Modell-JSON-Schema eine leere Abgrenzungsliste, während der nachgelagerte Validator
+sie im Widerspruch dazu verbot.
+
+### Lösung
+
+Ast C erkennt nun nummerierte Klauselanfänge wie `Abs. 14.5`, `Ziffer 14.5`,
+`Nr. 14.5`, `§ 14` und `14.5.`. Der Wortlaut reicht bis zu einem folgenden,
+eindeutig bezeichneten Metadatenblock wie `Adressatenkreis:` oder
+`Rechtsgrundlagen:`. Die vorangestellte Gliederungsnummer wird dabei als Fundstellen-
+bezeichnung vom eigentlichen Klauselwortlaut getrennt. Die Wortlautprüfung bleibt
+erhalten und normalisiert nur Leerraum, nicht den Inhalt. `nicht_umfasst` darf leer sein; die Oberfläche weist
+dann sichtbar darauf hin, dass keine Abgrenzung belegt ist, statt eine zu erfinden.
+
+### Verifikation und verbleibende Grenze
+
+Unit- und API-Regressionstests verwenden die Eingabe aus der gemeldeten Maske und
+prüfen, dass der vollständige Klauselwortlaut übernommen, der anschließende
+Adressatenhinweis aber nicht zum Klauselwortlaut gemacht wird. Eine bloße
+Paraphrase bleibt unzulässig. Nicht nummerierte Klauseltexte müssen weiterhin in
+Anführungszeichen stehen oder mit `Klausel:` gekennzeichnet werden; dadurch wird
+nicht beliebiger Beschreibungstext als wörtliche Vertragsklausel behandelt.
