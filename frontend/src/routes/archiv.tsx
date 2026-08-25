@@ -234,7 +234,7 @@ function TenorArchiveTable({
       <div className="mt-5 rounded-2xl border border-border bg-card px-6 py-12 text-center">
         <p className="font-serif text-lg text-foreground">Noch keine Tenore gespeichert.</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Ein Entwurf erscheint hier, sobald er in der Tenorschreibhilfe übernommen wurde.
+          Ein Entwurf erscheint hier, sobald er in der Tenorhilfe übernommen wurde.
         </p>
       </div>
     );

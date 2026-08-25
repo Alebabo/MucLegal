@@ -12,13 +12,13 @@ export const Route = createFileRoute("/tenorhilfe")({
   }),
   head: () => ({
     meta: [
-      { title: "Tenorschreibhilfe – Muc Legal Monitoring" },
+      { title: "Tenorhilfe – Muc Legal Monitoring" },
       {
         name: "description",
         content:
           "Unterlassungstenor wahlweise in einer strukturierten Maske oder einem minimalen Schreibmodus entwerfen.",
       },
-      { property: "og:title", content: "Tenorschreibhilfe – Muc Legal Monitoring" },
+      { property: "og:title", content: "Tenorhilfe – Muc Legal Monitoring" },
       {
         property: "og:description",
         content:
@@ -41,16 +41,16 @@ function TenorhilfePage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur sm:px-10">
         <div>
-          <span className="text-xs text-muted-foreground">Tenorschreibhilfe</span>
+          <span className="text-xs text-muted-foreground">Tenorhilfe</span>
           <p className="mt-0.5 font-sans text-sm font-semibold">
             {view === "minimal"
-              ? "Lokale, referenzierte Bausteinvorschläge"
-              : "Backend-Entwurf & menschliche Freigabe"}
+              ? "UE-Entwurf mit verifizierten Quellenankern"
+              : "Strukturierter UE-Entwurf & menschliche Freigabe"}
           </p>
         </div>
         <div
           role="tablist"
-          aria-label="Ansicht der Tenorschreibhilfe"
+          aria-label="Ansicht der Tenorhilfe"
           className="flex border border-foreground"
         >
           <button

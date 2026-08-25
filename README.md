@@ -53,7 +53,7 @@ Das ausführliche
 gesamten aktuellen Produkt- und Technikstand. Es enthält insbesondere:
 
 - alle Oberflächen und Benutzerabläufe von Dashboard, Fallmonitor, Archiv,
-  Tenorschreibhilfe und BeweisLab,
+  Tenorhilfe und BeweisLab,
 - HTTP-, Browser-, Robots-, Consent-, Screenshot- und Rechtstexterfassung,
 - Normalisierung, Hashvergleich, Klauselpaarung und Kerngleichheitsprüfung,
 - Beweisartefakte, WARC/CDX, Manifest, RFC-3161, Wayback, PDF und ZIP,
@@ -322,7 +322,7 @@ muclegal/
   llm/            Tenor-Entwurf, Vorprüfung und strikte Schema-Validierung
   evidence/       WARC, Manifest, Zeitstempel, Screenshot und PDF
   templates/      Ein-Seiten-Prüfoberfläche
-frontend/         React-/TanStack-Oberfläche für Fallmonitor und Tenorschreibhilfe
+frontend/         React-/TanStack-Oberfläche für Fallmonitor und Tenorhilfe
 fixtures/         synthetische Demo- und Eval-Fälle
 reference/        Funktionshandbuch, Implementierungspläne und technische Übergaben
 tests/            automatisierte Abnahme- und Regressionstests

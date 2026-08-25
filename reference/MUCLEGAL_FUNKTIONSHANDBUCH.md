@@ -7,11 +7,10 @@ Branch: `agent/live-url-ui`
 Dokumentationsgrundlage: aktueller Repository- und Arbeitsbaumstand, automatisierte Tests,
 verbindliche BeweisLab-Referenzen und aufgezeichnete Entire-Checkpoints.
 
-> **Wichtiger Standhinweis:** Am 25.08.2026 wird die Tenorschreibhilfe parallel auf eine
-> UE-konforme Einzelausgabe umgestellt. Dieses Handbuch beschreibt den im aktuellen
-> Arbeitsbaum sichtbaren Funktionsstand. Die übrigen Produktpfade werden anhand des
-> eingecheckten Codes dokumentiert. Funktionen aus Planungsdokumenten, die im Code nicht
-> nachweisbar sind, werden ausdrücklich als Grenze oder Roadmap bezeichnet.
+> **Wichtiger Standhinweis:** Am 25.08.2026 wurde die Tenorhilfe auf eine UE-konforme
+> Einzelausgabe umgestellt. Dieses Handbuch beschreibt den eingecheckten Funktionsstand.
+> Funktionen aus Planungsdokumenten, die im Code nicht nachweisbar sind, werden ausdrücklich
+> als Grenze oder Roadmap bezeichnet.
 
 ## 1. Kurzbeschreibung
 
@@ -66,7 +65,7 @@ Werkzeugen.
 | --- | --- | --- | --- |
 | Fallmonitor | Bekannten Erstverstoß erfassen, freigeben und nachverfolgen | nur in der getrennten Kerngleichheitsprüfung | React-Frontend |
 | BeweisLab | Öffentliche URL technisch erfassen und lokal beweissicher dokumentieren | nein | FastAPI/Jinja-Seite |
-| Tenorschreibhilfe | UE-/Tenorentwurf aus Sachverhalt, Rückfragen und Referenzen erstellen | optional OpenAI/Anthropic, sonst Demo-Fallback | React-Frontend |
+| Tenorhilfe | UE-/Tenorentwurf aus Sachverhalt, Rückfragen und Referenzen erstellen | optional OpenAI/Anthropic, sonst Demo-Fallback | React-Frontend |
 | Archiv | Fälle und gespeicherte Tenorfassungen lesen | nein | React-Frontend |
 | CLI und Offline-Demo | Pipeline, Eval, Blind Review und Diagnosen reproduzierbar ausführen | optional | Kommandozeile |
 
@@ -90,7 +89,7 @@ Navigation. Verfügbar sind:
 - `Hinweise`
 - `Archiv`
 - `Neu hinzufügen`
-- `Tenorschreibhilfe`
+- `Tenorhilfe`
 - `BeweisLab`
 - Light-/Dark-Mode
 - ein- und ausklappbare Desktop-Seitenleiste
@@ -215,7 +214,7 @@ Die Detailansicht enthält:
 - Quellenanker
 - zugrunde liegenden Sachverhalt
 
-Über `Tenor anpassen` wird eine gespeicherte Fassung wieder in die Tenorschreibhilfe geladen.
+Über `Tenor anpassen` wird eine gespeicherte Fassung wieder in die Tenorhilfe geladen.
 Eine Überarbeitung überschreibt die alte Fassung nicht, sondern wird als neue Version
 beziehungsweise neuer Archiveintrag gespeichert.
 
@@ -281,9 +280,9 @@ Der Fall wird mit unveränderlich gesetzten Herkunftsmerkmalen gespeichert:
 - `system_detected: false` im API-/Produktverständnis
 - Entscheidung zunächst `weitere_pruefung`
 
-### 4.6 Tenorschreibhilfe – Route `/tenorhilfe`
+### 4.6 Tenorhilfe – Route `/tenorhilfe`
 
-Die Tenorschreibhilfe besitzt eine minimalistische Schreibansicht und eine strukturierte Maske.
+Die Tenorhilfe besitzt eine minimalistische Schreibansicht und eine strukturierte Maske.
 Beide sollen denselben menschlichen Freigabegrundsatz erfüllen.
 
 #### 4.6.1 Minimalansicht
@@ -1394,7 +1393,7 @@ MucLegal bietet im aktuellen Prototyp:
 - lokale WARC-/Manifest-/Timestamp-/PDF-Beweiskette
 - technische Eignungsbewertung ohne juristische Überdehnung
 - Baseline-Zuordnung und technischen Beweisvergleich
-- Tenorschreibhilfe mit Referenzen, Rückfragen und versioniertem Archiv
+- Tenorhilfe mit Referenzen, Rückfragen und versioniertem Archiv
 - Offline-Demo, Eval, Blind Review und Diagnosetools
 
 Das wichtigste Sicherheitsversprechen bleibt: **Kein juristischer Befund und kein Tenor wird

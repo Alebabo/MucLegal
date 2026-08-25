@@ -37,7 +37,7 @@ npm run dev -- --host 127.0.0.1 --port 4175
 - `/hinweise`: Fälle mit Tenor, Prüfumfang und menschlicher Entscheidung;
 - `/archiv`: Falltabelle mit Detailansicht;
 - `/neu`: Intake eines bekannten Erstverstoßes;
-- `/tenorhilfe`: zwischen minimaler, lokaler Baustein-Schreibhilfe und backendgebundener
+- `/tenorhilfe`: zwischen der geführten UE-Tenorhilfe und der strukturierten
   Maske mit menschlicher Entscheidung wechseln;
 - `/beweis-labor`: rein technische URL-Erfassung des FastAPI-Backends.
 
@@ -54,9 +54,9 @@ POST /api/v1/tenor-drafts/{draft_id}/review
 POST /api/v1/tenor-proposals
 ```
 
-`POST /api/v1/tenor-proposals` erzeugt zwei fallbezogene, schema-validierte
-OpenAI-Entwürfe (`precise` und `neutral`). Beide bleiben bis zur menschlichen
-Prüfung ausdrücklich nicht freigegeben. Der API-Schlüssel liegt nur in der lokalen
+`POST /api/v1/tenor-proposals` erzeugt genau einen vollständigen, schema-validierten
+UE-Entwurf (`complete`). Er bleibt bis zur menschlichen Prüfung ausdrücklich nicht
+freigegeben. Der API-Schlüssel liegt nur in der lokalen
 Server-`.env` und wird weder an das Frontend noch an einen ngrok-Link übergeben.
 
 Ohne gespeicherte Monitoringfälle bleiben die fünf klar synthetischen Lotto-Fälle

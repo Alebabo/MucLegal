@@ -663,7 +663,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
         <Link to="/" aria-label="Zurück" className="text-slate-300 transition hover:text-slate-700">
           <ArrowLeft className="size-4" />
         </Link>
-        <span className="text-xs font-medium tracking-wide text-slate-300">Tenorschreibhilfe</span>
+        <span className="text-xs font-medium tracking-wide text-slate-300">Tenorhilfe</span>
         {context || pdf || generated ? (
           <button
             type="button"

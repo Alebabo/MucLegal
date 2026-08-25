@@ -18,7 +18,7 @@ const items = [
   { to: "/hinweise", label: "Hinweise", icon: Info, exact: false },
   { to: "/archiv", label: "Archiv", icon: Archive, exact: false },
   { to: "/neu", label: "Neu hinzufügen", icon: Plus, exact: false },
-  { to: "/tenorhilfe", label: "Tenorschreibhilfe", icon: FilePenLine, exact: false },
+  { to: "/tenorhilfe", label: "Tenorhilfe", icon: FilePenLine, exact: false },
 ] as const;
 
 export function AppSidebar() {
