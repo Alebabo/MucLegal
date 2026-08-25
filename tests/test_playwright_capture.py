@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw
 
+import muclegal.fetch.playwright as playwright_capture
 from muclegal.fetch.consent import classify_privacy_action
 from muclegal.fetch.playwright import (
     CaptureRunController,
@@ -69,6 +70,55 @@ class _CaptureHandler(BaseHTTPRequestHandler):
                 event.currentTarget.dataset.state='open';
                 event.currentTarget.nextElementSibling.hidden=false;
               };</script>"""
+            self.send_response(200)
+        elif self.path == "/lazy-accordion":
+            body = b"""<!doctype html><main><h1>Datenschutzerklaerung</h1>
+              <button aria-expanded='false' aria-controls='lazy-content'>Empfaenger</button>
+              <div id='lazy-content' hidden></div>
+              <script>document.querySelector('[aria-controls]').onclick=event=>{
+                event.currentTarget.setAttribute('aria-expanded','true');
+                const target=document.getElementById('lazy-content');
+                target.hidden=false;
+                setTimeout(()=>target.textContent='Nachgeladene Empfaengerkategorien.',700);
+              };</script></main>"""
+            self.send_response(200)
+        elif self.path == "/complex-legal":
+            body = b"""<!doctype html><main><h1>Datenschutzerklaerung</h1>
+              <button id='external'>Mehr anzeigen</button>
+              <details><summary>Verarbeitung</summary><p>Allgemeine Verarbeitung.</p>
+                <details><summary>Speicherdauer</summary><p>Konkrete Speicherdauer.</p></details>
+              </details>
+              <div role='tablist'><button role='tab' aria-selected='true'
+                aria-controls='tab-one'>Deutschland</button><button role='tab'
+                aria-selected='false' aria-controls='tab-two'>Europa</button></div>
+              <div id='tab-one'>Deutsche Fassung.</div><div id='tab-two' hidden></div>
+              <script>document.querySelector('[aria-selected=false]').onclick=event=>{
+                event.currentTarget.setAttribute('aria-selected','true');
+                const target=document.getElementById('tab-two');target.hidden=false;
+                target.textContent='Europaeische Datenschutzfassung.';
+              };external.onclick=()=>location.href='/must-not-open';</script></main>"""
+            self.send_response(200)
+        elif self.path == "/accordion-limit":
+            sections = "".join(
+                f"<button aria-expanded='false' aria-controls='part-{index}'>Teil {index}</button>"
+                f"<div id='part-{index}' hidden>Rechtstext {index}</div>"
+                for index in range(4)
+            )
+            body = f"""<!doctype html><main><h1>AGB</h1>{sections}
+              <script>document.querySelectorAll('[aria-controls]').forEach(button=>{{
+                button.onclick=()=>{{button.setAttribute('aria-expanded','true');
+                document.getElementById(button.getAttribute('aria-controls')).hidden=false;}};
+              }});</script></main>""".encode()
+            self.send_response(200)
+        elif self.path == "/already-open-accordion":
+            body = b"""<!doctype html><main><h1>Allgemeine Geschaeftsbedingungen</h1>
+              <section class='accordion expanded'><button class='accordion__trigger'
+                aria-expanded='true' aria-controls='open-content'>Geoeffnete Klausel</button>
+              <div id='open-content'>Diese Klausel ist bereits vollstaendig sichtbar.</div></section>
+              <script>document.querySelector('.accordion__trigger').onclick=event=>{
+                event.currentTarget.setAttribute('aria-expanded','false');
+                document.getElementById('open-content').hidden=true;
+              };</script></main>"""
             self.send_response(200)
         else:
             height = int(self.path.removeprefix("/height/").split("?")[0])
@@ -237,6 +287,94 @@ def test_richest_semantic_main_and_data_state_disclosure_are_used(
     assert "Inhaltsreicher Rechtstext im zweiten Hauptbereich" in normalized
     assert len(expansions) == 1
     assert expansions[0]["structure"]["structured_disclosure"] is True
+
+
+def test_lazy_legal_content_is_waited_for_and_captured(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/lazy-accordion", role="privacy"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    interactions = json.loads((root / "interactions.json").read_text("utf-8"))[
+        "interactions"
+    ]
+    expansions = [item for item in interactions if item.get("type") == "legal_expansion"]
+
+    assert "Nachgeladene Empfaengerkategorien" in normalized
+    assert expansions[0]["expanded_text"] == "Nachgeladene Empfaengerkategorien."
+
+
+def test_nested_details_tabs_and_external_navigation_are_handled_safely(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/complex-legal", role="privacy"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    coverage = json.loads((root / "content-coverage.json").read_text("utf-8"))
+
+    assert "Allgemeine Verarbeitung" in normalized
+    assert "Konkrete Speicherdauer" in normalized
+    assert "Europaeische Datenschutzfassung" in normalized
+    assert captured.fetch_result.final_url.endswith("/complex-legal")
+    assert coverage["legal_expansion"]["attempted"] == 3
+    assert coverage["legal_expansion"]["complete"] is True
+
+
+def test_expansion_limit_is_reported_as_partial_instead_of_complete(
+    tmp_path: Path, capture_server: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playwright_capture, "LEGAL_EXPANSION_LIMIT", 3)
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/accordion-limit", role="agb"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    coverage = json.loads((root / "content-coverage.json").read_text("utf-8"))[
+        "legal_expansion"
+    ]
+
+    assert "Rechtstext 2" in normalized
+    assert "Rechtstext 3" not in normalized
+    assert coverage["eligible_controls"] == 4
+    assert coverage["eligible_controls_exact"] is False
+    assert coverage["limit"] == 3
+    assert coverage["limit_exceeded"] is True
+    assert coverage["complete"] is False
+    assert captured.capture_completeness == "teilweise_erfasst"
+
+
+def test_already_open_legal_accordion_is_not_clicked_closed(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/already-open-accordion", role="agb"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    interactions = json.loads((root / "interactions.json").read_text("utf-8"))[
+        "interactions"
+    ]
+    coverage = json.loads((root / "content-coverage.json").read_text("utf-8"))[
+        "legal_expansion"
+    ]
+
+    assert "Diese Klausel ist bereits vollstaendig sichtbar" in normalized
+    assert not [item for item in interactions if item.get("type") == "legal_expansion"]
+    assert coverage["eligible_controls"] == 0
+    assert coverage["complete"] is True
+    assert captured.capture_completeness == "vollstaendig_erfasst"
 
 
 def test_generic_reject_requires_dialog_and_visible_accept_alternative() -> None:

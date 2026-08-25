@@ -1882,3 +1882,46 @@ Releasevorbereitung muss zusätzlich die Tenortests ausführen oder mindestens d
 Register mit `load_ue_examples()` laden. Künftige neue Laufzeitdateien außerhalb der
 bisher archivierten Pfade müssen weiterhin bewusst in den Release-Dateisatz
 aufgenommen werden.
+
+# Verschachtelte oder verzögert geladene Rechtstextabschnitte fehlen im Beweis
+
+### Symptom
+
+Nach der automatischen Rechtstexterweiterung konnten innere `details`-Abschnitte,
+inaktive Tabs oder erst verzögert nachgeladene Klauseln im normalisierten Text und
+im Druckbeweis fehlen. Bei mehr als 100 zulässigen Bedienelementen konnte die
+Abdeckung außerdem fälschlich als vollständig erscheinen. Bereits vollständig
+geöffnete Decathlon-Akkordeons wurden im Wayback-Lauf sogar erneut angeklickt und
+dadurch für den Hauptscreenshot geschlossen.
+
+### Ursache und Diagnose
+
+Die vorab ermittelten Playwright-Locators waren an die laufende Position in einer
+dynamischen Selektorliste gebunden. Sobald ein äußerer Abschnitt geöffnet wurde,
+verschob sich diese Liste; ein späterer Locator zeigte dadurch auf ein anderes
+Element. Zusätzlich war die Wartezeit nach jedem Klick fest auf 250 Millisekunden
+begrenzt und die auf 100 Treffer gekappte Suche erkannte keinen 101. Treffer. Eine
+bloße CSS-Klasse mit `accordion` galt außerdem auch bei `aria-expanded="true"` als
+Öffnungskandidat.
+`interactions.json` machte den Locator-Fehler sichtbar: Die gespeicherte Struktur
+war eine verschachtelte Summary, der tatsächlich gelesene Zieltext aber ein Tab.
+
+### Lösung
+
+Zulässige Rechtstext-Steuerelemente werden vor dem ersten Klick als stabile
+DOM-Handles festgehalten. Nach jedem Klick wird bis zu zwei Sekunden auf einen
+stabilen sichtbaren Inhalt gewartet. Die Suche prüft gezielt auf einen weiteren
+Treffer jenseits des Limits und kennzeichnet die Erweiterung dann als partiell,
+statt Vollständigkeit zu behaupten. Eine Akkordeon-/Disclosure-Klasse genügt nur
+noch, wenn das zugeordnete Inhaltsziel tatsächlich verborgen ist; bereits offene
+Abschnitte bleiben unangetastet.
+
+### Verifikation und verbleibende Grenze
+
+Die Chromium-Regressionsmatrix deckt verschachtelte `details`, ARIA-Akkordeons,
+inaktive Tabs, 700 Millisekunden verzögerten Inhalt, irreführende externe
+Navigation, bereits offene Akkordeons und das Erweiterungslimit ab. Es werden
+weiterhin nur deterministisch als Rechtstext-Steuerung klassifizierte Elemente im
+Rechtstextcontainer geöffnet, höchstens 100 pro Seite. Externe Navigation wird
+nicht ausgelöst, und Inhalte, die erst nach mehr als zwei Sekunden erscheinen,
+werden als unvollständige Erweiterung erkennbar statt unbegrenzt abgewartet.

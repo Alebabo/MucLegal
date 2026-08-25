@@ -234,10 +234,10 @@ class CaptureRunController:
             failure_phase = "expansion"
             legal_expansion_summary: dict[str, object] | None = None
             if role in {"agb", "privacy", "datenschutz"}:
-                expansion_records = _expand_legal_controls(page)
+                expansion_records, expansion_discovery = _expand_legal_controls(page)
                 interactions.extend(expansion_records)
                 legal_expansion_summary = _legal_expansion_summary(
-                    page, expansion_records
+                    page, expansion_records, expansion_discovery
                 )
             _write_text(target_root / "dom-after-expansion.html", page.content())
             final_text = _visible_text(page)
@@ -630,25 +630,36 @@ _LEGAL_CONTROL_SELECTOR = (
     "button"
 )
 
+LEGAL_EXPANSION_LIMIT = 100
 
-_LEGAL_CONTROL_ELIGIBILITY = """el => {
+
+_LEGAL_CONTROL_ELIGIBILITY = r"""el => {
   if (el.closest('nav, header, footer, [role="navigation"], form')) return null;
   const tag = el.tagName.toLowerCase();
   const role = el.getAttribute('role');
   const text = (el.innerText || el.getAttribute('aria-label') || '').trim();
   const className = typeof el.className === 'string' ? el.className : '';
   const isButton = tag === 'button' || role === 'button';
+  const controlled = el.getAttribute('aria-controls');
+  const target = controlled ? document.getElementById(controlled) : null;
+  const isHidden = node => !!node && (
+    node.hidden || node.getAttribute('aria-hidden') === 'true' ||
+    node.getClientRects().length === 0
+  );
+  const targetHidden = isHidden(target);
+  const siblingHidden = isHidden(el.nextElementSibling);
   const detailsSummary = tag === 'summary' && !!el.closest('details:not([open])');
   const ariaAccordion = isButton && el.getAttribute('aria-expanded') === 'false' &&
-    !!el.getAttribute('aria-controls');
+    !!controlled;
   const inactiveTab = role === 'tab' && el.getAttribute('aria-selected') === 'false' &&
-    !!el.getAttribute('aria-controls');
+    !!controlled;
   const structuredDisclosure = isButton && (
     el.getAttribute('data-state') === 'closed' ||
-    /(^|[\s_-])(accordion|disclosure)([\s_-]|$)/i.test(className) ||
-    /(^|\s)collapsed(\s|$)/i.test(className)
+    /(^|\s)collapsed(\s|$)/i.test(className) ||
+    (/(^|[\s_-])(accordion|disclosure)([\s_-]|$)/i.test(className) && targetHidden)
   );
-  const labelledDisclosure = isButton && /\b(mehr\s+anzeigen|mehr\s+lesen|weiterlesen|weitere\s+informationen|vollst[aä]ndigen\s+text\s+anzeigen|inhalt\s+anzeigen)\b/i.test(text);
+  const labelledDisclosure = isButton && (targetHidden || siblingHidden) &&
+    /\b(mehr\s+anzeigen|mehr\s+lesen|weiterlesen|weitere\s+informationen|vollst[aä]ndigen\s+text\s+anzeigen|inhalt\s+anzeigen)\b/i.test(text);
   if (!(detailsSummary || ariaAccordion || inactiveTab || structuredDisclosure || labelledDisclosure)) {
     return null;
   }
@@ -663,35 +674,70 @@ _LEGAL_CONTROL_ELIGIBILITY = """el => {
 }"""
 
 
-def _eligible_legal_controls(container, limit: int = 100) -> list:  # noqa: ANN001
-    """Select eligible legal disclosures before applying the deterministic limit."""
+_LEGAL_CONTROL_STATE = r"""el => {
+  const visibleText = node => {
+    if (!node || node.getClientRects().length === 0) return '';
+    return (node.innerText || '').trim();
+  };
+  const controlled = el.getAttribute('aria-controls');
+  const target = controlled ? document.getElementById(controlled) : null;
+  const details = el.closest('details');
+  const detailsText = details ? [...details.children]
+    .filter(child => child.tagName !== 'SUMMARY')
+    .map(visibleText).filter(Boolean).join('\n') : '';
+  const siblingText = visibleText(el.nextElementSibling);
+  const disclosure = el.closest('[role="region"], .accordion, .disclosure');
+  return {
+    aria_expanded: el.getAttribute('aria-expanded'),
+    aria_selected: el.getAttribute('aria-selected'),
+    data_state: el.getAttribute('data-state'),
+    class_name: typeof el.className === 'string' ? el.className : '',
+    details_open: details?.open ?? null,
+    url: document.URL,
+    text_length: (document.body?.innerText || '').length,
+    expanded_text: visibleText(target) || detailsText || siblingText || visibleText(disclosure)
+  };
+}"""
+
+
+def _eligible_legal_controls(container, limit: int) -> tuple[list, bool]:  # noqa: ANN001
+    """Return up to ``limit`` legal disclosures and report deterministic overflow."""
     eligible = []
     for control in container.locator(_LEGAL_CONTROL_SELECTOR).all():
         structure = control.evaluate(_LEGAL_CONTROL_ELIGIBILITY)
         if structure is None:
             continue
-        eligible.append((control, structure))
         if len(eligible) == limit:
-            break
-    return eligible
+            return eligible, True
+        handle = control.element_handle()
+        if handle is None:
+            continue
+        # Locator.all() returns index-based locators. Expanding a parent changes the
+        # selector result and would make a later locator point at a different node.
+        # Keep the originally classified DOM node stable across all clicks instead.
+        eligible.append((handle, structure))
+    return eligible, False
 
 
-def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
+def _expand_legal_controls(page) -> tuple[list[dict], dict[str, object]]:  # noqa: ANN001
     from playwright.sync_api import Error as PlaywrightError
 
     records: list[dict] = []
     try:
         container = _legal_container_locator(page)
-        controls = _eligible_legal_controls(container)
-        eligible_total = len(controls)
+        controls, limit_exceeded = _eligible_legal_controls(
+            container, LEGAL_EXPANSION_LIMIT
+        )
+        eligible_total = len(controls) + int(limit_exceeded)
     except PlaywrightError:
-        return records
-    for control, structure in controls:
+        return records, {
+            "eligible_controls": 0,
+            "eligible_controls_exact": False,
+            "limit_exceeded": False,
+        }
+    for handle, structure in controls:
         try:
-            if not control.is_visible(timeout=100):
-                continue
-            handle = control.element_handle()
-            if handle is None:
+            if not handle.is_visible():
                 continue
             before = handle.evaluate(
                 """el => ({
@@ -703,29 +749,29 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                   class_name: typeof el.className === 'string' ? el.className : '',
                   details_open: el.closest('details')?.open ?? null,
                   url: document.URL,
-                  text_length: (document.body?.innerText || '').length
-                })"""
-            )
-            handle.click(timeout=1_500)
-            page.wait_for_timeout(250)
-            after = handle.evaluate(
-                """el => ({
-                  aria_expanded: el.getAttribute('aria-expanded'),
-                  aria_selected: el.getAttribute('aria-selected'),
-                  data_state: el.getAttribute('data-state'),
-                  class_name: typeof el.className === 'string' ? el.className : '',
-                  details_open: el.closest('details')?.open ?? null,
-                  url: document.URL,
                   text_length: (document.body?.innerText || '').length,
-                  expanded_text: (() => {
-                    const controlled = el.getAttribute('aria-controls');
-                    const target = controlled ? document.getElementById(controlled) : null;
-                    const disclosure = el.closest('[role="region"], .accordion, .disclosure');
-                    return (target?.innerText || el.closest('details')?.innerText ||
-                      disclosure?.innerText || '').trim();
-                  })()
+                  expanded_text: ''
                 })"""
             )
+            before["expanded_text"] = handle.evaluate(_LEGAL_CONTROL_STATE)[
+                "expanded_text"
+            ]
+            handle.click(timeout=1_500)
+            after: dict[str, object] = handle.evaluate(_LEGAL_CONTROL_STATE)
+            previous_text = ""
+            stable_samples = 0
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                page.wait_for_timeout(100)
+                after = handle.evaluate(_LEGAL_CONTROL_STATE)
+                expanded_text = str(after.get("expanded_text", "")).strip()
+                if expanded_text and expanded_text == previous_text:
+                    stable_samples += 1
+                else:
+                    stable_samples = 0
+                previous_text = expanded_text
+                if expanded_text and stable_samples >= 1:
+                    break
             records.append(
                 {
                     "type": "legal_expansion",
@@ -735,6 +781,8 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                     "target_text": before["text"][:500],
                     "aria_controls": before["aria_controls"],
                     "eligible_total": eligible_total,
+                    "eligible_controls_exact": not limit_exceeded,
+                    "limit_exceeded": limit_exceeded,
                     "expanded_text": after["expanded_text"][:200_000],
                     "before": before,
                     "after": after,
@@ -749,33 +797,47 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
             )
         except PlaywrightError:
             continue
-    return records
+    return records, {
+        "eligible_controls": eligible_total,
+        "eligible_controls_exact": not limit_exceeded,
+        "limit_exceeded": limit_exceeded,
+    }
 
 
-def _legal_expansion_summary(page, records: list[dict]) -> dict[str, object]:  # noqa: ANN001
+def _legal_expansion_summary(
+    page, records: list[dict], discovery: dict[str, object]
+) -> dict[str, object]:  # noqa: ANN001
     from playwright.sync_api import Error as PlaywrightError
 
     try:
         container = _legal_container_locator(page)
-        remaining = len(_eligible_legal_controls(container))
+        remaining_controls, remaining_overflow = _eligible_legal_controls(
+            container, LEGAL_EXPANSION_LIMIT
+        )
+        remaining = len(remaining_controls) + int(remaining_overflow)
     except PlaywrightError:
         remaining = -1
     attempted = len(records)
     changed = sum(bool(record.get("changed")) for record in records)
-    eligible = max(
-        (int(record.get("eligible_total", 0)) for record in records),
-        default=0,
-    )
+    eligible = int(discovery.get("eligible_controls", 0))
+    limit_exceeded = bool(discovery.get("limit_exceeded"))
     captured = sum(bool(str(record.get("expanded_text", "")).strip()) for record in records)
     return {
         "eligible_controls": eligible,
+        "eligible_controls_exact": bool(
+            discovery.get("eligible_controls_exact", False)
+        ),
         "attempted": attempted,
         "changed": changed,
         "captured_expanded_texts": captured,
         "unchanged": attempted - changed,
         "remaining_collapsed_controls": remaining,
-        "limit": 100,
-        "complete": attempted == eligible and changed == attempted and captured == attempted,
+        "limit": LEGAL_EXPANSION_LIMIT,
+        "limit_exceeded": limit_exceeded,
+        "complete": not limit_exceeded
+        and attempted == eligible
+        and changed == attempted
+        and captured == attempted,
     }
 
 
