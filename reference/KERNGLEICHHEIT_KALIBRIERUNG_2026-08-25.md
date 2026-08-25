@@ -12,14 +12,15 @@ strukturierter, unveränderlicher Snapshot unter
   `12ElAk3j8x99gIulELGeYY9afEp2iXdSodhPFO2dJqvE`
 - gespeicherte Drive-Revisions-ID:
   `AIroW34qg7nf0KQfpDzGYV-dvIAjYMVtFtuByUxYvzqjB2bmOSLP4JEdZveJi1rz2m8phMgoGMvLfyJ5ihBmbSdSlIROw-c4vP9pTMt6Be0`
-- SHA-256 des lokalen JSON-Snapshots:
+- SHA-256 des auf LF-Zeilenenden kanonisierten JSON-Snapshots:
   `e737fac1e701f490cc194ead1c9cfe7024fccc4a9ff178fb53d2e42a4a0a401b`
 - Umfang: 20 Fälle mit Tenor, Ausgangsfassung, aktueller Fassung und
   anonymer Stimmenverteilung
 - Status: nutzerbereitgestellt, anonym und nicht juristisch freigegeben
 
 Der lokale Snapshot ist die reproduzierbare Laufzeitquelle. Spätere Änderungen am
-Drive-Dokument verändern ihn nicht still.
+Drive-Dokument verändern ihn nicht still. Die LF-Kanonisierung verhindert, dass ein
+Windows-Release-Archiv mit CRLF-Zeilenenden fälschlich eine andere Quelle ausweist.
 
 ## Laufzeitverwendung
 

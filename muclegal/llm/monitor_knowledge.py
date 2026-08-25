@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from functools import lru_cache
@@ -339,7 +340,14 @@ def _matching_calibration_cases(text: str, limit: int = 3) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def _load_calibration_dataset() -> dict[str, Any]:
-    dataset = json.loads(CALIBRATION_CONTEXT_PATH.read_text(encoding="utf-8"))
+    raw = CALIBRATION_CONTEXT_PATH.read_bytes()
+    canonical = raw.replace(b"\r\n", b"\n")
+    if hashlib.sha256(canonical).hexdigest() != CALIBRATION_CONTEXT_SOURCE_SHA256:
+        raise ValueError(
+            "SHA-256 des lokalen Kerngleichheits-Kalibrierungsdatensatzes stimmt "
+            "nicht mit der fixierten Quelle überein."
+        )
+    dataset = json.loads(raw.decode("utf-8"))
     if dataset.get("dataset_id") != (
         "anonyme-stimmenverteilung-kerngleichheit-2026-08-25"
     ) or not isinstance(dataset.get("cases"), list):

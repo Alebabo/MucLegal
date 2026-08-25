@@ -1983,13 +1983,15 @@ Lücke vor der Serveraktivierung.
 ### Lösung
 
 Die versionierte JSON-Datei wird im `git archive`-Aufruf ausdrücklich aufgenommen.
+Der Loader prüft den SHA-256 nach einer expliziten LF-Kanonisierung, weil
+`git archive` auf dem Windows-Deploymenthost Textdateien mit CRLF exportieren kann.
 Der Release bleibt vollständig aus dem gepushten Commit reproduzierbar; Drive wird
 zur Laufzeit nicht kontaktiert.
 
 ### Verifikation und verbleibende Grenze
 
 Vor Aktivierung wird mit `tar -tf` und einem Python-Import aus dem entpackten
-Release geprüft, dass der Snapshot vorhanden ist und sein SHA-256 dem im Code
-fixierten Wert entspricht. Künftige neue Laufzeitdateien unter `reference/` müssen
+Release geprüft, dass der Snapshot vorhanden ist und sein kanonisierter SHA-256 dem
+im Code fixierten Wert entspricht. Künftige neue Laufzeitdateien unter `reference/` müssen
 weiterhin bewusst in die Allowlist aufgenommen werden; der enge Archivumfang bleibt
 als Schutz gegen versehentliche Geheimnis- oder Artefaktuploads bestehen.

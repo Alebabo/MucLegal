@@ -100,7 +100,8 @@ def test_local_calibration_snapshot_is_complete_and_hash_pinned() -> None:
     assert CALIBRATION_CONTEXT_PATH == (
         ROOT / "reference" / "kerngleichheit_anonyme_stimmen_2026-08-25.json"
     )
-    assert hashlib.sha256(raw).hexdigest() == CALIBRATION_CONTEXT_SOURCE_SHA256
+    canonical = raw.replace(b"\r\n", b"\n")
+    assert hashlib.sha256(canonical).hexdigest() == CALIBRATION_CONTEXT_SOURCE_SHA256
     assert len(dataset["cases"]) == 20
     assert dataset["source"]["revision_id"]
     assert next(item for item in dataset["cases"] if item["id"] == "P07")[
