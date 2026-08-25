@@ -20,11 +20,22 @@ export function composeClarifiedContext(context: string, turns: ClarificationTur
   const base = context.trim();
   if (turns.length === 0) return base.slice(0, MAX_TENOR_CONTEXT_CHARS);
   const additions = turns
-    .map((turn) => `Rückfrage: ${turn.question.text}\nAntwort: ${turn.answer}`)
+    .map(
+      (turn) =>
+        `Thema: ${turn.question.topic_id}\nRückfrage: ${turn.question.text}\nAntwort: ${turn.answer}`,
+    )
     .join("\n\n");
   const suffix = `Ergänzende Angaben:\n${additions}`;
   const availableForBase = Math.max(0, MAX_TENOR_CONTEXT_CHARS - suffix.length - 2);
   return `${base.slice(0, availableForBase)}\n\n${suffix}`.slice(0, MAX_TENOR_CONTEXT_CHARS);
+}
+
+export function formatPdfExtractionStatus(extraction: TenorPdfExtraction) {
+  const pages =
+    extraction.extracted_pages === extraction.page_count
+      ? `${extraction.page_count} Seiten`
+      : `${extraction.extracted_pages} von ${extraction.page_count} Seiten`;
+  return `Text aus ${pages} berücksichtigt${extraction.truncated ? " · gekürzt" : ""}`;
 }
 
 export function composePdfContext(context: string, extraction: TenorPdfExtraction | null) {

@@ -8,6 +8,7 @@ import {
   filterModeCommands,
   hasConcreteViolationLocation,
   inferFallgruppe,
+  isAllowedUeAutocompleteSegment,
   isTenor,
   nextRequiredIntakeFact,
   nextWrappedIndex,
@@ -18,6 +19,7 @@ import {
   answeredQuestions,
   composeClarifiedContext,
   composePdfContext,
+  formatPdfExtractionStatus,
   formatSliderAnswer,
 } from "../src/lib/tenor-questions.ts";
 
@@ -102,6 +104,12 @@ test("recognizes tenor correction input", () => {
   assert.equal(isTenor("Ein kurzer Sachverhalt"), false);
 });
 
+test("never suggests judgment or coercive-order formulas in UE correction mode", () => {
+  assert.equal(isAllowedUeAutocompleteSegment("verpflichtungsformel"), false);
+  assert.equal(isAllowedUeAutocompleteSegment("ordnungsmittelandrohung"), false);
+  assert.equal(isAllowedUeAutocompleteSegment("adressatenkreis"), true);
+});
+
 test("recognizes common advertising word forms", () => {
   assert.equal(
     inferFallgruppe("Das Unternehmen wirbt mit einem Countdown"),
@@ -176,7 +184,7 @@ test("keeps contextual questions and answers in the generated tenor context", ()
   ]);
   assert.match(
     composeClarifiedContext("Die Aktion lief online.", turns),
-    /Rückfrage:.*\nAntwort: Nein/,
+    /Thema: taeuschungstatsache\nRückfrage:.*\nAntwort: Nein/,
   );
 });
 
@@ -246,5 +254,40 @@ test("includes extracted contract text and later answers in the tenor context", 
     { question, answer: "Synthetische Beispiel GmbH" },
   ]);
   assert.ok(clarified.length <= 60_000);
+  assert.match(clarified, /Thema: schuldner/);
   assert.match(clarified, /Antwort: Synthetische Beispiel GmbH/);
+});
+
+test("keeps the exact clause answer after a truncated uploaded contract", () => {
+  const extraction = {
+    filename: "vertrag.pdf",
+    text: "Die Marke „Fit“ gehört zum Tarif „Flex Deal 2026“. ".repeat(1_000),
+    page_count: 11,
+    extracted_pages: 8,
+    truncated: true,
+  };
+  const documentContext = composePdfContext("", extraction);
+  const question = {
+    question_id: "q-clause",
+    topic_id: "klauselwortlaut",
+    text: "Wie lautet die konkret beanstandete Klausel vollständig und wortwörtlich?",
+    answer_type: "text",
+    placeholder: "Vollständigen Klauselwortlaut hier einfügen",
+    slider: null,
+    options: [],
+  };
+  const clause = "Das Mitglied kann den Vertrag jederzeit mit einer Frist von vier Wochen kündigen.";
+  const clarified = composeClarifiedContext(documentContext, [{ question, answer: clause }]);
+
+  assert.ok(clarified.length <= 60_000);
+  assert.match(clarified, /Thema: klauselwortlaut/);
+  assert.ok(clarified.endsWith(`Antwort: ${clause}`));
+  assert.equal(
+    formatPdfExtractionStatus(extraction),
+    "Text aus 8 von 11 Seiten berücksichtigt · gekürzt",
+  );
+  assert.equal(
+    formatPdfExtractionStatus({ ...extraction, extracted_pages: 11, truncated: false }),
+    "Text aus 11 Seiten berücksichtigt",
+  );
 });

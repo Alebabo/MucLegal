@@ -46,6 +46,7 @@ import {
   answeredQuestions,
   composeClarifiedContext,
   composePdfContext,
+  formatPdfExtractionStatus,
   formatSliderAnswer,
   type ClarificationTurn,
 } from "@/lib/tenor-questions";
@@ -520,14 +521,9 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     try {
       const legalBases = extractLegalBases(generationContext);
       const schuldner = activeArchive?.schuldner ?? debtorFromContext(generationContext);
-      if (!schuldner) {
-        throw new Error(
-          "Für einen bestimmten UE-Entwurf fehlt die genaue Bezeichnung des Schuldners.",
-        );
-      }
       const response = await createTenorProposals({
         fall_id: activeArchive?.fall_id ?? selectedCase?.fall_id ?? "TENOR-ENTWURF",
-        schuldner,
+        schuldner: schuldner ?? null,
         fundstelle:
           selectedCase?.url ??
           generationContext.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
@@ -612,18 +608,18 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   const adoptSelected = async () => {
     if (!proposalText.trim() || savingArchive) return;
     const proposal = proposalResponse?.proposal;
-    const schuldner = activeArchive?.schuldner ?? debtorFromContext(lastGenerationContext);
-    if (!schuldner) {
-      setArchiveError("Der Schuldner ist nicht eindeutig bezeichnet.");
-      return;
-    }
+    const schuldner =
+      activeArchive?.schuldner ?? debtorFromContext(lastGenerationContext) ?? "Nicht angegeben";
     setArchiveError("");
     setSavingArchive(true);
     try {
       const archivedTenor = await saveTenorArchiveEntry({
         fall_id: activeArchive?.fall_id ?? selectedCase?.fall_id ?? "TENOR-ENTWURF",
         schuldner,
-        title: activeArchive?.title ?? selectedCase?.title ?? schuldner,
+        title:
+          activeArchive?.title ??
+          selectedCase?.title ??
+          (schuldner === "Nicht angegeben" ? "UE-Entwurf" : schuldner),
         text: proposalText,
         context: lastGenerationContext.trim() || clarifiedContext.trim(),
         strategy: "complete",
@@ -703,7 +699,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                   {pdfLoading
                     ? "Vertragstext wird lokal ausgelesen …"
                     : pdfExtraction
-                      ? `${pdfExtraction.page_count} Seiten · im Tenor berücksichtigt${pdfExtraction.truncated ? " · gekürzt" : ""}`
+                      ? formatPdfExtractionStatus(pdfExtraction)
                       : "nicht ausgelesen"}
                 </span>
                 <button
@@ -1260,6 +1256,14 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
               onText={setProposalText}
               provenance={aiProvenance(proposalResponse)}
             />
+            {proposalResponse?.proposal?.warnings
+              .filter((warning) => warning.startsWith("Optional:"))
+              .slice(0, 1)
+              .map((warning) => (
+                <p key={warning} className="mt-2 text-center text-[11px] text-amber-600">
+                  {warning.replace(/^Optional:\s*/, "Hinweis: ")}
+                </p>
+              ))}
           </div>
           <div className="mt-4 flex min-h-11 items-center justify-center">
             <div className="text-center">

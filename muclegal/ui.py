@@ -178,7 +178,7 @@ class MonitoringCaseCreateRequest(BaseModel):
 class TenorDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     fall_id: str = Field(min_length=1, max_length=200)
-    schuldner: str = Field(min_length=1, max_length=500)
+    schuldner: str | None = Field(default=None, max_length=500)
     fundstelle: str | None = Field(default=None, max_length=2048)
     beschreibung: str = Field(min_length=1, max_length=4000)
     rechtsgrundlagen: list[str] = Field(default_factory=list, max_length=20)
@@ -189,7 +189,7 @@ class TenorDraftRequest(BaseModel):
 class TenorProposalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     fall_id: str = Field(min_length=1, max_length=200)
-    schuldner: str = Field(min_length=1, max_length=500)
+    schuldner: str | None = Field(default=None, max_length=500)
     fundstelle: str | None = Field(default=None, max_length=2048)
     context: str = Field(min_length=20, max_length=60000)
     fallgruppe: str = Field(min_length=1, max_length=100)
@@ -201,7 +201,7 @@ class AnsweredTenorQuestionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     topic_id: str = Field(min_length=1, max_length=100)
     question: str = Field(min_length=1, max_length=500)
-    answer: str = Field(min_length=1, max_length=1000)
+    answer: str = Field(min_length=1, max_length=12000)
     answer_type: Literal["yes_no", "text", "slider", "single_choice"]
 
 

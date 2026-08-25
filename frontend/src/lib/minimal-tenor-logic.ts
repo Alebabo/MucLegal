@@ -60,6 +60,10 @@ export function isTenor(text: string) {
   );
 }
 
+export function isAllowedUeAutocompleteSegment(segment: string) {
+  return !["verpflichtungsformel", "ordnungsmittelandrohung"].includes(segment);
+}
+
 export function inferFallgruppe(text: string, uploadedContract = false) {
   const normalized = text.toLocaleLowerCase("de");
   return /klausel|agb|altvertrag|vertragsbedingung/.test(normalized) ||

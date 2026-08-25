@@ -8,7 +8,11 @@ from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from typing import Any, Literal, Protocol
 
-from muclegal.llm.tenor import OPENAI_TENOR_MODEL, infer_violation_branch
+from muclegal.llm.tenor import (
+    OPENAI_TENOR_MODEL,
+    _extract_clause_text,
+    infer_violation_branch,
+)
 
 
 TENOR_QUESTION_PROMPT_VERSION = "2026-08-25-ue-questions-3"
@@ -305,7 +309,16 @@ def _branch_answer(answered_questions: list[dict[str, str]]) -> str | None:
 
 
 def _branch_is_ambiguous(context: str, fallgruppe: str) -> bool:
-    lowered = context.casefold()
+    branch_context = context
+    if "Dokumentinhalt:\n" in context:
+        before_document = context.split("Dokumentinhalt:\n", 1)[0]
+        if "Nutzerangaben:\n" in before_document:
+            branch_context = before_document.split("Nutzerangaben:\n", 1)[1].split(
+                "\n\nHochgeladenes Vertragsdokument:", 1
+            )[0]
+        else:
+            branch_context = ""
+    lowered = branch_context.casefold()
     clause_signal = bool(re.search(r"\b(agb|vertragsklausel|klausel)\b", lowered))
     interaction_signal = bool(
         re.search(r"\b(klick|rechtsklick|maus|button|link|popup|dialog|screenshot|anlage)\b", lowered)
@@ -337,7 +350,7 @@ def _topics_covered_by_context(context: str, fallgruppe: str) -> set[str]:
         covered.add("interaktionsfolge")
 
     if fallgruppe == "agb_klausel":
-        if re.search(r"[„‚\"].{8,}[“‘\"]|\bklausel\s*:\s*.{8,}", context, re.DOTALL | re.IGNORECASE):
+        if _extract_clause_text(context) is not None:
             covered.add("klauselwortlaut")
         if re.search(r"\b(vertrag|abonnement|abo|tarif|mitgliedschaft|bahncard|produkt)\w*\b", text):
             covered.add("sachlicher_anwendungsbereich")
@@ -568,7 +581,7 @@ def build_tenor_question_input(
             raise ValueError("Beantwortete Rückfragen sind unvollständig oder fachlich unzulässig.")
         if topic_id in answered_topics:
             raise ValueError("Eine Tenor-Tatsache darf nur einmal beantwortet werden.")
-        if len(question) > 500 or len(answer) > 1000:
+        if len(question) > 500 or len(answer) > 12000:
             raise ValueError("Eine beantwortete Rückfrage ist zu lang.")
         answered_topics.add(topic_id)
         cleaned_answers.append(
@@ -582,18 +595,19 @@ def build_tenor_question_input(
     covered_by_context = _topics_covered_by_context(cleaned_context, cleaned_fallgruppe)
     covered_by_context &= set(catalog)
     used_topics = answered_topics | covered_by_context
+    optional_hint_topics = {"schuldner", "adressatenkreis"}
     open_topics = [
         spec.to_prompt_dict(topic_id)
         for topic_id, spec in catalog.items()
-        if topic_id not in used_topics
+        if topic_id not in used_topics and topic_id not in optional_hint_topics
     ]
-    required_topics = {"schuldner", "adressatenkreis"}
+    required_topics: set[str] = set()
     if branch_ambiguous and not answered_branch:
         required_topics.add(BRANCH_TOPIC_ID)
     if branch == "C":
         required_topics.add("klauselwortlaut")
     elif branch == "B":
-        required_topics.update({"interaktionsfolge", "sichtbare_beschriftungen", "anlagebezug"})
+        required_topics.update({"interaktionsfolge", "sichtbare_beschriftungen"})
     open_topic_ids = {item["topic_id"] for item in open_topics}
     return {
         "sachverhalt": cleaned_context,
@@ -852,6 +866,36 @@ def create_tenor_question(
             "question": question.to_dict(),
             "violation_branch": model_input["violation_branch"],
             "missing_information": [BRANCH_TOPIC.label],
+        }
+    if "klauselwortlaut" in model_input.get("erforderliche_offene_topic_ids", []):
+        question = TenorQuestion(
+            question_id=hashlib.sha256(
+                f"{model_input['sachverhalt']}\nklauselwortlaut".encode("utf-8")
+            ).hexdigest()[:16],
+            topic_id="klauselwortlaut",
+            text=(
+                "Wie lautet die konkret beanstandete Klausel vollständig und wortwörtlich?"
+            ),
+            answer_type="text",
+            placeholder="Vollständigen Klauselwortlaut hier einfügen",
+            slider=None,
+            options=(),
+        )
+        labels_by_topic = {
+            item["topic_id"]: item["bezeichnung"]
+            for item in model_input["erlaubte_offene_themen"]
+        }
+        missing_topic_ids = model_input.get("erforderliche_offene_topic_ids", [])
+        return {
+            "mode": "deterministic_required_fact",
+            "model": "server_rule",
+            "ready_to_generate": False,
+            "question": question.to_dict(),
+            "violation_branch": model_input["violation_branch"],
+            "missing_information": [
+                labels_by_topic[topic_id]
+                for topic_id in sorted(missing_topic_ids)
+            ],
         }
     rejected: list[dict[str, str]] = []
     for _attempt in range(MAX_QUESTION_ATTEMPTS):

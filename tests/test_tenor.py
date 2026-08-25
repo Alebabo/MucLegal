@@ -211,6 +211,42 @@ class TenorDraftTests(unittest.TestCase):
                 self.assertIsNone(result["proposal"])
                 self.assertTrue(result["missing_information"])
 
+    def test_optional_metadata_does_not_block_a_complete_violation_description(self) -> None:
+        model_input = build_tenor_input(
+            fall_id="OPTIONAL-001",
+            schuldner=None,
+            fundstelle=None,
+            beschreibung=(
+                "Mit einer angeblich nur heute geltenden Rabattfrist zu werben, obwohl "
+                "diese Frist tatsächlich nicht besteht."
+            ),
+            rechtsgrundlagen=[],
+            violation_branch="A",
+        )
+
+        result = create_tenor_proposals(
+            model_input,
+            DeterministicTenorAnalyzer(),
+            fallgruppe="irrefuehrende_werbung",
+        )
+
+        self.assertEqual("ready", result["status"])
+        self.assertEqual([], result["missing_information"])
+        self.assertEqual("Nicht angegeben", model_input["schuldner"])
+        optional_hint = next(
+            warning
+            for warning in result["proposal"]["warnings"]
+            if warning.startswith("Optional:")
+        )
+        for field in (
+            "Schuldnerbezeichnung",
+            "Adressatenkreis",
+            "Fundstelle",
+            "Rechtsgrundlagen",
+            "Anwendungsbereich",
+        ):
+            self.assertIn(field, optional_hint)
+
     def test_numbered_agb_clause_is_recognized_without_quotes_or_label(self) -> None:
         clause_wording = (
             "Jegliche Ansprüche auf Gewährleistung erlöschen, sollte nachweislich "
@@ -239,6 +275,103 @@ class TenorDraftTests(unittest.TestCase):
         self.assertEqual("ready", result["status"])
         self.assertIn(clause_wording, result["proposal"]["text"])
         self.assertNotIn("Adressatenkreis:", result["proposal"]["text"])
+
+    def test_uploaded_contract_requires_explicit_clause_selection(self) -> None:
+        document_context = (
+            "Hochgeladenes Vertragsdokument: vertrag.pdf\n"
+            "Umfang: 11 Seiten; Text aus 8 Seiten extrahiert.\n"
+            "Hinweis: Der extrahierte Dokumenttext wurde wegen der Längenbegrenzung gekürzt.\n"
+            "Dokumentinhalt:\n"
+            "[Seite 1]\n"
+            "Mitgliedsvertrag der Synthetische Beispiel GmbH mit Verbrauchern. "
+            "Die Marke „Fit“ wird im Tarif „Flex Deal 2026“ genannt.\n\n"
+            "[Seite 2]\n"
+            "1. Allgemeine Bedingungen. Weitere Informationen stehen unter einem Link.\n\n"
+            "[Seite 8]\n"
+            "Datenschutzerklärung mit Schaltfläche und weiteren nummerierten Abschnitten"
+        )
+
+        model_input = build_tenor_question_input(
+            context=document_context,
+            fallgruppe="agb_klausel",
+            answered_questions=[],
+        )
+
+        self.assertEqual("C", model_input["violation_branch"])
+        self.assertIn("klauselwortlaut", model_input["erforderliche_offene_topic_ids"])
+        self.assertNotIn(
+            "klauselwortlaut",
+            model_input["bereits_im_sachverhalt_abgedeckte_topic_ids"],
+        )
+        self.assertNotIn(
+            "verletzungsast",
+            model_input["erforderliche_offene_topic_ids"],
+        )
+
+        result = create_tenor_question(model_input, SequenceQuestionAnalyzer())
+        self.assertFalse(result["ready_to_generate"])
+        self.assertEqual("deterministic_required_fact", result["mode"])
+        self.assertEqual("klauselwortlaut", result["question"]["topic_id"])
+        self.assertEqual("text", result["question"]["answer_type"])
+        self.assertIn("vollständig und wortwörtlich", result["question"]["text"])
+
+        selected_clause = "Eine Kündigung ist ausschließlich schriftlich möglich."
+        selected_context = (
+            "Nutzerangaben:\n"
+            "Der Tarif heißt „Flex Deal 2026“. Beanstandete Klausel: "
+            f"„{selected_clause}“\n\n"
+            "Hochgeladenes Vertragsdokument: vertrag.pdf\n"
+            "Umfang: 11 Seiten; Text aus 8 Seiten extrahiert.\n"
+            "Dokumentinhalt:\n"
+            "[Seite 1]\nWeitere Vertragsbedingungen mit Produktbezeichnungen."
+        )
+        selected_input = build_tenor_question_input(
+            context=selected_context,
+            fallgruppe="agb_klausel",
+            answered_questions=[],
+        )
+        self.assertNotIn(
+            "klauselwortlaut", selected_input["erforderliche_offene_topic_ids"]
+        )
+        self.assertIn(
+            "klauselwortlaut",
+            selected_input["bereits_im_sachverhalt_abgedeckte_topic_ids"],
+        )
+
+    def test_explicit_clause_answer_overrides_uploaded_contract_text(self) -> None:
+        clause_wording = (
+            "Das Mitglied kann den Vertrag jederzeit mit einer Frist von vier Wochen kündigen."
+        )
+        clarified_context = (
+            "Hochgeladenes Vertragsdokument: vertrag.pdf\n"
+            "Umfang: 11 Seiten; Text aus 8 Seiten extrahiert.\n"
+            "Dokumentinhalt:\n"
+            "[Seite 1]\nVertrag der Synthetische Beispiel GmbH gegenüber Verbrauchern. "
+            "Die Marke „Fit“ gehört zum Tarif „Flex Deal 2026“.\n\n"
+            "[Seite 2]\n1. Allgemeine Vertragsbedingungen und weitere Klauseln.\n\n"
+            "Ergänzende Angaben:\n"
+            "Thema: klauselwortlaut\n"
+            "Rückfrage: Wie lautet die konkret beanstandete Klausel vollständig und wortwörtlich?\n"
+            f"Antwort: {clause_wording}"
+        )
+        model_input = build_tenor_input(
+            fall_id="VZ-PDF-C",
+            schuldner="Synthetische Beispiel GmbH",
+            fundstelle=None,
+            beschreibung=clarified_context,
+            rechtsgrundlagen=[],
+            violation_branch="C",
+        )
+
+        result = create_tenor_proposals(
+            model_input,
+            DeterministicTenorAnalyzer(),
+            fallgruppe="agb_klausel",
+        )
+
+        self.assertEqual("ready", result["status"])
+        self.assertIn(clause_wording, result["proposal"]["text"])
+        self.assertNotIn("Flex Deal 2026", result["proposal"]["text"])
 
     def test_empty_exclusion_is_valid_and_reported_without_inventing_one(self) -> None:
         model_input = build_tenor_input(**tenor_payload())
@@ -511,6 +644,61 @@ class TenorDraftTests(unittest.TestCase):
             self.assertIsNone(result["proposal"]["freigabe_durch_mensch"])
             self.assertEqual([], result["missing_information"])
 
+    def test_proposal_api_accepts_missing_optional_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                tenor_proposal_analyzer_factory=StrategyTenorAnalyzer,
+            )
+            payload = {
+                "fall_id": "OPTIONAL-API-001",
+                "context": (
+                    "Mit einer angeblich nur heute geltenden Rabattfrist zu werben, "
+                    "obwohl diese Frist tatsächlich nicht besteht."
+                ),
+                "fallgruppe": "irrefuehrende_werbung",
+                "rechtsgrundlagen": [],
+                "violation_branch": "A",
+            }
+            with TestClient(app) as client:
+                response = client.post("/api/v1/tenor-proposals", json=payload)
+
+        self.assertEqual(200, response.status_code, response.text)
+        result = response.json()
+        self.assertEqual("ready", result["status"])
+        self.assertTrue(
+            any(
+                warning.startswith("Optional:")
+                for warning in result["proposal"]["warnings"]
+            )
+        )
+
+    def test_mask_api_accepts_missing_debtor(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            app = create_app(
+                root / "latest-case.json",
+                root / "reviews.sqlite3",
+                tenor_analyzer_factory=StrategyTenorAnalyzer,
+            )
+            payload = {
+                "fall_id": "TENOR-ENTWURF",
+                "beschreibung": (
+                    "Mit einer angeblich nur heute geltenden Rabattfrist zu werben, "
+                    "obwohl diese Frist tatsächlich nicht besteht."
+                ),
+                "fallgruppe": "irrefuehrende_werbung",
+                "rechtsgrundlagen": [],
+                "violation_branch": "A",
+            }
+            with TestClient(app) as client:
+                response = client.post("/api/v1/tenor-drafts", json=payload)
+
+        self.assertEqual(201, response.status_code, response.text)
+        self.assertEqual("Nicht angegeben", response.json()["draft"]["schuldner"])
+
     def test_contextual_question_api_uses_prior_answers(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             root = Path(output)
@@ -646,6 +834,23 @@ class TenorDraftTests(unittest.TestCase):
         self.assertIn("Fallgruppe", analyzer.inputs[1]["abgelehnte_vorschlaege"][0]["grund"])
         self.assertIn("Verwendungskontext", analyzer.inputs[2]["abgelehnte_vorschlaege"][1]["grund"])
 
+    def test_optional_debtor_and_addressee_are_not_follow_up_questions(self) -> None:
+        model_input = build_tenor_question_input(
+            context="Beanstandete Klausel: ‚Eine Kündigung ist ausschließlich schriftlich möglich.‘",
+            fallgruppe="agb_klausel",
+            answered_questions=[],
+        )
+        open_topic_ids = {
+            item["topic_id"] for item in model_input["erlaubte_offene_themen"]
+        }
+        self.assertNotIn("schuldner", open_topic_ids)
+        self.assertNotIn("adressatenkreis", open_topic_ids)
+        self.assertEqual([], model_input["erforderliche_offene_topic_ids"])
+
+        analyzer = SequenceQuestionAnalyzer({"ready_to_generate": True, "question": None})
+        result = create_tenor_question(model_input, analyzer)
+        self.assertTrue(result["ready_to_generate"])
+
     def test_duplicate_topic_is_rejected_and_retried(self) -> None:
         model_input = build_tenor_question_input(
             context="Die Beispiel GmbH wirbt gegenüber Verbrauchern mit einer falschen Rabattfrist.",
@@ -753,7 +958,10 @@ class TenorDraftTests(unittest.TestCase):
 
     def test_three_invalid_questions_fail_instead_of_marking_ready(self) -> None:
         model_input = build_tenor_question_input(
-            context="Die Beispiel GmbH verwendet gegenüber Verbrauchern eine unwirksame AGB-Klausel.",
+            context=(
+                "Die Beispiel GmbH verwendet gegenüber Verbrauchern die Klausel: "
+                "‚Eine Kündigung ist ausschließlich schriftlich möglich.‘"
+            ),
             fallgruppe="agb_klausel",
             answered_questions=[],
         )

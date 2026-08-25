@@ -1995,3 +1995,107 @@ Release geprüft, dass der Snapshot vorhanden ist und sein kanonisierter SHA-256
 im Code fixierten Wert entspricht. Künftige neue Laufzeitdateien unter `reference/` müssen
 weiterhin bewusst in die Allowlist aufgenommen werden; der enge Archivumfang bleibt
 als Schutz gegen versehentliche Geheimnis- oder Artefaktuploads bestehen.
+
+# Gesamtvertrag wird fälschlich als ausgewählte AGB-Klausel behandelt
+
+### Symptom
+
+Nach dem Upload eines längeren Vertrags und der Auswahl von Ast C meldete die
+Tenorhilfe, es gebe keine weitere tenorbezogene Sachverhaltsfrage. Die anschließende
+Erzeugung scheiterte dennoch mit „Der vollständige Klauselwortlaut wurde nicht
+wörtlich übernommen.“ Bei gekürzten Dokumenten behauptete die Dateizeile außerdem
+pauschal, alle Seiten seien im Tenor berücksichtigt.
+
+### Ursache und Diagnose
+
+Die Rückfragelogik suchte im gesamten extrahierten PDF-Text nach beliebigen
+Anführungszeichen oder dem Wort `Klausel`. Produktbezeichnungen in typografischen
+Anführungszeichen konnten dadurch über mehrere Textabschnitte hinweg als vermeintlicher
+Klauselwortlaut erkannt werden. Nummerierte Abschnitte und Wörter wie `Link` oder
+`Button` im Vertrag beziehungsweise in einer enthaltenen Datenschutzerklärung lösten
+zusätzlich eine falsche Ast-Mehrdeutigkeit aus. Die PDF-Extraktion war korrekt auf
+40.000 Zeichen begrenzt, die Oberfläche zeigte aber nur die Gesamtseitenzahl statt
+der tatsächlich textlich erfassten Seiten.
+
+### Lösung
+
+Der Inhalt eines hochgeladenen Gesamtvertrags bleibt Kontext, gilt aber nicht mehr
+automatisch als Auswahl der konkret beanstandeten Klausel. Ast C fragt bei fehlender
+Auswahl deterministisch nach dem vollständigen wortwörtlichen Klauseltext. Die Antwort
+wird mit ihrer Topic-ID getrennt vom unvertrauten Dokumentinhalt in den Modellkontext
+übernommen und vom nachgelagerten Validator weiterhin wortgleich verlangt. Paarige
+deutsche und gerade Anführungszeichen werden nun getrennt erkannt, sodass kurze
+Produktnamen keine übergreifenden Scheinklauseln mehr bilden. Klauselantworten dürfen
+bis zu 12.000 Zeichen umfassen. Die Dateizeile nennt bei Teiltexten die tatsächlich
+erfassten Seiten, beispielsweise `Text aus 8 von 11 Seiten berücksichtigt · gekürzt`.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests bilden einen mehrteiligen Vertrag mit Produktnamen, Links,
+nummerierten Datenschutzabschnitten und gekürztem Dokumenttext nach. Sie prüfen die
+deterministische Wortlautfrage, die Bevorzugung der ausdrücklichen Antwort gegenüber
+dem PDF-Rohtext und die präzise Seitenanzeige. Der Gesamtvertrag wird weiterhin als
+unvertraute Quelle an das Modell übergeben; die fachliche Auswahl der beanstandeten
+Klausel trifft die Juristin. Eine im PDF enthaltene Klausel wird nicht automatisch
+ausgewählt oder juristisch bewertet.
+
+# Optionale Metadaten blockieren die UE-Erzeugung
+
+### Symptom
+
+Die Minimalansicht brach vor dem Modellaufruf mit „Für einen bestimmten UE-Entwurf
+fehlt die genaue Bezeichnung des Schuldners“ ab. Auch Adressatenkreis, Fundstelle,
+Rechtsgrundlagen, URL oder Anlagenbezeichnung konnten einen inhaltlich bereits
+formulierbaren Entwurf verhindern oder unnötige Rückfragen auslösen.
+
+### Ursache und Diagnose
+
+Frontend, API-Schema, Eingabeaufbereitung und Vollständigkeitsvalidator behandelten
+die Schuldnerbezeichnung gleichzeitig als technische und fachliche Pflichtangabe.
+Weitere für die spätere Prüfung hilfreiche Metadaten waren mit denjenigen Tatsachen
+vermischt, ohne die der eigentliche Verbotskern nicht bestimmt formuliert werden kann.
+Die Archivübernahme wiederholte denselben Schuldnerblocker.
+
+### Lösung
+
+Schuldnerbezeichnung, Adressatenkreis, Fundstelle und Rechtsgrundlagen sind in der
+Minimalansicht und in der Maske nun optional; eine leere Fall-ID wird intern als
+`TENOR-ENTWURF` geführt. Bei Ast A ist auch der Anwendungsbereich nur eine
+Empfehlung; bei Ast B gelten URL beziehungsweise Bedienoberfläche und Anlagebezug
+ebenfalls als ergänzbar. Fehlen solche Angaben, wird trotzdem erzeugt und genau ein
+dezenter Hinweis mit den empfohlenen Ergänzungen ausgegeben. Intern wird für
+technische Pflichtfelder `Nicht angegeben` verwendet, ohne dies als Tatsache in den
+UE-Text einzubauen. Auch die Archivübernahme bleibt möglich.
+
+Zwingend bleiben nur der eigentliche Verbotskern: eine hinreichende Handlungsbeschreibung
+bei Ast A, Bedienfolge und sichtbare Beschriftungen bei Ast B sowie der vollständige
+wörtliche Klauseltext bei Ast C. Unbekannte optionale Angaben dürfen vom Modell nicht
+erfunden werden.
+
+### Verifikation und verbleibende Grenze
+
+API- und Generatortests erzeugen einen Ast-A-Entwurf ohne Schuldner, Adressatenkreis,
+Fundstelle, Rechtsgrundlagen oder Anwendungsbereich und prüfen den zusammengefassten
+Hinweis. Ein Rückfragetest stellt sicher, dass Schuldner und Adressatenkreis nicht
+mehr abgefragt werden. Die menschliche juristische Freigabe bleibt für jeden Entwurf
+erforderlich; der Hinweis ersetzt keine fachliche Ergänzung vor Verwendung.
+
+# UE-Korrekturmodus schlägt gerichtliche Urteilsformel vor
+
+### Symptom
+
+Nach der Übernahme eines UE-Entwurfs bot die Tab-Autovervollständigung als nächsten
+Baustein „Die Beklagte wird verurteilt, es zu unterlassen“ an.
+
+### Ursache und Diagnose
+
+Der lokale Korrekturmodus bezog seine Vorschläge weiterhin aus dem historischen
+Urteilstenorregister und begann dort mit Verpflichtungsformel und Ordnungsmittelandrohung.
+Der neue UE-Generator selbst war davon nicht betroffen.
+
+### Lösung und Verifikation
+
+Die Autovervollständigung überspringt nun die Segmente `verpflichtungsformel` und
+`ordnungsmittelandrohung`. Ein Frontendtest weist gerichtliche Verurteilungs- und
+Ordnungsmittelformeln in Vorschlägen zurück. Die übrigen sachverhaltsbezogenen
+Bausteine des Korrekturmodus bleiben verfügbar.

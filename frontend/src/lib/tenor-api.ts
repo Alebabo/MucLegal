@@ -2,7 +2,7 @@ export type TenorDecision = "freigegeben" | "abgelehnt" | "weitere_pruefung";
 
 export type TenorDraftRequest = {
   fall_id: string;
-  schuldner: string;
+  schuldner?: string | null;
   fundstelle?: string | null;
   beschreibung: string;
   rechtsgrundlagen?: string[];
@@ -35,7 +35,7 @@ export type TenorDraftRecord = {
 
 export type TenorProposalRequest = {
   fall_id: string;
-  schuldner: string;
+  schuldner?: string | null;
   fundstelle?: string | null;
   context: string;
   fallgruppe: string;

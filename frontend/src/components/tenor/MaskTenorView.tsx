@@ -11,8 +11,8 @@ import {
 } from "../../lib/tenor-api";
 
 const tenorSchema = z.object({
-  fall_id: z.string().trim().min(1, "Fall-ID ist erforderlich").max(200),
-  schuldner: z.string().trim().min(1, "Schuldner ist erforderlich").max(500),
+  fall_id: z.string().trim().max(200),
+  schuldner: z.string().trim().max(500),
   fundstelle: z.union([
     z.literal(""),
     z.string().trim().url("Bitte eine vollständige HTTP(S)-URL angeben").max(2048),
@@ -60,8 +60,8 @@ function splitLegalBases(value: string) {
 
 function toPayload(values: FormValues): TenorDraftRequest {
   return {
-    fall_id: values.fall_id,
-    schuldner: values.schuldner,
+    fall_id: values.fall_id || "TENOR-ENTWURF",
+    schuldner: values.schuldner || null,
     fundstelle: values.fundstelle || null,
     beschreibung: values.beschreibung,
     rechtsgrundlagen: splitLegalBases(values.rechtsgrundlagen),
@@ -192,7 +192,7 @@ export function MaskTenorView() {
             </div>
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              <Field label="Fall-ID" error={errors.fall_id}>
+              <Field label="Fall-ID (optional)" error={errors.fall_id}>
                 <input
                   className={fieldClass}
                   value={values.fall_id}
@@ -200,7 +200,7 @@ export function MaskTenorView() {
                   placeholder="VZ-2026-0417"
                 />
               </Field>
-              <Field label="Schuldner" error={errors.schuldner}>
+              <Field label="Schuldner (optional)" error={errors.schuldner}>
                 <input
                   className={fieldClass}
                   value={values.schuldner}
@@ -239,6 +239,10 @@ export function MaskTenorView() {
                   placeholder="Welche konkrete geschäftliche Praxis wurde festgestellt?"
                 />
               </Field>
+              <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                Hinweis: Fall-ID, Schuldner, Fundstelle und Rechtsgrundlagen können später ergänzt
+                werden.
+              </p>
               <Field
                 label="Belegte Rechtsgrundlagen (optional, eine pro Zeile)"
                 error={errors.rechtsgrundlagen}

@@ -1,4 +1,5 @@
 import registerJson from "./generated/tenorregister.json";
+import { isAllowedUeAutocompleteSegment } from "./lib/minimal-tenor-logic";
 import type {
   BuildingBlock,
   Draft,
@@ -185,7 +186,10 @@ export function deriveReviewFeatures(profile: Profile, draft: Draft): ReviewFeat
 
 export function nextAutofillBlock(profile: Profile, acceptedIds: string[]): BuildingBlock | null {
   const draft = composeDraft(profile, "kerngleich");
-  const nextId = draft.blockIds.find((id) => !acceptedIds.includes(id));
+  const nextId = draft.blockIds.find((id) => {
+    if (acceptedIds.includes(id)) return false;
+    return isAllowedUeAutocompleteSegment(getBlock(id).segment);
+  });
   if (!nextId) return null;
   const block = getBlock(nextId);
   return { ...block, text: renderBlock(block, profile) };
