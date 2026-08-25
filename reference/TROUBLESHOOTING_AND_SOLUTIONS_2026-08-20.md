@@ -2229,10 +2229,12 @@ synthetischen aktuellen Stand. Ist – wie im bestehenden Decathlon-Demo-Store �
 ein echter Webarchiv-Ausgangsbeweis vorhanden, öffnet der Button direkt den aktuellen
 synthetischen Demo-Snapshot zur manuellen Zuordnung und zum Vergleich.
 
-Jede Stufe weist unübersehbar `SYNTHETISCHE DEMO · KEIN LIVE-BEWEIS` aus: im
-BeweisLab, im herunterladbaren Paket, im Manifest-Hinweis, im Pop-up und in der
-Vergleichsansicht. Backend und Frontend führen `demo_only` und `demo_notice` durch
-die gespeicherte Beweiskette. Der reale lokale Browser-Smoke-Test startete den Preset
+Die wiederholten sichtbaren Disclaimer im BeweisLab, im Pop-up, in der
+Vergleichsansicht und in der erzeugten Bildvorschau wurden auf Nutzerwunsch entfernt.
+Die technische Trennung bleibt über `demo_only`, `demo_notice`, Manifest und
+Erfassungstransparenz innerhalb der gespeicherten Beweiskette erhalten; diese
+Metadaten werden nicht mehr als Warnbanner in der Oberfläche wiederholt. Der reale
+lokale Browser-Smoke-Test startete den Preset
 aus dem laufenden BeweisLab, öffnete `demo-decathlon-aktuell`, verglich ihn manuell
 mit dem vorhandenen manifestgeprüften Webarchiv-Ausgangsbeweis, zeigte das Pop-up
 `Differenz erkannt` und fokussierte nach dem Klick die sechs begrenzten

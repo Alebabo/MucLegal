@@ -138,7 +138,6 @@ function HinweisePage() {
       caseId: string,
       fallId: string,
       notification: MonitoringChangeNotification,
-      demoOnly = false,
     ) => {
       toast.custom(
         (toastId) => {
@@ -168,9 +167,7 @@ function HinweisePage() {
                     {notification.title}
                   </span>
                   <span className="mt-1 block text-sm text-muted-foreground">
-                    {demoOnly
-                      ? "Synthetischer Demo-Vergleich – kein Live-Beweis. Anklicken, um den Unterschied zu sehen."
-                      : notification.description}
+                    {notification.description}
                   </span>
                 </span>
                 <ChevronRight
@@ -217,7 +214,6 @@ function HinweisePage() {
         stored.case_id,
         stored.fall_id,
         notification,
-        stored.demo_only === true,
       );
     }
   }, [showChangeNotification]);
@@ -404,13 +400,6 @@ function HinweisePage() {
                             >
                               Differenz erkannt
                             </p>
-                            {c.latestEvidenceComparison.demo_only && (
-                              <div className="mt-3 rounded-lg border border-warning/50 bg-background p-3 text-sm text-foreground">
-                                <strong>Synthetische Demo · kein Live-Beweis.</strong>{" "}
-                                {c.latestEvidenceComparison.demo_notice ??
-                                  "Dieser Vergleich dient ausschließlich der Vorführung des lokalen Ablaufs."}
-                              </div>
-                            )}
                             <p className="mt-2 text-sm leading-relaxed text-foreground">
                               {c.latestEvidenceComparison.difference_summary ??
                                 "Die gespeicherten Text-Prüfwerte unterscheiden sich."}

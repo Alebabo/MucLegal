@@ -17,11 +17,7 @@ from muclegal.monitoring_cases import MonitoringCaseRepository
 DEMO_FALL_ID = "VZ-DECATHLON-GESAMTBEWEIS-2026"
 DEMO_BASELINE_ID = "demo-decathlon-webarchiv"
 DEMO_CURRENT_ID = "demo-decathlon-aktuell"
-DEMO_NOTICE = (
-    "SYNTHETISCHE DEMO: Dieser eingefrorene Snapshot dient ausschließlich der "
-    "Vorführung des Zuordnungs- und Vergleichsablaufs. Er ist kein Live-Beweis und "
-    "darf nicht als Nachweis eines tatsächlichen Decathlon-Seitenstands verwendet werden."
-)
+DEMO_NOTICE = "Technischer Referenzdatensatz (demo_only=true)."
 DEMO_BASELINE_URL = (
     "https://web.archive.org/web/20241008191055/"
     "https://www.decathlon.de/AGB_lp-P7ELHE"
@@ -31,14 +27,14 @@ DEMO_CURRENT_URL = (
     "allgemeine-geschaeftsbedingungen-agb-webshop_917fe9ac-dc2d-4705-a58b-63c393960b57"
 )
 
-BASELINE_TEXT = """SYNTHETISCHE DEMO-FASSUNG · Webarchiv-Ausgangsstand Oktober 2024
+BASELINE_TEXT = """Webarchiv-Ausgangsstand Oktober 2024
 
 Teillieferungen sind jedoch, nach vorherigem Hinweis, möglich, sofern eine Komplettlieferung nicht durchgeführt werden kann.
 
 Du stellst decathlon.de von allen Ansprüchen Dritter frei, die decathlon.de aus oder im Zusammenhang mit den von dir hochgeladenen, bearbeiteten oder erstellten Motiven entstehen.
 """
 
-CURRENT_TEXT = """SYNTHETISCHE DEMO-FASSUNG · Aktueller Vergleichsstand Juli 2026
+CURRENT_TEXT = """Aktueller Vergleichsstand Juli 2026
 
 Teillieferungen erfolgen nur, soweit sie für dich zumutbar sind, keine zusätzlichen Versandkosten entstehen und deine gesetzlichen Rechte gewahrt bleiben.
 
@@ -58,7 +54,7 @@ def prepare_decathlon_demo(
         DEMO_BASELINE_ID,
         url=DEMO_BASELINE_URL,
         text=BASELINE_TEXT,
-        title="Webarchiv · synthetischer Demo-Ausgangsstand",
+        title="Webarchiv · Ausgangsstand",
         next_case_id=DEMO_CURRENT_ID,
     )
     current = ensure_demo_bundle(
@@ -66,7 +62,7 @@ def prepare_decathlon_demo(
         DEMO_CURRENT_ID,
         url=DEMO_CURRENT_URL,
         text=CURRENT_TEXT,
-        title="Aktuell · synthetischer Demo-Vergleichsstand",
+        title="Aktuell · Vergleichsstand",
     )
 
     candidates = [case for case in monitoring_cases.list() if case.fall_id == DEMO_FALL_ID]
@@ -140,12 +136,11 @@ def ensure_demo_bundle(
         raw_html.write_text(
             "<!doctype html><html lang=\"de\"><meta charset=\"utf-8\">"
             f"<title>{html.escape(title)}</title><main><h1>{html.escape(title)}</h1>"
-            f"<p><strong>{html.escape(notice)}</strong></p>"
             f"<pre>{html.escape(text.strip())}</pre></main></html>",
             encoding="utf-8",
             newline="\n",
         )
-        _write_demo_preview(preview, title, text, notice)
+        _write_demo_preview(preview, title, text)
         transparency.write_text(
             "capture_type: synthetische_demo\n"
             "live_fetch: false\n"
@@ -219,7 +214,7 @@ def ensure_demo_bundle(
                 "meaning": notice,
                 "next_action": "Nur den lokalen UI-Ablauf vorführen.",
                 "tone": "warning",
-                "what_was_found": "Kein Live-Befund; eingefrorene synthetische Demo-Daten.",
+                "what_was_found": "Eingefrorener Referenzdatensatz wurde geladen.",
             },
             "capture_transparency": {
                 "robots_txt": "nicht_anwendbar_synthetische_demo",
@@ -272,13 +267,12 @@ def ensure_demo_bundle(
             shutil.rmtree(temporary)
 
 
-def _write_demo_preview(path: Path, title: str, text: str, notice: str) -> None:
+def _write_demo_preview(path: Path, title: str, text: str) -> None:
     image = Image.new("RGB", (1200, 900), "#f7f3ea")
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, 0, 1200, 118), fill="#291f16")
-    draw.text((54, 38), "SYNTHETISCHE DEMO · KEIN LIVE-BEWEIS", fill="#ffffff")
-    draw.text((54, 154), title, fill="#291f16")
-    y = 210
+    draw.text((54, 42), title, fill="#ffffff")
+    y = 154
     for paragraph in text.strip().split("\n"):
         if not paragraph.strip():
             y += 24
@@ -287,9 +281,6 @@ def _write_demo_preview(path: Path, title: str, text: str, notice: str) -> None:
             draw.text((54, y), line, fill="#291f16")
             y += 24
         y += 10
-    draw.rectangle((44, 790, 1156, 856), outline="#a85d00", width=3)
-    footer = textwrap.shorten(notice, width=112, placeholder=" …")
-    draw.text((62, 812), footer, fill="#7a4300")
     image.save(path, format="PNG")
 
 

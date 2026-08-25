@@ -48,7 +48,10 @@ def test_local_decathlon_demo_replays_manual_baseline_and_difference_flow() -> N
     assert payload["baseline_attached"] is False
     assert payload["next_case_id"] == DEMO_BASELINE_ID
     assert 'id="decathlon-demo"' in page.text
-    assert "keine Live-Beweise" in page.text
+    assert "keine Live-Beweise" not in page.text
+    assert "SYNTHETISCHE DEMO · KEIN LIVE-BEWEIS" not in page.text
+    assert DEMO_NOTICE not in page.text
+    assert "Synthetisches Demo-Paket herunterladen" not in page.text
 
     assert baseline.status_code == 200
     assert baseline.json()["demo_only"] is True
@@ -64,7 +67,7 @@ def test_local_decathlon_demo_replays_manual_baseline_and_difference_flow() -> N
     assert current.status_code == 200
     assert current.json()["demo_only"] is True
     assert current.json()["evidence_suitability"] == "synthetische_demo"
-    assert "synthetischer Demo-Vergleichsstand" in current.json()["capture_galleries"]["agb"]["title"]
+    assert current.json()["capture_galleries"]["agb"]["title"] == "Aktuell · Vergleichsstand"
 
     assert compared.status_code == 201
     comparison = compared.json()["comparison"]

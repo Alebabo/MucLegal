@@ -11,14 +11,9 @@ DEMO_FALL_ID = "VZ-MUELLER-CLICK-COLLECT-2025"
 DEMO_BASELINE_ID = "demo-mueller-agb-alt"
 DEMO_CURRENT_URL = "https://www.mueller.de/unternehmen/agb/"
 DEMO_SOURCE_URL = "https://www.landesrecht-bw.de/bsbw/document/NJRE001626589"
-DEMO_NOTICE = (
-    "HISTORISCHER DEMO-REFERENZTEXT: Die beanstandete Klauselkombination ist dem "
-    "rechtskräftigen Urteil des OLG Stuttgart vom 25.11.2025 (6 UKl 1/25) "
-    "entnommen. Dieser synthetisch gesetzte Referenzstand ist kein archivierter "
-    "Live-Screenshot der früheren Müller-Website."
-)
+DEMO_NOTICE = "Technischer Referenzdatensatz (demo_only=true)."
 
-BASELINE_TEXT = """Historischer Demo-Referenzstand · OLG Stuttgart, 25.11.2025, 6 UKl 1/25
+BASELINE_TEXT = """Historischer Ausgangsstand · OLG Stuttgart, 25.11.2025, 6 UKl 1/25
 
 Teil 2 · Lieferung in die Filiale
 
@@ -49,7 +44,7 @@ def prepare_mueller_demo(
         DEMO_BASELINE_ID,
         url=DEMO_CURRENT_URL,
         text=BASELINE_TEXT,
-        title="Müller-AGB · historischer Demo-Referenzstand",
+        title="Müller-AGB · historischer Ausgangsstand",
         fall_id=DEMO_FALL_ID,
         notice=DEMO_NOTICE,
     )
@@ -106,7 +101,7 @@ def _case_payload() -> dict:
         "description": (
             "Historischer Müller-Click-&-Collect-Fall nach dem rechtskräftigen "
             "Urteil des OLG Stuttgart vom 25.11.2025 (6 UKl 1/25). Der frühere "
-            "Klauselstand wird transparent als synthetischer Referenztext geführt."
+            "Klauselstand ist dem veröffentlichten Urteil entnommen."
         ),
         "tenor_element": (
             "Es ist zu unterlassen, in AGB für die Lieferung in eine Filiale zu "

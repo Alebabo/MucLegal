@@ -25,7 +25,7 @@ test("creates a notification for every agreed comparison difference", () => {
   }
 });
 
-test("uses the demo wording for a technical evidence difference", () => {
+test("uses neutral wording for a technical evidence difference", () => {
   const notification = monitoringChangeNotification("technische_aenderung_erkannt");
   assert.equal(notification?.title, "Differenz erkannt");
   assert.match(notification?.description ?? "", /Unterschied zu sehen/);
