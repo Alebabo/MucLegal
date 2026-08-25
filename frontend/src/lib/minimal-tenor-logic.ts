@@ -1,5 +1,33 @@
 export type WritingMode = "sachverhalt" | "tenor" | "fälle";
 
+export type SearchableCase = {
+  title: string;
+  fall_id: string;
+  domain: string;
+  secondary: string;
+};
+
+function normalizeCaseSearch(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("de")
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss");
+}
+
+export function filterCaseOptions<T extends SearchableCase>(cases: T[], query: string, limit = 5) {
+  const normalizedQuery = normalizeCaseSearch(query);
+  return cases
+    .filter((item) =>
+      normalizeCaseSearch(
+        `${item.title} ${item.fall_id} ${item.domain} ${item.secondary}`,
+      ).includes(normalizedQuery),
+    )
+    .slice(0, limit);
+}
+
 export type ModeCommand = {
   id: WritingMode;
   command: string;

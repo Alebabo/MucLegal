@@ -2433,3 +2433,34 @@ synthetischer Screenshot auch nach einer autorisierten Erfassung unverändert we
 Gleichzeitig müssen Manifest und Autorisierungsprotokoll die interne Kennzeichnung weiter
 enthalten. Der technische PDF-Prüfbericht kann die Autorisierung weiterhin benennen; die
 unveränderten Primär- und Rechtstextartefakte selbst tragen keinen eingebrannten Hinweis.
+
+# `/fälle` in der Tenorschreibhilfe zeigte nur statische Fallback-Fälle
+
+### Symptom
+
+Obwohl im Backend bereits neue Monitoringfälle vorhanden waren, bot der Modus `/fälle`
+der Tenorschreibhilfe ausschließlich die fünf statischen Lotto-Demofälle an. Archiv,
+Dashboard und Hinweise zeigten dagegen die aktuellen Backendfälle.
+
+### Ursache und Diagnose
+
+Die drei übrigen Ansichten verwendeten bereits `useCaseViews()`. Die Tenorschreibhilfe
+filterte weiterhin direkt die Konstante `lottoDemoCases` aus ihrer ersten Umsetzung und
+war damit vollständig von `/api/v1/monitoring-cases` getrennt. Zusätzlich lieferte
+`useCaseViews()` während des Ladens oder bei einem API-Fehler vorübergehend den Fallback,
+obwohl noch gar nicht feststand, dass das Backend keine Fälle enthält.
+
+### Lösung
+
+Die Tenorschreibhilfe verwendet nun ebenfalls `useCaseViews()` und filtert dessen aktuelle
+Fallliste. Die Lotto-Demos erscheinen nur nach einem erfolgreich geladenen, tatsächlich
+leeren Backend. Während des Ladens und bei einem API-Fehler zeigt `/fälle` einen eigenen
+Status statt irreführender Fallback-Daten.
+
+### Verifikation und verbleibende Grenze
+
+Ein Frontend-Regressionstest prüft die Suche in einer übergebenen aktuellen Fallliste.
+TypeScript-Prüfung und Browser-End-to-End-Test müssen zusätzlich bestätigen, dass der
+vorbereitete Müller-Fall in `/fälle` auswählbar ist und bis zur Tenorerstellung übernommen
+wird. Die Auswahl lädt höchstens fünf Suchtreffer; durch Eingabe von Fall-ID, Domain oder
+Titel bleibt jeder weitere Backendfall erreichbar.

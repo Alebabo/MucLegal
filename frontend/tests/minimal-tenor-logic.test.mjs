@@ -5,6 +5,7 @@ import {
   assessCompleteness,
   composeRevisionContext,
   extractLegalBases,
+  filterCaseOptions,
   filterModeCommands,
   hasConcreteViolationLocation,
   inferFallgruppe,
@@ -143,6 +144,20 @@ test("filters slash modes and wraps keyboard selection", () => {
   assert.equal(nextWrappedIndex(0, 3, -1), 2);
 });
 
+test("filters the current case source supplied by the Tenorhilfe", () => {
+  const backendCases = [
+    {
+      title: "Click & Collect in der Filiale",
+      fall_id: "VZ-MUELLER-CLICK-COLLECT-2025",
+      domain: "www.mueller.de",
+      secondary: "Aktueller technischer Vergleich vorhanden",
+    },
+  ];
+
+  assert.deepEqual(filterCaseOptions(backendCases, "müller"), backendCases);
+  assert.deepEqual(filterCaseOptions(backendCases, "lotto"), []);
+});
+
 test("replaces cumulative dictation results instead of appending them twice", () => {
   let segments = mergeDictationSegments({}, [
     { index: 0, transcript: "Der erste Satz", isFinal: false },
@@ -276,7 +291,8 @@ test("keeps the exact clause answer after a truncated uploaded contract", () => 
     slider: null,
     options: [],
   };
-  const clause = "Das Mitglied kann den Vertrag jederzeit mit einer Frist von vier Wochen kündigen.";
+  const clause =
+    "Das Mitglied kann den Vertrag jederzeit mit einer Frist von vier Wochen kündigen.";
   const clarified = composeClarifiedContext(documentContext, [{ question, answer: clause }]);
 
   assert.ok(clarified.length <= 60_000);

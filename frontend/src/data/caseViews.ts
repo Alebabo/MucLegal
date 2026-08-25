@@ -108,10 +108,11 @@ const demoViews: CaseView[] = lottoDemoCases.map((item) => ({
 export function useCaseViews() {
   const query = useMonitoringCases();
   const backendCases = (query.data ?? []).map(toCaseView);
+  const dataLoaded = query.isSuccess;
 
   return {
     ...query,
-    cases: backendCases.length ? backendCases : demoViews,
-    demoMode: backendCases.length === 0,
+    cases: dataLoaded ? (backendCases.length ? backendCases : demoViews) : [],
+    demoMode: dataLoaded && backendCases.length === 0,
   };
 }

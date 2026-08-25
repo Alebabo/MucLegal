@@ -15,10 +15,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { nextAutofillBlock } from "@/tenor-engine";
 import type { Profile } from "@/tenor-types";
-import { lottoDemoCases, type DemoCase } from "@/data/lottoDemoCases";
+import { useCaseViews, type CaseView } from "@/data/caseViews";
 import {
   composeRevisionContext,
   extractLegalBases,
+  filterCaseOptions,
   filterModeCommands,
   inferFallgruppe,
   isTenor,
@@ -86,7 +87,7 @@ type SpeechRecognitionInstance = {
   stop: () => void;
 };
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
-function caseContext(selectedCase: DemoCase) {
+function caseContext(selectedCase: CaseView) {
   return `${selectedCase.fall_id}: ${selectedCase.title}. ${selectedCase.secondary}. ${selectedCase.explanation} Fundstelle: ${selectedCase.evidence.fundstelle}.`;
 }
 
@@ -157,9 +158,10 @@ function DraftChoice({
 }
 
 export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: string | undefined }) {
+  const caseQuery = useCaseViews();
   const [context, setContext] = useState("");
   const [mode, setMode] = useState<WritingMode | null>(null);
-  const [selectedCase, setSelectedCase] = useState<DemoCase | null>(null);
+  const [selectedCase, setSelectedCase] = useState<CaseView | null>(null);
   const [commandIndex, setCommandIndex] = useState(0);
   const [caseIndex, setCaseIndex] = useState(0);
   const [pdf, setPdf] = useState<File | null>(null);
@@ -223,17 +225,8 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   const slashQuery = slashMatch?.[1]?.toLocaleLowerCase("de") ?? "";
   const showModeMenu = Boolean(slashMatch);
   const filteredCommands = filterModeCommands(slashQuery);
-  const normalizedCaseQuery = context.trim().toLocaleLowerCase("de");
   const caseMatches =
-    mode === "fälle" && !selectedCase
-      ? lottoDemoCases
-          .filter((item) =>
-            `${item.title} ${item.fall_id} ${item.domain} ${item.secondary}`
-              .toLocaleLowerCase("de")
-              .includes(normalizedCaseQuery),
-          )
-          .slice(0, 5)
-      : [];
+    mode === "fälle" && !selectedCase ? filterCaseOptions(caseQuery.cases, context) : [];
   const canRequestQuestions =
     !showModeMenu &&
     !correctionMode &&
@@ -302,7 +295,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
 
   useEffect(() => {
     setCaseIndex(0);
-  }, [normalizedCaseQuery]);
+  }, [context]);
 
   useEffect(() => {
     const input = contextInput.current;
@@ -396,7 +389,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     window.requestAnimationFrame(() => contextInput.current?.focus());
   };
 
-  const chooseCase = (item: DemoCase) => {
+  const chooseCase = (item: CaseView) => {
     setMode("fälle");
     setSelectedCase(item);
     setActiveArchive(null);
@@ -882,7 +875,13 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                 className="ml-14 mt-1 max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-white py-0.5 shadow-md"
                 onClick={(event) => event.stopPropagation()}
               >
-                {caseMatches.length > 0 ? (
+                {caseQuery.isPending ? (
+                  <p className="px-3 py-2 text-xs text-slate-400">Fälle werden geladen …</p>
+                ) : caseQuery.isError ? (
+                  <p className="px-3 py-2 text-xs text-red-600" role="alert">
+                    Fälle konnten nicht geladen werden.
+                  </p>
+                ) : caseMatches.length > 0 ? (
                   caseMatches.map((item, index) => (
                     <button
                       key={item.case_id}
