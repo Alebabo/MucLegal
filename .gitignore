@@ -22,6 +22,7 @@ data/
 artifacts/
 .muclegal/
 .muclegal-demo/
+.muclegal-decathlon-demo/
 .muclegal-ui/
 output/
 tmp/
