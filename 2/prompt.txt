@@ -1,0 +1,9 @@
+Überprüfe und überarbeite meinen Code in einem [@GitHub](plugin://github@openai-curated-remote)-Repository. Frag mich zuerst, auf welchen Teil der Codebasis du dich konzentrieren sollst.
+
+---
+
+beweispaket
+
+---
+
+das archiv ist ein toter link
