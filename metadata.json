@@ -3,7 +3,7 @@
   "checkpoint_id": "01M0W6ZJXSSNK3VVF6ZT51FKTS",
   "strategy": "manual-commit",
   "branch": "agent/live-url-ui",
-  "checkpoints_count": 6,
+  "checkpoints_count": 7,
   "files_touched": [
     "muclegal/live.py",
     "tests/test_live_ui.py"
@@ -22,13 +22,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1822555,
+    "input_tokens": 2074989,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 67998464,
-    "output_tokens": 234627,
-    "api_call_count": 560
+    "cache_read_tokens": 78596608,
+    "output_tokens": 272040,
+    "api_call_count": 633
   }
 }
