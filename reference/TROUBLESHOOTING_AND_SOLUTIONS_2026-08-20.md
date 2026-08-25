@@ -2330,3 +2330,43 @@ die Kennzeichnung bei einem technischen Vergleich. Domain-, Manifest- und
 Beweiseignungsprüfung gelten unverändert. Ein nicht technisch geeignetes Paket darf auch
 im Grey Mode nicht als Ausgangsbeweis verwendet werden; die Zuordnung ist keine
 juristische Bewertung und keine menschliche Freigabe eines Befunds.
+
+# Netto-AGB blockieren den transparent gekennzeichneten BeweisLab-Abruf
+
+### Symptom
+
+Der reale BeweisLab-Lauf vom 26.08.2026 gegen
+`https://www.netto-online.de/agb` endete mit einem Schutzbefund. Weder der
+normalisierte AGB-Text noch ein AGB-Screenshot konnten als regulärer Beweis einem
+Monitoringfall zugeordnet werden. Der direkte Abruf von `robots.txt`, der HTML-AGB
+und der statischen AGB-PDF antwortete jeweils mit HTTP 403.
+
+### Ursache und Diagnose
+
+Netto beziehungsweise der vorgeschaltete Zugriffsschutz weist den transparenten
+Projekt-User-Agent
+`MucLegal-Monitor/0.1 (+https://github.com/Alebabo/MucLegal; public-page compliance monitor)`
+ab. Derselbe HTTP-403-Stand wurde mit `Invoke-WebRequest`, im produktiven
+BeweisLab und in einem separaten Chromium-Kontext mit dem Projekt-User-Agent
+reproduziert. Ein normaler Chromium-Kontext ohne den zusätzlichen Projekt-Token
+konnte die HTML-AGB dagegen laden. Damit ist die Ursache kein fehlender AGB-Pfad;
+die öffentlich sichtbare Zieladresse `/agb` ist weiterhin korrekt.
+
+### Lösung
+
+Der Projekt-User-Agent wird nicht entfernt und der Seitenschutz nicht umgangen.
+Der Netto-Fall wird deshalb nicht für den Live-Demo-Pfad verwendet. Als Ersatz dient
+der Müller-Click-&-Collect-Fall: Seine aktuelle AGB-Seite ist mit dem transparenten
+Projekt-User-Agent als HTML erreichbar. Der historische Ausgangsstand wird dabei
+ausdrücklich als synthetische, aus dem veröffentlichten Urteil transkribierte
+Demo-Referenz gekennzeichnet; der aktuelle Stand wird regulär live erfasst.
+
+### Verifikation und verbleibende Grenze
+
+Der Müller-API-Regressionstest bereitet den Fall idempotent vor und ordnet den
+historischen Demo-Ausgangsbeweis einmalig zu. Ein realer Live-Lauf erfasst die
+Müller-AGB vollständig als Rolle `agb`; der rollenreine technische Vergleich meldet
+eine Änderung und erzeugt die bestehende anklickbare Differenzbenachrichtigung.
+Ein aktueller Live-Beweis der Netto-AGB ist mit dem vorgeschriebenen transparenten
+Projekt-User-Agent weiterhin nicht möglich. Der Netto-Schutzbefund bleibt korrekt
+dokumentiert, ist aber nicht Teil des Demo-Ablaufs.

@@ -36,6 +36,7 @@ from muclegal.evidence import verify_manifest
 from muclegal.evidence.suitability import classify_technical_evidence
 from muclegal.domain_monitor import CaseDomainMonitor
 from muclegal.decathlon_demo import prepare_decathlon_demo
+from muclegal.mueller_demo import prepare_mueller_demo
 from muclegal.monitoring_cases import (
     MonitoringCaseError,
     MonitoringCaseRepository,
@@ -1485,6 +1486,15 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         except (OSError, RuntimeError, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    @app.post("/api/v1/demo/mueller", include_in_schema=False)
+    async def prepare_mueller_agb_demo():
+        if monitoring_cases is None:
+            raise HTTPException(404, "Fallaufnahme ist nicht konfiguriert.")
+        try:
+            return prepare_mueller_demo(archive.store_root, monitoring_cases)
+        except (MonitoringCaseError, OSError, RuntimeError, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+
     @app.get("/api/v1/monitoring-cases/{case_id}")
     async def get_monitoring_case(case_id: str):
         if monitoring_cases is None:
@@ -1592,6 +1602,27 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 return document
         return documents[0] if documents else None
 
+    def matching_evidence_documents(
+        baseline_documents: list[dict], current_documents: list[dict]
+    ) -> tuple[dict | None, dict | None]:
+        """Prefer the same legal-page role so a homepage scan compares AGB with AGB."""
+
+        for preferred_role in ("agb", "privacy", "main", "requested"):
+            baseline = next(
+                (item for item in baseline_documents if item.get("role") == preferred_role),
+                None,
+            )
+            current = next(
+                (item for item in current_documents if item.get("role") == preferred_role),
+                None,
+            )
+            if baseline is not None and current is not None:
+                return baseline, current
+        return (
+            primary_evidence_document(baseline_documents),
+            primary_evidence_document(current_documents),
+        )
+
     @app.post("/api/v1/cases/{case_id}/baseline-evidence", status_code=201)
     async def attach_case_baseline_evidence(
         case_id: str, payload: BaselineEvidenceAttachRequest
@@ -1629,8 +1660,9 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if baseline.get("evidence_case_id") == payload.evidence_case_id:
             raise HTTPException(422, "Ausgangsbeweis kann nicht mit sich selbst verglichen werden.")
         current = validated_case_evidence(monitoring_case, payload.evidence_case_id)
-        baseline_document = primary_evidence_document(baseline.get("documents", []))
-        current_document = primary_evidence_document(current.get("documents", []))
+        baseline_document, current_document = matching_evidence_documents(
+            baseline.get("documents", []), current.get("documents", [])
+        )
         current_incomplete = (
             current.get("capture_completeness") == "durch_seitenschutz_begrenzt"
             or (

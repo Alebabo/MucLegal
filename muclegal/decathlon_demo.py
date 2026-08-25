@@ -53,7 +53,7 @@ def prepare_decathlon_demo(
     """Prepare a local-only, unmistakably synthetic replay of the real UI workflow."""
 
     root = Path(store_root).resolve()
-    baseline = _ensure_demo_bundle(
+    baseline = ensure_demo_bundle(
         root,
         DEMO_BASELINE_ID,
         url=DEMO_BASELINE_URL,
@@ -61,7 +61,7 @@ def prepare_decathlon_demo(
         title="Webarchiv · synthetischer Demo-Ausgangsstand",
         next_case_id=DEMO_CURRENT_ID,
     )
-    current = _ensure_demo_bundle(
+    current = ensure_demo_bundle(
         root,
         DEMO_CURRENT_ID,
         url=DEMO_CURRENT_URL,
@@ -90,7 +90,7 @@ def prepare_decathlon_demo(
     }
 
 
-def _ensure_demo_bundle(
+def ensure_demo_bundle(
     store_root: Path,
     case_id: str,
     *,
@@ -98,6 +98,8 @@ def _ensure_demo_bundle(
     text: str,
     title: str,
     next_case_id: str | None = None,
+    fall_id: str = DEMO_FALL_ID,
+    notice: str = DEMO_NOTICE,
 ) -> dict:
     bundle_root = store_root / "bundles"
     bundle_root.mkdir(parents=True, exist_ok=True)
@@ -115,8 +117,12 @@ def _ensure_demo_bundle(
             require_digest_file=True,
         )
         if not verification.valid:
-            raise RuntimeError("Vorhandenes Decathlon-Demo-Paket ist nicht manifestgültig.")
-        return {"case_id": case_id, "manifest_sha256": verification.manifest_sha256}
+            raise RuntimeError("Vorhandenes Demo-Paket ist nicht manifestgültig.")
+        return {
+            "case_id": case_id,
+            "manifest_sha256": verification.manifest_sha256,
+            "captured_at": record["erkannt_am"],
+        }
 
     temporary = bundle_root / f".{case_id}.{uuid.uuid4().hex}.tmp"
     try:
@@ -134,12 +140,12 @@ def _ensure_demo_bundle(
         raw_html.write_text(
             "<!doctype html><html lang=\"de\"><meta charset=\"utf-8\">"
             f"<title>{html.escape(title)}</title><main><h1>{html.escape(title)}</h1>"
-            f"<p><strong>{html.escape(DEMO_NOTICE)}</strong></p>"
+            f"<p><strong>{html.escape(notice)}</strong></p>"
             f"<pre>{html.escape(text.strip())}</pre></main></html>",
             encoding="utf-8",
             newline="\n",
         )
-        _write_demo_preview(preview, title, text)
+        _write_demo_preview(preview, title, text, notice)
         transparency.write_text(
             "capture_type: synthetische_demo\n"
             "live_fetch: false\n"
@@ -150,7 +156,7 @@ def _ensure_demo_bundle(
             newline="\n",
         )
         interactions.write_text("[]\n", encoding="utf-8", newline="\n")
-        notice_path.write_text(DEMO_NOTICE + "\n", encoding="utf-8", newline="\n")
+        notice_path.write_text(notice + "\n", encoding="utf-8", newline="\n")
         capture_index.write_text(
             json.dumps(
                 {
@@ -181,7 +187,7 @@ def _ensure_demo_bundle(
             "raw_html": raw_html,
             "screenshot_interactions": interactions,
         }
-        manifest = create_manifest(manifested, temporary, notice=DEMO_NOTICE)
+        manifest = create_manifest(manifested, temporary, notice=notice)
         temporary.rename(target)
 
         def final_path(path: Path) -> str:
@@ -193,16 +199,16 @@ def _ensure_demo_bundle(
             "requested_url": url,
             "captured_url": url,
             "erkannt_am": captured_at,
-            "fall_id": DEMO_FALL_ID,
+            "fall_id": fall_id,
             "demo_only": True,
-            "demo_notice": DEMO_NOTICE,
+            "demo_notice": notice,
             "demo_next_case_id": next_case_id,
             "god_mode": False,
             "evidence_suitability": "synthetische_demo",
-            "evidence_suitability_notice": DEMO_NOTICE,
+            "evidence_suitability_notice": notice,
             "capture_completeness": "vollstaendig_erfasst",
             "snapshot_sha256": sha256_file(target / "capture" / "agb" / "normalized-text.txt"),
-            "warnings": [DEMO_NOTICE],
+            "warnings": [notice],
             "assessment": {
                 "ergebnis": "nicht_bewertet",
                 "confidence": 0.0,
@@ -210,7 +216,7 @@ def _ensure_demo_bundle(
             "technical_result": {
                 "code": "synthetische_demo",
                 "label": "Synthetischer Demo-Snapshot",
-                "meaning": DEMO_NOTICE,
+                "meaning": notice,
                 "next_action": "Nur den lokalen UI-Ablauf vorführen.",
                 "tone": "warning",
                 "what_was_found": "Kein Live-Befund; eingefrorene synthetische Demo-Daten.",
@@ -256,13 +262,17 @@ def _ensure_demo_bundle(
             encoding="utf-8",
             newline="\n",
         )
-        return {"case_id": case_id, "manifest_sha256": manifest.manifest_sha256}
+        return {
+            "case_id": case_id,
+            "manifest_sha256": manifest.manifest_sha256,
+            "captured_at": captured_at,
+        }
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
 
 
-def _write_demo_preview(path: Path, title: str, text: str) -> None:
+def _write_demo_preview(path: Path, title: str, text: str, notice: str) -> None:
     image = Image.new("RGB", (1200, 900), "#f7f3ea")
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, 0, 1200, 118), fill="#291f16")
@@ -278,7 +288,8 @@ def _write_demo_preview(path: Path, title: str, text: str) -> None:
             y += 24
         y += 10
     draw.rectangle((44, 790, 1156, 856), outline="#a85d00", width=3)
-    draw.text((62, 812), "Nur zur Vorführung des lokalen Zuordnungs- und Vergleichsablaufs.", fill="#7a4300")
+    footer = textwrap.shorten(notice, width=112, placeholder=" …")
+    draw.text((62, 812), footer, fill="#7a4300")
     image.save(path, format="PNG")
 
 
