@@ -1962,3 +1962,34 @@ Adressatenhinweis aber nicht zum Klauselwortlaut gemacht wird. Eine bloße
 Paraphrase bleibt unzulässig. Nicht nummerierte Klauseltexte müssen weiterhin in
 Anführungszeichen stehen oder mit `Klausel:` gekennzeichnet werden; dadurch wird
 nicht beliebiger Beschreibungstext als wörtliche Vertragsklausel behandelt.
+
+# Hetzner-Release fehlt lokaler Kerngleichheits-Kalibrierungskontext
+
+### Symptom
+
+Der lokal und in Tests funktionierende Kerngleichheitscheck würde nach einem
+Hetzner-Update beim Aufbau der `wissensbasis` mit `FileNotFoundError` abbrechen.
+Das Release-Archiv enthielt die neue Laufzeitdatei
+`reference/kerngleichheit_anonyme_stimmen_2026-08-25.json` nicht.
+
+### Ursache und Diagnose
+
+Das Deployment erzeugt absichtlich ein eng begrenztes Archiv aus explizit genannten
+Git-Pfaden. Nach Einführung des lokalen Kalibrierungsdatensatzes blieb die Pfadliste
+im Hetzner-Runbook unverändert. Ein Vergleich der von
+`muclegal/llm/monitor_knowledge.py` gelesenen Dateien mit `tar -tf` zeigte die
+Lücke vor der Serveraktivierung.
+
+### Lösung
+
+Die versionierte JSON-Datei wird im `git archive`-Aufruf ausdrücklich aufgenommen.
+Der Release bleibt vollständig aus dem gepushten Commit reproduzierbar; Drive wird
+zur Laufzeit nicht kontaktiert.
+
+### Verifikation und verbleibende Grenze
+
+Vor Aktivierung wird mit `tar -tf` und einem Python-Import aus dem entpackten
+Release geprüft, dass der Snapshot vorhanden ist und sein SHA-256 dem im Code
+fixierten Wert entspricht. Künftige neue Laufzeitdateien unter `reference/` müssen
+weiterhin bewusst in die Allowlist aufgenommen werden; der enge Archivumfang bleibt
+als Schutz gegen versehentliche Geheimnis- oder Artefaktuploads bestehen.
