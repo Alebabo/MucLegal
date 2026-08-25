@@ -13,9 +13,12 @@ import {
 const tenorSchema = z.object({
   fall_id: z.string().trim().min(1, "Fall-ID ist erforderlich").max(200),
   schuldner: z.string().trim().min(1, "Schuldner ist erforderlich").max(500),
-  fundstelle: z.string().trim().url("Bitte eine vollständige HTTP(S)-URL angeben").max(2048),
+  fundstelle: z.union([
+    z.literal(""),
+    z.string().trim().url("Bitte eine vollständige HTTP(S)-URL angeben").max(2048),
+  ]),
   beschreibung: z.string().trim().min(1, "Beschreibung ist erforderlich").max(4000),
-  rechtsgrundlagen: z.string().trim().min(1, "Mindestens eine belegte Rechtsgrundlage angeben"),
+  rechtsgrundlagen: z.string().trim().max(2000),
   fallgruppe: z.enum([
     "irrefuehrende_werbung",
     "agb_klausel",
@@ -28,20 +31,12 @@ const tenorSchema = z.object({
 type FormValues = z.infer<typeof tenorSchema>;
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
-const legalBasisDefaults: Record<FormValues["fallgruppe"], string> = {
-  irrefuehrende_werbung: "§ 5 UWG\n§ 8 Abs. 1 UWG",
-  agb_klausel: "§ 1 UKlaG\n§ 307 BGB",
-  kuendigungsbutton: "§ 312k Abs. 2 BGB\n§ 2 Abs. 1 UKlaG",
-  consent_gestaltung: "§ 25 Abs. 1 TDDDG\n§ 2 Abs. 1 UKlaG",
-  dark_pattern_dsa: "Art. 25 DSA\n§ 2 Abs. 1 UKlaG",
-};
-
 const initialValues: FormValues = {
   fall_id: "",
   schuldner: "",
   fundstelle: "",
   beschreibung: "",
-  rechtsgrundlagen: legalBasisDefaults.irrefuehrende_werbung,
+  rechtsgrundlagen: "",
   fallgruppe: "irrefuehrende_werbung",
 };
 
@@ -67,7 +62,7 @@ function toPayload(values: FormValues): TenorDraftRequest {
   return {
     fall_id: values.fall_id,
     schuldner: values.schuldner,
-    fundstelle: values.fundstelle,
+    fundstelle: values.fundstelle || null,
     beschreibung: values.beschreibung,
     rechtsgrundlagen: splitLegalBases(values.rechtsgrundlagen),
     fallgruppe: values.fallgruppe,
@@ -86,18 +81,7 @@ export function MaskTenorView() {
     (key: keyof FormValues) =>
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       const value = event.target.value;
-      setValues((current) => {
-        if (key !== "fallgruppe") return { ...current, [key]: value };
-        const fallgruppe = value as FormValues["fallgruppe"];
-        return {
-          ...current,
-          fallgruppe,
-          rechtsgrundlagen:
-            current.rechtsgrundlagen === legalBasisDefaults[current.fallgruppe]
-              ? legalBasisDefaults[fallgruppe]
-              : current.rechtsgrundlagen,
-        };
-      });
+      setValues((current) => ({ ...current, [key]: value }));
     };
 
   async function onSubmit(event: React.FormEvent) {
@@ -114,11 +98,6 @@ export function MaskTenorView() {
     }
 
     const payload = toPayload(parsed.data);
-    if (!payload.rechtsgrundlagen.length) {
-      setErrors({ rechtsgrundlagen: "Mindestens eine belegte Rechtsgrundlage angeben" });
-      return;
-    }
-
     setErrors({});
     setSubmitError(null);
     setRecord(null);
@@ -242,7 +221,7 @@ export function MaskTenorView() {
                   <option value="dark_pattern_dsa">Dark Pattern</option>
                 </select>
               </Field>
-              <Field label="Fundstelle" error={errors.fundstelle} full>
+              <Field label="Fundstelle (bei Ast A/C optional)" error={errors.fundstelle} full>
                 <input
                   type="url"
                   className={fieldClass}
@@ -261,7 +240,7 @@ export function MaskTenorView() {
                 />
               </Field>
               <Field
-                label="Belegte Rechtsgrundlagen (eine pro Zeile)"
+                label="Belegte Rechtsgrundlagen (optional, eine pro Zeile)"
                 error={errors.rechtsgrundlagen}
                 full
               >

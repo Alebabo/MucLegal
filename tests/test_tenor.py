@@ -20,6 +20,12 @@ from muclegal.llm.tenor import (
     create_tenor_proposals,
     validate_tenor_draft,
 )
+from muclegal.llm.tenor_examples import (
+    UEExampleValidationError,
+    eligible_source_ids,
+    load_ue_examples,
+    select_ue_examples,
+)
 from muclegal.llm.tenor_questions import (
     QUESTION_TOPICS,
     TENOR_QUESTION_PROMPT_VERSION,
@@ -41,7 +47,11 @@ def tenor_payload() -> dict:
         "fall_id": "VZ-TEST-001",
         "schuldner": "Synthetische Beispiel GmbH",
         "fundstelle": "https://example.org/angebot",
-        "beschreibung": "mit einer nicht bestehenden Befristung zu werben",
+        "beschreibung": (
+            "im Rahmen geschäftlicher Handlungen gegenüber Verbrauchern auf Websites "
+            "mit einer angeblich nur heute bestehenden Rabattfrist zu werben, obwohl "
+            "die Frist tatsächlich nicht besteht"
+        ),
         "rechtsgrundlagen": ["§ 5 UWG", "§ 8 Abs. 1 UWG"],
     }
 
@@ -52,8 +62,7 @@ class StrategyTenorAnalyzer(DeterministicTenorAnalyzer):
 
     def analyze(self, model_input: dict) -> dict:
         value = super().analyze(model_input)
-        strategy = model_input["strategie"]["id"]
-        value["entwurf"] = f"{value['entwurf']} Strategie: {strategy}."
+        value["entwurf"] = f"{value['entwurf']} Vollständiger UE-Entwurf."
         return value
 
 
@@ -116,9 +125,12 @@ def question_value(
 
 class TenorDraftTests(unittest.TestCase):
     def test_tenor_prompt_is_separately_versioned(self) -> None:
-        self.assertEqual("2026-08-19-tenor-draft-1", TENOR_PROMPT_VERSION)
-        self.assertEqual(64, len(TENOR_PROMPT_SHA256))
-        self.assertEqual("2026-08-24-tenor-questions-2", TENOR_QUESTION_PROMPT_VERSION)
+        self.assertEqual("2026-08-25-ue-draft-2", TENOR_PROMPT_VERSION)
+        self.assertEqual(
+            "0405cee6e7f7b3bf05c4eb9d991a36433b61400257af63cdf776b5e67efac511",
+            TENOR_PROMPT_SHA256,
+        )
+        self.assertEqual("2026-08-25-ue-questions-3", TENOR_QUESTION_PROMPT_VERSION)
 
     def test_deterministic_draft_is_valid_and_not_human_approved(self) -> None:
         model_input = build_tenor_input(**tenor_payload())
@@ -127,6 +139,153 @@ class TenorDraftTests(unittest.TestCase):
         self.assertIsNone(draft.freigabe_durch_mensch)
         self.assertTrue(draft.nicht_umfasst)
         self.assertEqual(tuple(model_input["rechtsgrundlagen"]), draft.rechtsgrundlagen)
+
+    def test_complete_generation_and_missing_information_for_each_branch(self) -> None:
+        cases = {
+            "A": (
+                "Gegenüber Verbrauchern auf Websites mit einer angeblich nur heute "
+                "geltenden Rabattfrist zu werben, obwohl diese tatsächlich nicht besteht.",
+                "Nur heute",
+            ),
+            "B": (
+                "Gegenüber Verbrauchern auf https://example.org nach Klick auf den Button "
+                "„Weiter zur Kasse“ danach das Fenster „Versicherung wählen“ einzublenden, "
+                "wie in Anlage K 4 abgebildet.",
+                "Weiter zur Kasse",
+            ),
+            "C": (
+                "Gegenüber Verbrauchern die Klausel: „Eine Kündigung ist ausschließlich "
+                "schriftlich möglich.“ zu verwenden.",
+                "Eine Kündigung ist ausschließlich schriftlich möglich.",
+            ),
+        }
+        for branch, (description, expected) in cases.items():
+            with self.subTest(branch=branch):
+                model_input = build_tenor_input(
+                    fall_id=f"VZ-{branch}",
+                    schuldner="Synthetische Beispiel GmbH",
+                    fundstelle=None,
+                    beschreibung=description,
+                    rechtsgrundlagen=[],
+                    violation_branch=branch,
+                )
+                result = create_tenor_proposals(
+                    model_input,
+                    DeterministicTenorAnalyzer(),
+                    fallgruppe="agb_klausel" if branch == "C" else "irrefuehrende_werbung",
+                )
+                self.assertEqual("ready", result["status"])
+                self.assertEqual(branch, result["violation_branch"])
+                self.assertTrue(result["proposal"]["text"].startswith("…es zu unterlassen,"))
+                if branch in {"B", "C"}:
+                    self.assertIn(expected, result["proposal"]["text"])
+
+        missing_contexts = {
+            "A": "Eine Rabattfrist ist falsch.",
+            "B": "Verbraucher sehen nach einem Klick auf einer Website einen Dialog.",
+            "C": "Die Beispiel GmbH verwendet gegenüber Verbrauchern eine unwirksame Klausel.",
+        }
+        for branch, description in missing_contexts.items():
+            with self.subTest(missing_branch=branch):
+                model_input = build_tenor_input(
+                    fall_id=f"MISS-{branch}",
+                    schuldner="Synthetische Beispiel GmbH",
+                    fundstelle=None,
+                    beschreibung=description,
+                    rechtsgrundlagen=[],
+                    violation_branch=branch,
+                )
+                result = create_tenor_proposals(
+                    model_input,
+                    DeterministicTenorAnalyzer(),
+                    fallgruppe="agb_klausel" if branch == "C" else "irrefuehrende_werbung",
+                )
+                self.assertEqual("needs_information", result["status"])
+                self.assertIsNone(result["proposal"])
+                self.assertTrue(result["missing_information"])
+
+    def test_validator_rejects_judgment_formulas_and_incomplete_branch_content(self) -> None:
+        branch_b = build_tenor_input(
+            fall_id="VZ-B",
+            schuldner="Beispiel GmbH",
+            fundstelle="https://example.org",
+            beschreibung=(
+                "Gegenüber Verbrauchern nach Rechtsklick auf „Video“ und danach Klick auf "
+                "„Feeds verwalten“ ein Menü zu zeigen, wie in Anlage K 2 abgebildet."
+            ),
+            rechtsgrundlagen=[],
+            violation_branch="B",
+        )
+        base = DeterministicTenorAnalyzer().analyze(branch_b)
+        forbidden = [
+            "Die Beklagte wird verurteilt, es zu unterlassen, etwas zu tun.",
+            "Es wird untersagt, etwas zu tun.",
+            "…es zu unterlassen, etwas bei Meidung eines Ordnungsgeldes zu tun.",
+        ]
+        for text in forbidden:
+            with self.subTest(text=text):
+                value = {**base, "entwurf": text}
+                with self.assertRaises(TenorDraftValidationError):
+                    validate_tenor_draft(value, allowed_legal_bases=[], model_input=branch_b)
+        incomplete_b = {
+            **base,
+            "entwurf": "…es zu unterlassen, gegenüber Verbrauchern ein Menü zu zeigen, wie in Anlage K 2.",
+        }
+        with self.assertRaises(TenorDraftValidationError):
+            validate_tenor_draft(incomplete_b, allowed_legal_bases=[], model_input=branch_b)
+
+        branch_c = build_tenor_input(
+            fall_id="VZ-C",
+            schuldner="Beispiel GmbH",
+            fundstelle=None,
+            beschreibung="Gegenüber Verbrauchern die Klausel: „Nur schriftliche Kündigung.“ zu verwenden.",
+            rechtsgrundlagen=[],
+            violation_branch="C",
+        )
+        paraphrased = DeterministicTenorAnalyzer().analyze(branch_c)
+        paraphrased["entwurf"] = "…es zu unterlassen, eine Klausel über die Schriftform zu verwenden."
+        with self.assertRaisesRegex(TenorDraftValidationError, "wörtlich"):
+            validate_tenor_draft(paraphrased, allowed_legal_bases=[], model_input=branch_c)
+
+    def test_reference_inventory_and_prompt_eligibility_are_strict(self) -> None:
+        records = load_ue_examples()
+        source_urls = {item["source_url"] for item in records}
+        self.assertEqual(51, len(records))
+        self.assertEqual(49, len(source_urls))
+        eligible = set(eligible_source_ids())
+        self.assertTrue(eligible)
+        self.assertTrue(all(item.get("primary_verification_url") for item in records if item["prompt_eligible"]))
+        selected = select_ue_examples(
+            branch="B",
+            fallgruppe="kuendigungsbutton",
+            text="Klick auf Kündigen und Anlage",
+        )
+        self.assertLessEqual(len(selected), 3)
+        self.assertTrue({item["source_id"] for item in selected}.issubset(eligible))
+
+        source_payload = json.loads(
+            (ROOT / "reference" / "ue_examples.json").read_text(encoding="utf-8")
+        )
+        mutations = []
+        mismatch = json.loads(json.dumps(source_payload))
+        mismatch["examples"][8]["prompt_eligible"] = True
+        mismatch["examples"][8]["quarantine_reason"] = ""
+        mutations.append(mismatch)
+        truncated = json.loads(json.dumps(source_payload))
+        truncated["examples"] = truncated["examples"][:50]
+        mutations.append(truncated)
+        duplicate = json.loads(json.dumps(source_payload))
+        duplicate["examples"][1]["id"] = duplicate["examples"][0]["id"]
+        mutations.append(duplicate)
+        scan_only = json.loads(json.dumps(source_payload))
+        scan_only["examples"][6]["primary_verification_url"] = "https://example.org/scan.pdf"
+        mutations.append(scan_only)
+        with tempfile.TemporaryDirectory() as output:
+            for index, mutation in enumerate(mutations):
+                path = Path(output) / f"invalid-{index}.json"
+                path.write_text(json.dumps(mutation), encoding="utf-8")
+                with self.assertRaises(UEExampleValidationError):
+                    load_ue_examples(path)
 
     def test_unproven_legal_source_and_model_release_are_rejected(self) -> None:
         model_input = build_tenor_input(**tenor_payload())
@@ -139,7 +298,7 @@ class TenorDraftTests(unittest.TestCase):
         with self.assertRaises(TenorDraftValidationError):
             validate_tenor_draft(value, allowed_legal_bases=model_input["rechtsgrundlagen"])
 
-    def test_two_proposals_are_case_specific_and_require_human_review(self) -> None:
+    def test_one_complete_proposal_is_case_specific_and_requires_human_review(self) -> None:
         model_input = build_tenor_input(**tenor_payload())
         result = create_tenor_proposals(
             model_input,
@@ -147,25 +306,26 @@ class TenorDraftTests(unittest.TestCase):
             fallgruppe="irrefuehrende_werbung",
         )
         self.assertEqual("test_openai", result["mode"])
-        self.assertEqual(["precise", "neutral"], [item["strategy"] for item in result["proposals"]])
-        self.assertNotEqual(result["proposals"][0]["text"], result["proposals"][1]["text"])
-        self.assertTrue(all(item["human_approval_required"] for item in result["proposals"]))
-        self.assertTrue(all(item["freigabe_durch_mensch"] is None for item in result["proposals"]))
-        self.assertIn("Unterlassungsmonitor-Wissensdokument", result["reference_version"])
-        self.assertTrue(all("KW-002" in item["source_ids"] for item in result["proposals"]))
+        self.assertEqual("ready", result["status"])
+        self.assertEqual("A", result["violation_branch"])
+        self.assertEqual("complete", result["proposal"]["strategy"])
+        self.assertTrue(result["proposal"]["human_approval_required"])
+        self.assertIsNone(result["proposal"]["freigabe_durch_mensch"])
+        self.assertEqual("ue-examples-2026-08-25-v1", result["reference_version"])
+        self.assertNotIn("KW-002", result["proposal"]["source_ids"])
 
-    def test_mask_input_uses_the_same_neutral_strategy_and_knowledge(self) -> None:
+    def test_mask_input_uses_the_same_complete_generator_and_verified_examples(self) -> None:
         model_input = build_tenor_input(**tenor_payload())
         enriched, source_ids, reference_version = build_tenor_strategy_input(
             model_input,
             fallgruppe="irrefuehrende_werbung",
             strategy="neutral",
         )
-        self.assertEqual("neutral", enriched["strategie"]["id"])
+        self.assertEqual("A", enriched["violation_branch"])
         self.assertEqual("irrefuehrende_werbung", enriched["fallgruppe"])
-        self.assertEqual(source_ids, enriched["wissensbasis"]["source_ids"])
-        self.assertIn("KW-002", source_ids)
-        self.assertEqual(reference_version, enriched["wissensbasis"]["version"])
+        self.assertEqual(source_ids, [item["source_id"] for item in enriched["referenzbeispiele"]])
+        self.assertEqual("ue-examples-2026-08-25-v1", reference_version)
+        self.assertNotIn("wissensbasis", enriched)
 
     def test_mask_api_enriches_a_selected_fallgruppe(self) -> None:
         with tempfile.TemporaryDirectory() as output:
@@ -180,9 +340,9 @@ class TenorDraftTests(unittest.TestCase):
                 response = client.post("/api/v1/tenor-drafts", json=payload)
             self.assertEqual(201, response.status_code, response.text)
             record = response.json()
-            self.assertEqual("neutral", record["input"]["strategie"]["id"])
+            self.assertEqual("A", record["input"]["violation_branch"])
             self.assertEqual("irrefuehrende_werbung", record["input"]["fallgruppe"])
-            self.assertIn("KW-002", record["input"]["wissensbasis"]["source_ids"])
+            self.assertIn("referenzbeispiele", record["input"])
 
     def test_openai_analyzer_uses_frozen_prompt_and_structured_output(self) -> None:
         class FakeResponses:
@@ -205,7 +365,7 @@ class TenorDraftTests(unittest.TestCase):
         analyzer = OpenAITenorAnalyzer(model="test-model", client=client)
         analyzer.analyze(build_tenor_input(**tenor_payload()))
         self.assertEqual("test-model", responses.request["model"])
-        self.assertIn("prüfbedürftigen Entwurf", responses.request["instructions"])
+        self.assertIn("AUSSCHLIESSLICH der Text für eine Unterlassungserklärung", responses.request["instructions"])
         self.assertTrue(responses.request["text"]["format"]["strict"])
         self.assertFalse(responses.request["store"])
 
@@ -237,7 +397,7 @@ class TenorDraftTests(unittest.TestCase):
             restarted = LiveMonitorWorkflow(root, ROOT / "fixtures" / "tenor.json")
             self.assertEqual("VZ-TEST-001", restarted.tenor["fall_id"])
 
-    def test_proposal_api_returns_two_validated_strategies(self) -> None:
+    def test_proposal_api_returns_one_validated_complete_draft(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             root = Path(output)
             app = create_app(
@@ -261,10 +421,10 @@ class TenorDraftTests(unittest.TestCase):
                 response = client.post("/api/v1/tenor-proposals", json=payload)
             self.assertEqual(200, response.status_code, response.text)
             result = response.json()
-            self.assertEqual(["precise", "neutral"], [
-                item["strategy"] for item in result["proposals"]
-            ])
-            self.assertTrue(all(item["freigabe_durch_mensch"] is None for item in result["proposals"]))
+            self.assertEqual("ready", result["status"])
+            self.assertEqual("complete", result["proposal"]["strategy"])
+            self.assertIsNone(result["proposal"]["freigabe_durch_mensch"])
+            self.assertEqual([], result["missing_information"])
 
     def test_contextual_question_api_uses_prior_answers(self) -> None:
         with tempfile.TemporaryDirectory() as output:
@@ -297,7 +457,54 @@ class TenorDraftTests(unittest.TestCase):
             self.assertTrue(ready.json()["ready_to_generate"])
             self.assertIsNone(ready.json()["question"])
 
-    def test_slider_question_is_strictly_validated(self) -> None:
+    def test_branch_choice_appears_only_for_genuine_ambiguity(self) -> None:
+        ambiguous = build_tenor_question_input(
+            context=(
+                "Die Beispiel GmbH bietet gegenüber Verbrauchern online einen "
+                "Kündigungsbutton an; die konkrete Beanstandung ist noch nicht beschrieben."
+            ),
+            fallgruppe="kuendigungsbutton",
+            answered_questions=[],
+        )
+        result = create_tenor_question(ambiguous, ContextualQuestionAnalyzer())
+        self.assertEqual("verletzungsast", result["question"]["topic_id"])
+        self.assertEqual("single_choice", result["question"]["answer_type"])
+        self.assertEqual(
+            [
+                "vollständig textlich beschreibbar",
+                "nur mit Screenshot/Klickpfad verständlich",
+                "wörtliche Vertrags-/AGB-Klausel",
+            ],
+            [item["label"] for item in result["question"]["options"]],
+        )
+
+        answered = build_tenor_question_input(
+            context=ambiguous["sachverhalt"],
+            fallgruppe="kuendigungsbutton",
+            answered_questions=[{
+                "topic_id": "verletzungsast",
+                "question": result["question"]["text"],
+                "answer": "nur mit Screenshot/Klickpfad verständlich",
+                "answer_type": "single_choice",
+            }],
+        )
+        self.assertEqual("B", answered["violation_branch"])
+        self.assertNotIn("verletzungsast", answered["erforderliche_offene_topic_ids"])
+
+        clear = build_tenor_question_input(
+            context=(
+                "Die Beispiel GmbH wirbt gegenüber Verbrauchern auf ihrer Website mit "
+                "einer falschen Rabattfrist, die tatsächlich nicht besteht."
+            ),
+            fallgruppe="irrefuehrende_werbung",
+            answered_questions=[],
+        )
+        self.assertNotIn(
+            "verletzungsast",
+            {item["topic_id"] for item in clear["erlaubte_offene_themen"]},
+        )
+
+    def test_slider_question_is_not_part_of_the_new_catalog(self) -> None:
         model_input = build_tenor_question_input(
             context="Die Aktion lief mit einem sichtbaren Countdown auf der Website.",
             fallgruppe="irrefuehrende_werbung",
@@ -316,17 +523,7 @@ class TenorDraftTests(unittest.TestCase):
                 "unit": "Tage",
             },
         )
-        result = create_tenor_question(
-            model_input,
-            type(
-                "SliderAnalyzer",
-                (),
-                {"mode": "test", "model": "test", "analyze": lambda self, _: raw},
-            )(),
-        )
-        self.assertEqual(15, result["question"]["slider"]["maximum"] // 2)
-        raw["question"]["slider"]["maximum"] = 0
-        with self.assertRaises(TenorQuestionValidationError):
+        with self.assertRaisesRegex(TenorQuestionValidationError, "Faktenkatalog"):
             validate_tenor_question(raw, model_input=model_input)
 
     def test_agb_catalog_excludes_usage_context_and_accepts_immediate_ready(self) -> None:

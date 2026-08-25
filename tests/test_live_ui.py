@@ -246,6 +246,12 @@ class LiveWorkflowTests(unittest.TestCase):
             _discover_legal_pages(html_path, "https://www.adidas.de/", adidas_path)
             adidas = json.loads(adidas_path.read_text(encoding="utf-8"))
 
+            decathlon_path = root / "decathlon-legal-pages.json"
+            _discover_legal_pages(
+                html_path, "https://www.decathlon.de/", decathlon_path
+            )
+            decathlon = json.loads(decathlon_path.read_text(encoding="utf-8"))
+
         self.assertEqual(
             "https://www.temu.com/de/terms-of-use.html", temu["agb"][0]["url"]
         )
@@ -258,6 +264,17 @@ class LiveWorkflowTests(unittest.TestCase):
             "https://www.adidas.de/terms_and_conditions", adidas["agb"][0]["url"]
         )
         self.assertEqual("known_site_public_path", adidas["agb"][0]["source"])
+        self.assertEqual("https://www.decathlon.de/agb", decathlon["agb"][0]["url"])
+        self.assertEqual(
+            "https://www.decathlon.de/c/legal/datenschutz_a20e5c3d-ec34-4893-b9f4-e58ff3144207",
+            decathlon["datenschutz"][0]["url"],
+        )
+        self.assertTrue(
+            all(
+                item["source"] == "known_site_public_path"
+                for item in decathlon["agb"] + decathlon["datenschutz"]
+            )
+        )
 
     def test_failure_discovery_keeps_one_agb_and_privacy_fallback_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1804,7 +1821,10 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn("Dem Fall zuordnen oder vergleichen", page.text)
         self.assertIn('"baseline-evidence"', page.text)
         self.assertIn('"evidence-comparisons"', page.text)
-        self.assertIn("Mit Ausgangsbeweis vergleichen", page.text)
+        self.assertIn("Aktuellen Scan zuordnen & vergleichen", page.text)
+        self.assertIn("cases.length===1", page.text)
+        self.assertIn("Passender Fall automatisch gewählt", page.text)
+        self.assertIn("Scan ist dem Fall zugeordnet", page.text)
         self.assertIn("muclegal:evidence-comparison-notification:v1", page.text)
         self.assertIn("monitoringUiUrl", page.text)
         self.assertIn("openMonitoringNotification", page.text)

@@ -45,6 +45,31 @@ class _CaptureHandler(BaseHTTPRequestHandler):
                 button.setAttribute('aria-expanded','true');
               }); print.onclick=()=>location.href='/must-not-open';</script></main>"""
             self.send_response(200)
+        elif self.path == "/accordion-after-noise":
+            noise = "".join(
+                f"<button type='button'>Produktaktion {index}</button>"
+                for index in range(130)
+            )
+            body = f"""<!doctype html><main><h1>Datenschutzhinweise</h1>{noise}
+              <section class='accordion'><button class='accordion__trigger'
+                aria-expanded='false' aria-controls='privacy-content'>Ihre Rechte</button>
+              <div id='privacy-content' hidden>Deterministisch erfasster Datenschutztext.</div></section>
+              <script>document.querySelector('.accordion__trigger').onclick=event=>{{
+                event.currentTarget.setAttribute('aria-expanded','true');
+                document.getElementById('privacy-content').hidden=false;
+              }};</script></main>""".encode()
+            self.send_response(200)
+        elif self.path == "/second-main-accordion":
+            body = b"""<!doctype html><main><button aria-expanded='false'
+              aria-controls='menu'>Menue</button><div id='menu' hidden>Navigation</div></main>
+              <main><h1>Datenschutzerklaerung</h1><section class='disclosure'>
+              <button data-state='closed'>Weitere Informationen</button>
+              <div hidden>Inhaltsreicher Rechtstext im zweiten Hauptbereich.</div></section></main>
+              <script>document.querySelector('[data-state]').onclick=event=>{
+                event.currentTarget.dataset.state='open';
+                event.currentTarget.nextElementSibling.hidden=false;
+              };</script>"""
+            self.send_response(200)
         else:
             height = int(self.path.removeprefix("/height/").split("?")[0])
             body = (
@@ -171,6 +196,47 @@ def test_aria_legal_accordions_are_expanded_and_print_pdf_is_stored(
     assert print_metadata["website_original"] is False
     assert (root / "expanded-legal-print.pdf").stat().st_size > 1_000
     assert captured.fetch_result.final_url.endswith("/accordion")
+
+
+def test_legal_accordion_is_not_hidden_by_more_than_100_unrelated_buttons(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/accordion-after-noise", role="privacy"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    interactions = json.loads((root / "interactions.json").read_text("utf-8"))[
+        "interactions"
+    ]
+    expansions = [item for item in interactions if item.get("type") == "legal_expansion"]
+
+    assert "Deterministisch erfasster Datenschutztext" in normalized
+    assert len(expansions) == 1
+    assert expansions[0]["structure"]["aria_accordion"] is True
+    assert expansions[0]["eligible_total"] == 1
+
+
+def test_richest_semantic_main_and_data_state_disclosure_are_used(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/second-main-accordion", role="privacy"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    interactions = json.loads((root / "interactions.json").read_text("utf-8"))[
+        "interactions"
+    ]
+    expansions = [item for item in interactions if item.get("type") == "legal_expansion"]
+
+    assert "Inhaltsreicher Rechtstext im zweiten Hauptbereich" in normalized
+    assert len(expansions) == 1
+    assert expansions[0]["structure"]["structured_disclosure"] is True
 
 
 def test_generic_reject_requires_dialog_and_visible_accept_alternative() -> None:

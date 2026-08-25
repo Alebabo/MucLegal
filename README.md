@@ -46,6 +46,23 @@ Anthropic vorprüfen lassen. Auf einer einzigen Prüfseite werden Änderung, KI-
 Unsicherheit und lokale Dokumentationsartefakte gezeigt. Die menschliche Entscheidung wird davon
 getrennt erfasst.
 
+### Vollständige Funktionsdokumentation
+
+Das ausführliche
+[`MucLegal-Funktionshandbuch`](reference/MUCLEGAL_FUNKTIONSHANDBUCH.md) beschreibt den
+gesamten aktuellen Produkt- und Technikstand. Es enthält insbesondere:
+
+- alle Oberflächen und Benutzerabläufe von Dashboard, Fallmonitor, Archiv,
+  Tenorschreibhilfe und BeweisLab,
+- HTTP-, Browser-, Robots-, Consent-, Screenshot- und Rechtstexterfassung,
+- Normalisierung, Hashvergleich, Klauselpaarung und Kerngleichheitsprüfung,
+- Beweisartefakte, WARC/CDX, Manifest, RFC-3161, Wayback, PDF und ZIP,
+- Datenmodelle, REST-API, CLI, Persistenz und Konfiguration sowie
+- Sicherheitsgrenzen, bekannte Einschränkungen, Tests und einen empfohlenen Demoablauf.
+
+Das Handbuch unterscheidet ausdrücklich zwischen implementierten Funktionen, technischen
+Fallbacks, bekannten Grenzen und noch nicht umgesetzter Roadmap.
+
 ### Welche Grenzen gelten?
 
 MucLegal arbeitet ausschließlich mit öffentlich zugänglichen Seiten. Es umgeht keine Logins, Paywalls, CAPTCHAs oder technischen Schutzmaßnahmen und respektiert `robots.txt`. Rohdaten und Dokumentationsartefakte werden nicht zur Analyse an fremde Extraktionsdienste weitergegeben.
@@ -79,8 +96,10 @@ Der aktuelle Golden Path umfasst:
 - versionierte REST-Schnittstelle unter `/api/v1/`
 - versionierte Eval-Suite mit maschinenlesbarem und fachlichem Bericht
 
-Eine technische Übergabe mit Architektur, Datenflüssen, Befehlen und offenen Punkten steht in
-[`CONTEXT.md`](CONTEXT.md).
+Die vollständige Funktionsbeschreibung steht im
+[`MucLegal-Funktionshandbuch`](reference/MUCLEGAL_FUNKTIONSHANDBUCH.md). Eine kompaktere
+technische Übergabe mit Architektur, Datenflüssen, Befehlen und offenen Punkten steht zusätzlich
+in [`CONTEXT.md`](CONTEXT.md).
 
 ## Voraussetzungen und Installation
 
@@ -303,7 +322,9 @@ muclegal/
   llm/            Tenor-Entwurf, Vorprüfung und strikte Schema-Validierung
   evidence/       WARC, Manifest, Zeitstempel, Screenshot und PDF
   templates/      Ein-Seiten-Prüfoberfläche
+frontend/         React-/TanStack-Oberfläche für Fallmonitor und Tenorschreibhilfe
 fixtures/         synthetische Demo- und Eval-Fälle
+reference/        Funktionshandbuch, Implementierungspläne und technische Übergaben
 tests/            automatisierte Abnahme- und Regressionstests
 app.py            FastAPI-Einstiegspunkt
 ```

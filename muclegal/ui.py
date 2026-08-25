@@ -46,6 +46,7 @@ from muclegal.llm.tenor import (
     build_tenor_strategy_input,
     create_tenor_draft,
     create_tenor_proposals,
+    missing_tenor_information,
     validate_tenor_draft,
 )
 from muclegal.llm.tenor_questions import (
@@ -178,20 +179,22 @@ class TenorDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     fall_id: str = Field(min_length=1, max_length=200)
     schuldner: str = Field(min_length=1, max_length=500)
-    fundstelle: str = Field(min_length=1, max_length=2048)
+    fundstelle: str | None = Field(default=None, max_length=2048)
     beschreibung: str = Field(min_length=1, max_length=4000)
-    rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
+    rechtsgrundlagen: list[str] = Field(default_factory=list, max_length=20)
     fallgruppe: str | None = Field(default=None, min_length=1, max_length=100)
+    violation_branch: Literal["A", "B", "C"] | None = None
 
 
 class TenorProposalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     fall_id: str = Field(min_length=1, max_length=200)
     schuldner: str = Field(min_length=1, max_length=500)
-    fundstelle: str = Field(min_length=1, max_length=2048)
+    fundstelle: str | None = Field(default=None, max_length=2048)
     context: str = Field(min_length=20, max_length=60000)
     fallgruppe: str = Field(min_length=1, max_length=100)
-    rechtsgrundlagen: list[str] = Field(min_length=1, max_length=20)
+    rechtsgrundlagen: list[str] = Field(default_factory=list, max_length=20)
+    violation_branch: Literal["A", "B", "C"] | None = None
 
 
 class AnsweredTenorQuestionRequest(BaseModel):
@@ -218,7 +221,7 @@ class TenorArchiveRequest(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     text: str = Field(min_length=1, max_length=12000)
     context: str = Field(min_length=1, max_length=60000)
-    strategy: Literal["precise", "neutral"]
+    strategy: Literal["complete", "precise", "neutral"]
     model: str = Field(min_length=1, max_length=200)
     reference_version: str = Field(min_length=1, max_length=500)
     source_ids: list[str] = Field(default_factory=list, max_length=50)
@@ -1115,13 +1118,20 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
 
     def generate_tenor(payload: TenorDraftRequest) -> dict:
         values = payload.model_dump()
-        fallgruppe = values.pop("fallgruppe")
+        fallgruppe = values.pop("fallgruppe") or "irrefuehrende_werbung"
         model_input = build_tenor_input(**values)
-        if fallgruppe:
-            model_input, _, _ = build_tenor_strategy_input(
-                model_input,
-                fallgruppe=fallgruppe,
-                strategy="neutral",
+        model_input, _, _ = build_tenor_strategy_input(
+            model_input,
+            fallgruppe=fallgruppe,
+            strategy="complete",
+        )
+        missing = missing_tenor_information(
+            model_input=model_input,
+            fallgruppe=fallgruppe,
+        )
+        if missing:
+            raise ValueError(
+                "Für einen bestimmten UE-Entwurf fehlen: " + ", ".join(missing)
             )
         draft, mode, model = create_tenor_draft(model_input, tenor_analyzer_factory())
         return tenor_drafts.save(model_input, draft, mode=mode, model=model)
@@ -1175,6 +1185,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             fundstelle=payload.fundstelle,
             beschreibung=payload.context,
             rechtsgrundlagen=payload.rechtsgrundlagen,
+            violation_branch=payload.violation_branch,
         )
         try:
             return create_tenor_proposals(

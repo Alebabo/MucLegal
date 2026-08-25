@@ -202,6 +202,7 @@ function tenorStatus(item: TenorArchiveRecord) {
 }
 
 function strategyLabel(item: TenorArchiveRecord) {
+  if (item.strategy === "complete") return "Vollständiger UE-Entwurf";
   if (item.strategy === "precise") return "Präzise";
   if (item.strategy === "neutral") return "Technikneutral";
   return item.strategy.replaceAll("_", " ");

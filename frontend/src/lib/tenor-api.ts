@@ -3,10 +3,11 @@ export type TenorDecision = "freigegeben" | "abgelehnt" | "weitere_pruefung";
 export type TenorDraftRequest = {
   fall_id: string;
   schuldner: string;
-  fundstelle: string;
+  fundstelle?: string | null;
   beschreibung: string;
-  rechtsgrundlagen: string[];
+  rechtsgrundlagen?: string[];
   fallgruppe?: string;
+  violation_branch?: "A" | "B" | "C" | null;
 };
 
 export type TenorDraft = {
@@ -35,14 +36,15 @@ export type TenorDraftRecord = {
 export type TenorProposalRequest = {
   fall_id: string;
   schuldner: string;
-  fundstelle: string;
+  fundstelle?: string | null;
   context: string;
   fallgruppe: string;
-  rechtsgrundlagen: string[];
+  rechtsgrundlagen?: string[];
+  violation_branch?: "A" | "B" | "C" | null;
 };
 
 export type TenorProposal = {
-  strategy: "precise" | "neutral";
+  strategy: "complete";
   title: string;
   text: string;
   source_ids: string[];
@@ -55,7 +57,10 @@ export type TenorProposalResponse = {
   mode: "live_openai";
   model: string;
   reference_version: string;
-  proposals: [TenorProposal, TenorProposal];
+  status: "ready" | "needs_information";
+  violation_branch: "A" | "B" | "C";
+  proposal: TenorProposal | null;
+  missing_information: string[];
 };
 
 export type TenorArchiveRequest = {
@@ -64,7 +69,7 @@ export type TenorArchiveRequest = {
   title: string;
   text: string;
   context: string;
-  strategy: "precise" | "neutral";
+  strategy: "complete";
   model: string;
   reference_version: string;
   source_ids: string[];
@@ -117,6 +122,8 @@ export type TenorQuestionResponse = {
   model: string;
   ready_to_generate: boolean;
   question: TenorQuestion | null;
+  violation_branch: "A" | "B" | "C";
+  missing_information: string[];
 };
 
 export type TenorPdfExtraction = {

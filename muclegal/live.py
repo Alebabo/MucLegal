@@ -56,6 +56,17 @@ KNOWN_SITE_LEGAL_PATHS: dict[str, dict[str, tuple[str, ...]]] = {
     "adidas.de": {
         "agb": ("/terms_and_conditions",),
     },
+    "decathlon.de": {
+        "agb": (
+            "/agb",
+            "/c/legal/allgemeine-geschaeftsbedingungen-agb-webshop_917fe9ac-dc2d-4705-a58b-63c393960b57",
+            "/AGB_lp-P7ELHE",
+        ),
+        "datenschutz": (
+            "/c/legal/datenschutz_a20e5c3d-ec34-4893-b9f4-e58ff3144207",
+            "/datenschutz_lp-UKIO21",
+        ),
+    },
 }
 
 

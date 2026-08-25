@@ -595,38 +595,98 @@ def _legal_container_text(page) -> str:  # noqa: ANN001
     )
 
 
+def _legal_container_locator(page):  # noqa: ANN001, ANN201
+    """Return the visible semantic content root with the most readable text."""
+    candidates = page.locator("main, article, [role='main']")
+    count = candidates.count()
+    if count == 0:
+        return page.locator("body")
+    selected = int(
+        candidates.evaluate_all(
+            """elements => {
+              let bestIndex = 0;
+              let bestLength = -1;
+              elements.forEach((element, index) => {
+                const style = getComputedStyle(element);
+                const visible = style.visibility !== 'hidden' && style.display !== 'none';
+                const length = visible ? (element.innerText || '').trim().length : -1;
+                if (length > bestLength) {
+                  bestIndex = index;
+                  bestLength = length;
+                }
+              });
+              return bestIndex;
+            }"""
+        )
+    )
+    return candidates.nth(selected)
+
+
+_LEGAL_CONTROL_SELECTOR = (
+    "details:not([open]) > summary, "
+    "[aria-expanded='false'], "
+    "[role='tab'][aria-selected='false'], "
+    "[data-state='closed'], "
+    "button"
+)
+
+
+_LEGAL_CONTROL_ELIGIBILITY = """el => {
+  if (el.closest('nav, header, footer, [role="navigation"], form')) return null;
+  const tag = el.tagName.toLowerCase();
+  const role = el.getAttribute('role');
+  const text = (el.innerText || el.getAttribute('aria-label') || '').trim();
+  const className = typeof el.className === 'string' ? el.className : '';
+  const isButton = tag === 'button' || role === 'button';
+  const detailsSummary = tag === 'summary' && !!el.closest('details:not([open])');
+  const ariaAccordion = isButton && el.getAttribute('aria-expanded') === 'false' &&
+    !!el.getAttribute('aria-controls');
+  const inactiveTab = role === 'tab' && el.getAttribute('aria-selected') === 'false' &&
+    !!el.getAttribute('aria-controls');
+  const structuredDisclosure = isButton && (
+    el.getAttribute('data-state') === 'closed' ||
+    /(^|[\s_-])(accordion|disclosure)([\s_-]|$)/i.test(className) ||
+    /(^|\s)collapsed(\s|$)/i.test(className)
+  );
+  const labelledDisclosure = isButton && /\b(mehr\s+anzeigen|mehr\s+lesen|weiterlesen|weitere\s+informationen|vollst[aä]ndigen\s+text\s+anzeigen|inhalt\s+anzeigen)\b/i.test(text);
+  if (!(detailsSummary || ariaAccordion || inactiveTab || structuredDisclosure || labelledDisclosure)) {
+    return null;
+  }
+  return {
+    tag_name: tag,
+    details_summary: detailsSummary,
+    aria_accordion: ariaAccordion,
+    inactive_tab: inactiveTab,
+    structured_disclosure: structuredDisclosure,
+    labelled_disclosure: labelledDisclosure
+  };
+}"""
+
+
+def _eligible_legal_controls(container, limit: int = 100) -> list:  # noqa: ANN001
+    """Select eligible legal disclosures before applying the deterministic limit."""
+    eligible = []
+    for control in container.locator(_LEGAL_CONTROL_SELECTOR).all():
+        structure = control.evaluate(_LEGAL_CONTROL_ELIGIBILITY)
+        if structure is None:
+            continue
+        eligible.append((control, structure))
+        if len(eligible) == limit:
+            break
+    return eligible
+
+
 def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
     from playwright.sync_api import Error as PlaywrightError
 
     records: list[dict] = []
-    container = page.locator("main, article, [role='main']").first
     try:
-        if container.count() == 0:
-            container = page.locator("body")
-        controls = container.locator(
-            "details:not([open]) > summary, [aria-expanded='false'][aria-controls], "
-            "[role='tab'][aria-selected='false'], button"
-        )
-        count = min(controls.count(), 100)
-        eligible_total = int(
-            container.evaluate(
-                """root => [...root.querySelectorAll(
-                  "details:not([open]) > summary, [aria-expanded='false'][aria-controls], " +
-                  "[role='tab'][aria-selected='false'], button"
-                )].filter(el => {
-                  const text = (el.innerText || el.getAttribute('aria-label') || '').trim();
-                  return (el.tagName === 'SUMMARY' && !!el.closest('details:not([open])')) ||
-                    (el.getAttribute('aria-expanded') === 'false' && !!el.getAttribute('aria-controls')) ||
-                    (el.getAttribute('role') === 'tab' && el.getAttribute('aria-selected') === 'false' &&
-                      !!el.getAttribute('aria-controls')) ||
-                    (el.tagName === 'BUTTON' && /\\bmehr\\s+anzeigen\\b/i.test(text));
-                }).slice(0, 100).length"""
-            )
-        )
+        container = _legal_container_locator(page)
+        controls = _eligible_legal_controls(container)
+        eligible_total = len(controls)
     except PlaywrightError:
         return records
-    for index in range(count):
-        control = controls.nth(index)
+    for control, structure in controls:
         try:
             if not control.is_visible(timeout=100):
                 continue
@@ -638,45 +698,31 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                   text: (el.innerText || el.getAttribute('aria-label') || '').trim(),
                   aria_expanded: el.getAttribute('aria-expanded'),
                   aria_controls: el.getAttribute('aria-controls'),
+                  aria_selected: el.getAttribute('aria-selected'),
+                  data_state: el.getAttribute('data-state'),
+                  class_name: typeof el.className === 'string' ? el.className : '',
                   details_open: el.closest('details')?.open ?? null,
                   url: document.URL,
                   text_length: (document.body?.innerText || '').length
                 })"""
             )
-            structure = handle.evaluate(
-                """el => ({
-                  tag_name: el.tagName.toLowerCase(),
-                  details_summary: el.tagName === 'SUMMARY' && !!el.closest('details:not([open])'),
-                  aria_accordion: el.getAttribute('aria-expanded') === 'false' && !!el.getAttribute('aria-controls'),
-                  inactive_tab: el.getAttribute('role') === 'tab' &&
-                    el.getAttribute('aria-selected') === 'false' && !!el.getAttribute('aria-controls')
-                })"""
-            )
-            more_button = bool(
-                structure["tag_name"] == "button"
-                and re.search(r"\bmehr\s+anzeigen\b", before["text"], re.IGNORECASE)
-            )
-            if not any(
-                (
-                    structure["details_summary"],
-                    structure["aria_accordion"],
-                    structure["inactive_tab"],
-                    more_button,
-                )
-            ):
-                continue
             handle.click(timeout=1_500)
             page.wait_for_timeout(250)
             after = handle.evaluate(
                 """el => ({
                   aria_expanded: el.getAttribute('aria-expanded'),
+                  aria_selected: el.getAttribute('aria-selected'),
+                  data_state: el.getAttribute('data-state'),
+                  class_name: typeof el.className === 'string' ? el.className : '',
                   details_open: el.closest('details')?.open ?? null,
                   url: document.URL,
                   text_length: (document.body?.innerText || '').length,
                   expanded_text: (() => {
                     const controlled = el.getAttribute('aria-controls');
                     const target = controlled ? document.getElementById(controlled) : null;
-                    return (target?.innerText || el.closest('details')?.innerText || '').trim();
+                    const disclosure = el.closest('[role="region"], .accordion, .disclosure');
+                    return (target?.innerText || el.closest('details')?.innerText ||
+                      disclosure?.innerText || '').trim();
                   })()
                 })"""
             )
@@ -693,6 +739,9 @@ def _expand_legal_controls(page) -> list[dict]:  # noqa: ANN001
                     "before": before,
                     "after": after,
                     "changed": before["aria_expanded"] != after["aria_expanded"]
+                    or before["aria_selected"] != after["aria_selected"]
+                    or before["data_state"] != after["data_state"]
+                    or before["class_name"] != after["class_name"]
                     or before["details_open"] != after["details_open"]
                     or before["text_length"] != after["text_length"]
                     or before["url"] != after["url"],
@@ -707,12 +756,8 @@ def _legal_expansion_summary(page, records: list[dict]) -> dict[str, object]:  #
     from playwright.sync_api import Error as PlaywrightError
 
     try:
-        container = page.locator("main, article, [role='main']").first
-        if container.count() == 0:
-            container = page.locator("body")
-        remaining = container.locator(
-            "details:not([open]) > summary, [aria-expanded='false'][aria-controls]"
-        ).count()
+        container = _legal_container_locator(page)
+        remaining = len(_eligible_legal_controls(container))
     except PlaywrightError:
         remaining = -1
     attempted = len(records)

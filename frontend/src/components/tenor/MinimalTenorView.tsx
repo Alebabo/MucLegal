@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { composeDraft, getBlock, nextAutofillBlock, register } from "@/tenor-engine";
-import type { Draft, Profile } from "@/tenor-types";
+import { nextAutofillBlock } from "@/tenor-engine";
+import type { Profile } from "@/tenor-types";
 import { lottoDemoCases, type DemoCase } from "@/data/lottoDemoCases";
 import {
   composeRevisionContext,
@@ -23,9 +23,7 @@ import {
   inferFallgruppe,
   isTenor,
   modeCommands,
-  nextRequiredIntakeFact,
   nextWrappedIndex,
-  type RequiredIntakeAnswer,
   type WritingMode,
 } from "@/lib/minimal-tenor-logic";
 import {
@@ -112,92 +110,46 @@ function profileFromContext(context: string, uploadedContract = false): Profile 
   };
 }
 
-function legalBasesFor(fallgruppe: string) {
-  if (fallgruppe === "agb_klausel") return ["§ 1 UKlaG"];
-  if (fallgruppe === "irrefuehrende_werbung") return ["§ 5 UWG", "§ 8 Abs. 1 UWG"];
-  if (fallgruppe === "consent_gestaltung") return ["§ 25 Abs. 1 TDDDG", "§ 2 Abs. 1 UKlaG"];
-  if (fallgruppe === "dark_pattern_dsa") return ["Art. 25 DSA", "§ 2 Abs. 1 UKlaG"];
-  return ["§ 312k Abs. 2 BGB", "§ 2 Abs. 1 UKlaG"];
-}
-
 function debtorFromContext(context: string) {
   const match = context.match(
     /\b([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.,' -]{1,100}\s(?:GmbH|AG|UG|SE|KG|e\.\s?K\.))\b/,
   );
-  return match?.[1]?.trim() ?? "die Antragsgegnerin";
+  return match?.[1]?.trim() ?? null;
 }
 
-function aiProvenance(response: TenorProposalResponse | null, strategy: "precise" | "neutral") {
-  const proposal = response?.proposals.find((item) => item.strategy === strategy);
+function aiProvenance(response: TenorProposalResponse | null) {
+  const proposal = response?.proposal;
   if (!response || !proposal) return null;
-  const knowledgeLabel = response.reference_version.includes("2026-08-24")
-    ? "Wissensbasis 24.08.2026"
-    : response.reference_version;
-  return `OpenAI ${response.model} · ${knowledgeLabel} · ${proposal.source_ids.length} Quellenanker · nicht juristisch freigegeben`;
-}
-
-function referenceSummary(draft: Draft) {
-  const references = [...new Set(draft.blockIds.flatMap((id) => getBlock(id).belegt_in))];
-  return `${draft.blockIds.join(" · ")}  —  ${references
-    .map((id) => {
-      const tenor = register.tenore.find((item) => item.id === id);
-      return tenor?.zitat_geprueft === true ? id : `${id} ungeprüft`;
-    })
-    .join(" · ")}`;
+  return `OpenAI ${response.model} · ${response.reference_version} · ${proposal.source_ids.length} verifizierte Quellenanker · nicht juristisch freigegeben`;
 }
 
 function DraftChoice({
   title,
-  draft,
   text,
-  selected,
-  onSelect,
   onText,
   provenance,
-  expanded = false,
 }: {
   title: string;
-  draft: Draft;
   text: string;
-  selected: boolean;
-  onSelect: () => void;
   onText: (text: string) => void;
   provenance?: string | null;
-  expanded?: boolean;
 }) {
   return (
-    <div
-      className={`flex min-w-0 flex-col ${
-        expanded
-          ? "min-h-[64dvh] flex-1 px-0 py-2 md:min-h-0"
-          : "px-1 py-4 md:min-h-0 md:px-6 md:py-1"
-      }`}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        className={`flex items-center gap-3 text-left ${expanded ? "min-h-11" : ""}`}
-      >
-        <span
-          className={`grid size-5 place-items-center rounded-full border ${selected ? "border-slate-950 bg-slate-950" : "border-slate-300"}`}
-        >
-          {selected && <Check className="size-3 text-white" />}
+    <div className="flex min-h-[64dvh] min-w-0 flex-1 flex-col px-0 py-2 md:min-h-0">
+      <div className="flex min-h-11 items-center gap-3 text-left">
+        <span className="grid size-5 place-items-center rounded-full border border-slate-950 bg-slate-950">
+          <Check className="size-3 text-white" />
         </span>
         <span className="text-sm font-semibold text-slate-900">{title}</span>
-      </button>
+      </div>
       <textarea
         value={text}
-        onFocus={onSelect}
         onChange={(event) => onText(event.target.value)}
         aria-label={`${title} bearbeiten`}
-        className={`w-full overflow-y-auto bg-transparent font-serif text-slate-700 outline-none ${
-          expanded
-            ? "mt-4 min-h-[56dvh] resize-y text-base leading-8 md:min-h-0 md:flex-1"
-            : "mt-3 min-h-48 resize-none text-sm leading-6 md:min-h-0 md:flex-1"
-        }`}
+        className="mt-4 min-h-[56dvh] w-full resize-y overflow-y-auto bg-transparent font-serif text-base leading-8 text-slate-700 outline-none md:min-h-0 md:flex-1"
       />
       <p className="mt-3 break-words font-mono text-[9px] leading-4 text-slate-300">
-        {provenance ?? referenceSummary(draft)}
+        {provenance ?? "Nicht juristisch freigegebener UE-Entwurf"}
       </p>
     </div>
   );
@@ -218,18 +170,15 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   const [dictationNotice, setDictationNotice] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
-  const [selected, setSelected] = useState<"precise" | "neutral" | null>(null);
-  const [preciseText, setPreciseText] = useState("");
-  const [neutralText, setNeutralText] = useState("");
+  const [proposalText, setProposalText] = useState("");
   const [proposalResponse, setProposalResponse] = useState<TenorProposalResponse | null>(null);
+  const [violationBranch, setViolationBranch] = useState<"A" | "B" | "C" | null>(null);
   const [generationError, setGenerationError] = useState("");
   const [archiveError, setArchiveError] = useState("");
   const [savingArchive, setSavingArchive] = useState(false);
   const [activeArchive, setActiveArchive] = useState<TenorArchiveRecord | null>(null);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [archiveLoadError, setArchiveLoadError] = useState("");
-  const [requiredIntakeAnswers, setRequiredIntakeAnswers] = useState<RequiredIntakeAnswer[]>([]);
-  const [requiredIntakeAnswer, setRequiredIntakeAnswer] = useState("");
   const [revisionInput, setRevisionInput] = useState("");
   const [revisionHistory, setRevisionHistory] = useState<string[]>([]);
   const [lastGenerationContext, setLastGenerationContext] = useState("");
@@ -257,16 +206,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   );
   const previousSourceContext = useRef(sourceContext);
 
-  const factualContext = useMemo(
-    () =>
-      [
-        sourceContext,
-        ...requiredIntakeAnswers.map((item) => `${item.question}\nAntwort: ${item.answer}`),
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-    [requiredIntakeAnswers, sourceContext],
-  );
+  const factualContext = sourceContext;
 
   const clarifiedContext = useMemo(
     () => composeClarifiedContext(factualContext, clarificationTurns),
@@ -276,13 +216,8 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     () => profileFromContext(clarifiedContext, Boolean(pdfExtraction)),
     [clarifiedContext, pdfExtraction],
   );
-  const preciseDraft = useMemo(() => composeDraft(profile, "eng"), [profile]);
-  const neutralDraft = useMemo(() => composeDraft(profile, "kerngleich"), [profile]);
   const contextLength = sourceContext.length;
   const correctionMode = mode === "tenor" || isTenor(sourceContext);
-  const requiredIntakeFact = correctionMode
-    ? null
-    : nextRequiredIntakeFact(sourceContext, profile.fallgruppe, requiredIntakeAnswers);
   const slashMatch = context.match(/(?:^|\s)\/([^\s]*)$/);
   const slashQuery = slashMatch?.[1]?.toLocaleLowerCase("de") ?? "";
   const showModeMenu = Boolean(slashMatch);
@@ -304,7 +239,6 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     (mode !== "fälle" || Boolean(selectedCase)) &&
     contextLength >= 20 &&
     !pdfLoading &&
-    !requiredIntakeFact &&
     !clarificationReady;
   const canGenerate =
     !showModeMenu &&
@@ -387,8 +321,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     setQuestionError("");
     setTextAnswer("");
     setCustomChoiceOpen(false);
-    setRequiredIntakeAnswers([]);
-    setRequiredIntakeAnswer("");
+    setViolationBranch(null);
   }, [sourceContext]);
 
   useEffect(
@@ -543,6 +476,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
         answered_questions: answeredQuestions(turns),
       });
       if (questionSession.current !== session) return;
+      setViolationBranch(response.violation_branch);
       if (response.ready_to_generate) {
         setClarificationReady(true);
         return;
@@ -577,16 +511,6 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     void requestClarificationQuestion(nextTurns);
   };
 
-  const answerRequiredIntakeFact = () => {
-    const answer = requiredIntakeAnswer.trim();
-    if (!requiredIntakeFact || !answer) return;
-    setRequiredIntakeAnswers((current) => [
-      ...current.filter((item) => item.id !== requiredIntakeFact.id),
-      { ...requiredIntakeFact, answer },
-    ]);
-    setRequiredIntakeAnswer("");
-  };
-
   const generateProposals = async (generationContext: string) => {
     if (generating || generationContext.trim().length < 4) return;
     setGenerating(true);
@@ -595,39 +519,36 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     setLastGenerationContext(generationContext);
     try {
       const legalBases = extractLegalBases(generationContext);
-      const legalBasisStillOpen = requiredIntakeAnswers.some(
-        (item) => item.id === "rechtsgrundlagen" && extractLegalBases(item.answer).length === 0,
-      );
+      const schuldner = activeArchive?.schuldner ?? debtorFromContext(generationContext);
+      if (!schuldner) {
+        throw new Error(
+          "Für einen bestimmten UE-Entwurf fehlt die genaue Bezeichnung des Schuldners.",
+        );
+      }
       const response = await createTenorProposals({
         fall_id: activeArchive?.fall_id ?? selectedCase?.fall_id ?? "TENOR-ENTWURF",
-        schuldner: activeArchive?.schuldner ?? debtorFromContext(generationContext),
+        schuldner,
         fundstelle:
           selectedCase?.url ??
           generationContext.match(/https?:\/\/[^\s,;)]+/i)?.[0] ??
-          (pdfExtraction
-            ? `Hochgeladenes Vertragsdokument: ${pdfExtraction.filename}`
-            : "Vom Nutzer beschriebene Fundstelle"),
+          (pdfExtraction ? `Hochgeladenes Vertragsdokument: ${pdfExtraction.filename}` : null),
         context: generationContext,
         fallgruppe: profile.fallgruppe,
-        rechtsgrundlagen:
-          legalBases.length > 0
-            ? legalBases
-            : legalBasisStillOpen
-              ? ["Rechtsgrundlage noch durch Menschen zu prüfen"]
-              : legalBasesFor(profile.fallgruppe),
+        rechtsgrundlagen: legalBases,
+        violation_branch: violationBranch,
       });
-      const precise = response.proposals.find((item) => item.strategy === "precise");
-      const neutral = response.proposals.find((item) => item.strategy === "neutral");
-      if (!precise || !neutral) throw new Error("Die KI hat nicht beide Entwürfe geliefert.");
       setProposalResponse(response);
-      setPreciseText(precise.text);
-      setNeutralText(neutral.text);
-      setSelected(null);
+      setViolationBranch(response.violation_branch);
+      if (response.status !== "ready" || !response.proposal) {
+        const details = response.missing_information.join(", ");
+        throw new Error(`Der UE-Entwurf ist noch nicht bestimmt genug. Es fehlen: ${details}`);
+      }
+      setProposalText(response.proposal.text);
       setGenerated(true);
     } catch (error) {
       setProposalResponse(null);
       setGenerationError(
-        error instanceof Error ? error.message : "Die KI-Entwürfe konnten nicht erzeugt werden.",
+        error instanceof Error ? error.message : "Der KI-Entwurf konnte nicht erzeugt werden.",
       );
     } finally {
       setGenerating(false);
@@ -664,16 +585,15 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     setPdfLoading(false);
     setPdfError("");
     setGenerated(false);
-    setSelected(null);
+    setProposalText("");
     setProposalResponse(null);
+    setViolationBranch(null);
     setGenerationError("");
     setArchiveError("");
     setSavingArchive(false);
     setActiveArchive(null);
     setArchiveLoading(false);
     setArchiveLoadError("");
-    setRequiredIntakeAnswers([]);
-    setRequiredIntakeAnswer("");
     setRevisionInput("");
     setRevisionHistory([]);
     setLastGenerationContext("");
@@ -690,11 +610,13 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   };
 
   const adoptSelected = async () => {
-    if (!selected || savingArchive) return;
-    const draft = selected === "precise" ? preciseDraft : neutralDraft;
-    const text = selected === "precise" ? preciseText : neutralText;
-    const proposal = proposalResponse?.proposals.find((item) => item.strategy === selected);
+    if (!proposalText.trim() || savingArchive) return;
+    const proposal = proposalResponse?.proposal;
     const schuldner = activeArchive?.schuldner ?? debtorFromContext(lastGenerationContext);
+    if (!schuldner) {
+      setArchiveError("Der Schuldner ist nicht eindeutig bezeichnet.");
+      return;
+    }
     setArchiveError("");
     setSavingArchive(true);
     try {
@@ -702,18 +624,16 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
         fall_id: activeArchive?.fall_id ?? selectedCase?.fall_id ?? "TENOR-ENTWURF",
         schuldner,
         title: activeArchive?.title ?? selectedCase?.title ?? schuldner,
-        text,
+        text: proposalText,
         context: lastGenerationContext.trim() || clarifiedContext.trim(),
-        strategy: selected,
-        model: proposalResponse?.model ?? "Lokale Bausteinlogik",
-        reference_version: proposalResponse?.reference_version ?? "Lokales Tenorregister",
-        source_ids: proposal?.source_ids ?? draft.blockIds,
+        strategy: "complete",
+        model: proposalResponse?.model ?? "Lokaler UE-Fallback",
+        reference_version: proposalResponse?.reference_version ?? "ue-examples-2026-08-25-v1",
+        source_ids: proposal?.source_ids ?? [],
       });
-      setContext(text);
+      setContext(proposalText);
       setActiveArchive(archivedTenor);
-      setAcceptedIds(draft.blockIds);
       setGenerated(false);
-      setSelected(null);
     } catch (error) {
       setArchiveError(
         error instanceof Error ? error.message : "Der Tenor konnte nicht archiviert werden.",
@@ -989,36 +909,6 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                   <p className="px-3 py-2 text-xs text-slate-400">Kein Fall gefunden.</p>
                 )}
               </div>
-            )}
-            {requiredIntakeFact && contextLength >= 20 && !showModeMenu && (
-              <form
-                className="ml-4 mt-5 max-w-2xl border-l border-slate-200 pl-5 sm:ml-8 sm:pl-6"
-                onClick={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  answerRequiredIntakeFact();
-                }}
-              >
-                <p className="text-sm leading-6 text-slate-400">{requiredIntakeFact.question}</p>
-                <div className="mt-2 flex items-end gap-3">
-                  <textarea
-                    autoFocus
-                    value={requiredIntakeAnswer}
-                    maxLength={1_500}
-                    rows={1}
-                    placeholder={requiredIntakeFact.placeholder}
-                    onChange={(event) => setRequiredIntakeAnswer(event.target.value)}
-                    className="min-h-10 flex-1 resize-y border-b border-slate-200 bg-transparent py-2 font-serif text-base leading-7 text-slate-700 outline-none placeholder:text-slate-300 focus:border-slate-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!requiredIntakeAnswer.trim()}
-                    className="min-h-10 rounded-full bg-slate-900 px-4 text-xs font-semibold text-white disabled:opacity-30"
-                  >
-                    Weiter
-                  </button>
-                </div>
-              </form>
             )}
             {correctionMode && context.trim().length >= 4 && !showModeMenu && (
               <section
@@ -1348,7 +1238,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                     <Sparkles className="size-4" />
                   )}
                   <span aria-live="polite">
-                    {generating ? "KI erstellt zwei Entwürfe …" : "Generieren"}
+                    {generating ? "KI erstellt den UE-Entwurf …" : "Generieren"}
                   </span>
                 </button>
               )}
@@ -1356,85 +1246,40 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
           </div>
         </main>
       ) : (
-        <main
-          className={`mx-auto flex max-w-6xl flex-col px-6 py-8 md:py-6 ${
-            selected
-              ? "md:h-[calc(100dvh-2rem)] md:min-h-[38rem]"
-              : "md:h-[calc(100dvh-8rem)] md:min-h-[30rem]"
-          }`}
-        >
-          {selected ? (
-            <>
-              <div className="flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => setSelected(null)}
-                  className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-slate-800"
-                >
-                  <ArrowLeft className="size-4" /> Beide Entwürfe
-                </button>
-                <span className="text-xs text-slate-300">Breite Lese- und Bearbeitungsansicht</span>
-              </div>
-              <div className="mx-auto mt-4 flex min-h-[64dvh] w-full max-w-5xl flex-1 flex-col md:min-h-0">
-                <DraftChoice
-                  title={selected === "precise" ? "Präzise" : "Technikneutral"}
-                  draft={selected === "precise" ? preciseDraft : neutralDraft}
-                  text={selected === "precise" ? preciseText : neutralText}
-                  selected
-                  onSelect={() => undefined}
-                  onText={selected === "precise" ? setPreciseText : setNeutralText}
-                  provenance={aiProvenance(proposalResponse, selected)}
-                  expanded
-                />
-              </div>
-              <div className="mt-4 flex min-h-11 items-center justify-center">
-                <div className="text-center">
-                  {archiveError && (
-                    <p role="alert" className="mb-3 text-xs text-red-600">
-                      {archiveError}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void adoptSelected()}
-                    disabled={savingArchive}
-                    aria-busy={savingArchive}
-                    className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {savingArchive && <Loader2 className="size-4 animate-spin" />}
-                    {savingArchive ? "Wird archiviert …" : "Entwurf übernehmen"}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <h1 className="text-center font-sans text-sm font-medium text-slate-400">
-                Wähle einen Entwurf
-              </h1>
-              <div className="mt-5 grid md:min-h-0 md:flex-1 md:grid-cols-2 md:divide-x md:divide-slate-100">
-                <DraftChoice
-                  title="Präzise"
-                  draft={preciseDraft}
-                  text={preciseText}
-                  selected={false}
-                  onSelect={() => setSelected("precise")}
-                  onText={setPreciseText}
-                  provenance={aiProvenance(proposalResponse, "precise")}
-                />
-                <DraftChoice
-                  title="Technikneutral"
-                  draft={neutralDraft}
-                  text={neutralText}
-                  selected={false}
-                  onSelect={() => setSelected("neutral")}
-                  onText={setNeutralText}
-                  provenance={aiProvenance(proposalResponse, "neutral")}
-                />
-              </div>
-              <div className="mt-4 min-h-11" />
-            </>
-          )}
+        <main className="mx-auto flex max-w-6xl flex-col px-6 py-8 md:h-[calc(100dvh-2rem)] md:min-h-[38rem] md:py-6">
+          <div className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-2 text-sm text-slate-400">
+              <Check className="size-4" /> Vollständiger UE-Entwurf
+            </span>
+            <span className="text-xs text-slate-300">Breite Lese- und Bearbeitungsansicht</span>
+          </div>
+          <div className="mx-auto mt-4 flex min-h-[64dvh] w-full max-w-5xl flex-1 flex-col md:min-h-0">
+            <DraftChoice
+              title="Unterlassungs- und Verpflichtungserklärung"
+              text={proposalText}
+              onText={setProposalText}
+              provenance={aiProvenance(proposalResponse)}
+            />
+          </div>
+          <div className="mt-4 flex min-h-11 items-center justify-center">
+            <div className="text-center">
+              {archiveError && (
+                <p role="alert" className="mb-3 text-xs text-red-600">
+                  {archiveError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void adoptSelected()}
+                disabled={savingArchive || !proposalText.trim()}
+                aria-busy={savingArchive}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {savingArchive && <Loader2 className="size-4 animate-spin" />}
+                {savingArchive ? "Wird archiviert …" : "Entwurf übernehmen"}
+              </button>
+            </div>
+          </div>
         </main>
       )}
     </div>

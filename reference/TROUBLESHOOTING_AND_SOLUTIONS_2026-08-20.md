@@ -1635,6 +1635,51 @@ Unterstützt wird bewusst nur das exakte Wayback-Replayformat, nicht jeder belie
 Archiv- oder Redirectdienst. Berechtigung und rechtliche Zulässigkeit des Abrufs
 bleiben vom Nutzer zu prüfen.
 
+# Rechtstext-Akkordeons hinter vielen Seitenschaltern und unklare Fallzuordnung
+
+### Symptom
+
+Bei einem Decathlon-Demolauf blieb der Zuordnungsbutton zunächst deaktiviert, obwohl
+genau ein passender Monitoringfall angeboten wurde. Auf Rechtstextseiten konnten
+geschlossene Datenschutzhinweise außerdem unberücksichtigt bleiben, wenn vor dem
+eigentlichen Akkordeon mehr als 100 gewöhnliche Buttons im DOM standen oder mehrere
+semantische Hauptbereiche vorhanden waren.
+
+### Ursache und Diagnose
+
+Die Fallauswahl verlangte auch bei genau einem Domain-Treffer einen zusätzlichen
+manuellen Auswahlklick. Die Rechtstextlogik begrenzte dagegen zuerst die gemischte
+Menge aus Akkordeons und sämtlichen Buttons auf 100 und prüfte erst danach die
+fachliche Zulässigkeit. Außerdem verwendete der Klickpfad stets den ersten
+`main`-/`article`-Knoten, während die Texterfassung bereits den inhaltsreichsten
+Hauptbereich nutzte. Ein realer Decathlon-Lauf zeigte zusätzlich eine davon getrennte
+Grenze: Der aktuelle Root-Abruf war eine Cloudflare-Blockseite; der ältere
+Wayback-Datenschutz-Unterabruf scheiterte an `ERR_CONNECTION_REFUSED`. Beides ist
+kein Aufklappfehler und darf nicht als vollständig erfasster Rechtstext erscheinen.
+
+### Lösung
+
+Bei exakt einem zulässigen Domain-Treffer wird der Monitoringfall jetzt automatisch
+ausgewählt. Ein unvollständiger Scan kann damit bewusst zugeordnet werden und wird als
+`pruefung_unvollstaendig` dokumentiert. Die Akkordeonlogik wählt deterministisch den
+sichtbaren semantischen Hauptbereich mit dem meisten Text, schließt Navigation,
+Header, Footer und Formulare aus und begrenzt erst anschließend bis zu 100 tatsächlich
+zulässige Controls. Unterstützt werden native `details`, ARIA-Akkordeons und Tabs,
+gängige Accordion-/Disclosure-Klassen, `data-state="closed"` sowie eindeutig
+beschriftete Mehr-anzeigen-Schalter. Decathlon erhält zusätzlich feste öffentliche
+Kandidaten für die aktuellen und bisherigen AGB-/Datenschutzpfade.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests decken 130 vorangestellte irrelevante Buttons, mehrere `main`-Knoten,
+ARIA-Controls und `data-state`-Disclosures ab. Im Browser wurde geprüft, dass ein
+einziger Decathlon-Fall ohne Zusatzklick ausgewählt und der Zuordnungs-/Vergleichsbutton
+aktiv ist. Eine Website kann technisch erzwingen, dass immer nur ein Abschnitt zugleich
+offen ist; dann werden die Abschnitte sequenziell erfasst und zusammen im normalisierten
+Text sowie in der abgeleiteten Druckfassung gesichert. Cloudflare, nicht erreichbare
+Wayback-Unterseiten, Logins, Paywalls und CAPTCHAs werden dadurch nicht umgangen und
+bleiben sichtbar unvollständige Erfassungen.
+
 # Kommas zerlegen juristische „Nicht umfasst“-Abgrenzungen in Satzfragmente
 
 ### Symptom
