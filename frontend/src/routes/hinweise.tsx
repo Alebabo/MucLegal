@@ -285,13 +285,18 @@ function HinweisePage() {
 
   return (
     <div className="min-h-screen bg-background px-6 py-10 sm:px-10">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         <ul className="space-y-4">
           {cases.map((c) => {
             const Icon = toneIcon[c.tone];
             const isOpen = openId === c.case_id;
             return (
-              <li key={c.case_id}>
+              <li
+                key={c.case_id}
+                className={`mx-auto w-full transition-[max-width] duration-300 ${
+                  isOpen ? "max-w-6xl" : "max-w-3xl"
+                }`}
+              >
                 <article
                   className={`group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md ${
                     isOpen ? "ring-1 ring-ring" : ""
@@ -390,7 +395,7 @@ function HinweisePage() {
 
                         {c.latestEvidenceComparison?.status === "technische_aenderung_erkannt" && (
                           <section
-                            className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4"
+                            className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4 sm:p-5"
                             aria-labelledby={`differenz-${c.case_id}`}
                             tabIndex={-1}
                           >
@@ -411,23 +416,23 @@ function HinweisePage() {
                                     key={`${difference.change_type}-${index}`}
                                     className="overflow-hidden rounded-lg border border-border bg-card"
                                   >
-                                    <p className="border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground">
+                                    <p className="border-b border-border px-5 py-3 text-xs font-medium text-muted-foreground">
                                       {difference.label} · Ausschnitt {index + 1}
                                     </p>
-                                    <div className="grid gap-px bg-border sm:grid-cols-2">
-                                      <div className="bg-danger/5 p-4">
+                                    <div className="grid gap-px bg-border xl:grid-cols-2">
+                                      <div className="min-w-0 bg-danger/5 p-5">
                                         <p className="text-xs font-semibold tracking-wider text-danger uppercase">
                                           Vorher · Webarchiv
                                         </p>
-                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                                        <p className="mt-3 break-words whitespace-pre-wrap text-[15px] leading-7 hyphens-auto text-foreground">
                                           {difference.before || "— Kein entsprechender Text —"}
                                         </p>
                                       </div>
-                                      <div className="bg-success/5 p-4">
+                                      <div className="min-w-0 bg-success/5 p-5">
                                         <p className="text-xs font-semibold tracking-wider text-success uppercase">
                                           Aktueller Stand
                                         </p>
-                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                                        <p className="mt-3 break-words whitespace-pre-wrap text-[15px] leading-7 hyphens-auto text-foreground">
                                           {difference.after || "— Text entfernt —"}
                                         </p>
                                       </div>

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -6,6 +7,8 @@ import {
   monitoringChangeNotification,
   parseStoredEvidenceComparisonNotification,
 } from "../src/lib/monitoring-notifications.ts";
+
+const hintsSource = readFileSync(new URL("../src/routes/hinweise.tsx", import.meta.url), "utf8");
 
 test("creates a notification for every agreed comparison difference", () => {
   const expected = new Map([
@@ -29,6 +32,12 @@ test("uses neutral wording for a technical evidence difference", () => {
   const notification = monitoringChangeNotification("technische_aenderung_erkannt");
   assert.equal(notification?.title, "Differenz erkannt");
   assert.match(notification?.description ?? "", /Unterschied zu sehen/);
+});
+
+test("keeps evidence comparison columns readable", () => {
+  assert.match(hintsSource, /max-w-6xl/);
+  assert.match(hintsSource, /grid gap-px bg-border xl:grid-cols-2/);
+  assert.match(hintsSource, /text-\[15px\] leading-7 hyphens-auto/);
 });
 
 test("accepts only the versioned BeweisLab comparison handoff", () => {

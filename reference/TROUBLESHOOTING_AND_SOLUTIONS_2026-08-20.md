@@ -2372,3 +2372,32 @@ eine Änderung und erzeugt die bestehende anklickbare Differenzbenachrichtigung.
 Ein aktueller Live-Beweis der Netto-AGB ist mit dem vorgeschriebenen transparenten
 Projekt-User-Agent weiterhin nicht möglich. Der Netto-Schutzbefund bleibt korrekt
 dokumentiert, ist aber nicht Teil des Demo-Ablaufs.
+
+# Vorher-/Nachher-Klauseln sind in der Hinweise-Ansicht zu schmal
+
+### Symptom
+
+Beim Öffnen eines technischen Beweisvergleichs wurden `Vorher · Webarchiv` und
+`Aktueller Stand` bereits auf kleinen Bildschirmbreiten nebeneinander dargestellt.
+Die geöffnete Hinweiskarte blieb gleichzeitig auf `max-w-3xl` begrenzt. Längere
+AGB-Klauseln liefen dadurch in zwei schmalen Spalten und waren nur schwer zu erfassen.
+
+### Ursache und Lösung
+
+Die Spaltenumschaltung orientierte sich mit `sm:grid-cols-2` nur an der gesamten
+Viewportbreite, nicht an der tatsächlich nach Seitenleiste und Kartenabständen
+verfügbaren Inhaltsbreite. Die Hinweise-Seite darf nun bis `max-w-6xl` wachsen;
+geschlossene Hinweise bleiben zentriert auf `max-w-3xl`, nur der geöffnete Fall nutzt
+die größere Breite. Der Klauselvergleich wechselt erst ab `xl` in zwei Spalten und
+bleibt darunter als gut lesbare Vorher-/Nachher-Folge untereinander. Größere
+Innenabstände, 15-Pixel-Text, höhere Zeilenhöhe und Wortumbruch verbessern die
+Lesbarkeit zusätzlich.
+
+### Verifikation und verbleibende Grenze
+
+Ein Frontend-Regressionstest sichert breite geöffnete Karten, den späten
+Zwei-Spalten-Breakpoint und die lesbare Klauseltypografie. Der Browser-Smoke-Test
+prüft die geöffnete Müller-Differenzansicht auf Desktop- und schmaler Breite sowie
+Konsole und horizontales Überlaufen. Auf sehr langen Klauseln bleibt die Anzeige
+bewusst ausschnittsweise; die Zahl und Länge der Ausschnitte wird weiterhin im
+Backend begrenzt.
