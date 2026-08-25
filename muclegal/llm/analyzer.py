@@ -8,6 +8,8 @@ from typing import Any, Protocol
 
 from muclegal.llm.prompt import PROMPT_SHA256, PROMPT_VERSION, SYSTEM_PROMPT
 from muclegal.llm.monitor_knowledge import (
+    CALIBRATION_CONTEXT_SOURCE_SHA256,
+    CALIBRATION_CONTEXT_VERSION,
     MONITOR_KNOWLEDGE_VERSION,
     build_monitor_knowledge,
 )
@@ -165,6 +167,8 @@ def analyze_and_store(
         "model": analyzer.model,
         "prompt_version": PROMPT_VERSION,
         "prompt_sha256": PROMPT_SHA256,
+        "calibration_context_version": CALIBRATION_CONTEXT_VERSION,
+        "calibration_context_sha256": CALIBRATION_CONTEXT_SOURCE_SHA256,
         "knowledge_version": MONITOR_KNOWLEDGE_VERSION,
         "valid": assessment is not None,
         "validation_error": validation_error,

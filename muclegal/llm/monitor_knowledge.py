@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 
@@ -8,6 +12,27 @@ MONITOR_KNOWLEDGE_SOURCE_SHA256 = (
     "f537bc5747d3bd2412b7792530088575f2e7a11fe23ba1abd0a60b12ef7cb222"
 )
 MONITOR_KNOWLEDGE_STATUS = "nutzerbereitgestellt_nicht_juristisch_freigegeben"
+
+CALIBRATION_CONTEXT_VERSION = "Anonyme-Stimmenverteilung-2026-08-25-v1"
+CALIBRATION_CONTEXT_SOURCE_SHA256 = (
+    "e737fac1e701f490cc194ead1c9cfe7024fccc4a9ff178fb53d2e42a4a0a401b"
+)
+CALIBRATION_CONTEXT_STATUS = (
+    "nutzerbereitgestellt_anonym_nicht_juristisch_freigegeben"
+)
+CALIBRATION_CONTEXT_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "reference"
+    / "kerngleichheit_anonyme_stimmen_2026-08-25.json"
+)
+
+_CALIBRATION_STOPWORDS = frozenset({
+    "aktuelle", "aktuellen", "aktuell", "allgemeinen", "allein", "auch",
+    "beanstandet", "besteht", "geschäftlichen", "gegenüber", "klausel",
+    "klauseln", "kunden", "mehr", "nicht", "oder", "sämtliche", "tenor",
+    "untersagt", "verbraucher", "verbrauchern", "verstoß", "verwendet",
+    "verwenden", "wird", "werden", "wurde", "zurück", "zwischen",
+})
 
 
 MONITOR_GUIDANCE: tuple[dict[str, Any], ...] = (
@@ -263,8 +288,10 @@ def build_monitor_knowledge(
         )
     ][:4]
     clause_types = _matching_clause_types(text)
+    calibration = _matching_calibration_cases(text)
     source_ids = [item["id"] for item in rules]
     source_ids.extend(item["id"] for item in case_references)
+    source_ids.extend(f"KAL-{item['id']}" for item in calibration["faelle"])
     return {
         "version": MONITOR_KNOWLEDGE_VERSION,
         "source_sha256": MONITOR_KNOWLEDGE_SOURCE_SHA256,
@@ -273,11 +300,68 @@ def build_monitor_knowledge(
         "leitlinien": rules,
         "fallreferenzen": case_references,
         "erkannte_klauseltypen": clause_types,
+        "anonyme_kalibrierung": calibration,
         "source_ids": source_ids,
         "hinweis": (
             "Die Wissensbasis ist nutzerbereitgestellt und nicht juristisch freigegeben. "
             "Fallsätze mit T/P-Status oder Datenlücken nur als Hinweis verwenden."
         ),
+    }
+
+
+def _matching_calibration_cases(text: str, limit: int = 3) -> dict[str, Any]:
+    dataset = _load_calibration_dataset()
+    query_tokens = _calibration_tokens(text)
+    ranked: list[tuple[int, str, dict[str, Any]]] = []
+    for case in dataset["cases"]:
+        case_text = " ".join(
+            str(case.get(field, ""))
+            for field in ("tenor", "urspruenglich_beanstandet", "aktuelle_fassung")
+        )
+        overlap = query_tokens & _calibration_tokens(case_text)
+        if overlap:
+            ranked.append((len(overlap), case["id"], case))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    selected = [_public_calibration_case(item[2]) for item in ranked[:limit]]
+    return {
+        "version": CALIBRATION_CONTEXT_VERSION,
+        "source_sha256": CALIBRATION_CONTEXT_SOURCE_SHA256,
+        "source_revision_id": dataset["source"]["revision_id"],
+        "source_status": CALIBRATION_CONTEXT_STATUS,
+        "faelle": selected,
+        "hinweis": (
+            "Anonyme Stimmen sind nur Kalibrierungs- und Unsicherheitskontext, kein "
+            "juristischer Goldstandard. Tenor, Tatsachenbasis, nicht_umfasst und "
+            "menschliche Freigabe gehen stets vor."
+        ),
+    }
+
+
+@lru_cache(maxsize=1)
+def _load_calibration_dataset() -> dict[str, Any]:
+    dataset = json.loads(CALIBRATION_CONTEXT_PATH.read_text(encoding="utf-8"))
+    if dataset.get("dataset_id") != (
+        "anonyme-stimmenverteilung-kerngleichheit-2026-08-25"
+    ) or not isinstance(dataset.get("cases"), list):
+        raise ValueError("Lokaler Kerngleichheits-Kalibrierungsdatensatz ist ungültig.")
+    return dataset
+
+
+def _calibration_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-zäöüß]{4,}", text.casefold())
+        if token not in _CALIBRATION_STOPWORDS
+    }
+
+
+def _public_calibration_case(case: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": case["id"],
+        "tenor": case["tenor"],
+        "urspruenglich_beanstandet": case["urspruenglich_beanstandet"],
+        "aktuelle_fassung": case["aktuelle_fassung"],
+        "stimmen": case["stimmen"],
     }
 
 

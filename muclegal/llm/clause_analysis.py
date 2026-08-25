@@ -16,6 +16,8 @@ from muclegal.llm.classification import (
 )
 from muclegal.llm.schema import LegalAssessment, LegalSource
 from muclegal.llm.monitor_knowledge import (
+    CALIBRATION_CONTEXT_SOURCE_SHA256,
+    CALIBRATION_CONTEXT_VERSION,
     MONITOR_KNOWLEDGE_VERSION,
     build_monitor_knowledge,
 )
@@ -263,6 +265,8 @@ def analyze_clause_pairs_and_store(
         "model": analyzer.model,
         "prompt_version": CLAUSE_PROMPT_VERSION,
         "prompt_sha256": CLAUSE_PROMPT_SHA256,
+        "calibration_context_version": CALIBRATION_CONTEXT_VERSION,
+        "calibration_context_sha256": CALIBRATION_CONTEXT_SOURCE_SHA256,
         "knowledge_version": MONITOR_KNOWLEDGE_VERSION,
         "schema_valid": valid,
         "pair_count": len(findings),

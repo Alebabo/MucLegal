@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
+
 from muclegal.clause_diff import ClausePair
 from muclegal.llm.analyzer import build_model_input
 from muclegal.llm.clause_analysis import build_clause_input, tenor_elements_from_tenor
 from muclegal.llm.monitor_knowledge import (
+    CALIBRATION_CONTEXT_PATH,
+    CALIBRATION_CONTEXT_SOURCE_SHA256,
+    CALIBRATION_CONTEXT_VERSION,
     MONITOR_KNOWLEDGE_SOURCE_SHA256,
     MONITOR_KNOWLEDGE_STATUS,
     MONITOR_KNOWLEDGE_VERSION,
     build_monitor_knowledge,
 )
 from muclegal.normalize.clauses import Clause
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _ids(items: list[dict[str, str]]) -> set[str]:
@@ -81,3 +91,37 @@ def test_clause_pair_input_receives_matching_clause_type() -> None:
         model_input["wissensbasis"]["erkannte_klauseltypen"]
     )
     assert "KW-005" in model_input["wissensbasis"]["source_ids"]
+
+
+def test_local_calibration_snapshot_is_complete_and_hash_pinned() -> None:
+    raw = CALIBRATION_CONTEXT_PATH.read_bytes()
+    dataset = json.loads(raw)
+
+    assert CALIBRATION_CONTEXT_PATH == (
+        ROOT / "reference" / "kerngleichheit_anonyme_stimmen_2026-08-25.json"
+    )
+    assert hashlib.sha256(raw).hexdigest() == CALIBRATION_CONTEXT_SOURCE_SHA256
+    assert len(dataset["cases"]) == 20
+    assert dataset["source"]["revision_id"]
+    assert next(item for item in dataset["cases"] if item["id"] == "P07")[
+        "stimmen"
+    ]["mehrheitsklasse"] is None
+
+
+def test_matching_anonymous_votes_are_bounded_context_not_ground_truth() -> None:
+    bundle = build_monitor_knowledge(
+        fallgruppe="agb_klausel",
+        text=(
+            "Jegliche Haftung für Schäden ist ausgeschlossen; Ansprüche auf "
+            "Schadensersatz bestehen unter keinen Umständen."
+        ),
+    )
+
+    calibration = bundle["anonyme_kalibrierung"]
+    ids = _ids(calibration["faelle"])
+    assert calibration["version"] == CALIBRATION_CONTEXT_VERSION
+    assert calibration["source_sha256"] == CALIBRATION_CONTEXT_SOURCE_SHA256
+    assert {"P03", "AGB-07"} <= ids
+    assert len(calibration["faelle"]) <= 3
+    assert "kein juristischer Goldstandard" in calibration["hinweis"]
+    assert {"KAL-P03", "KAL-AGB-07"} <= set(bundle["source_ids"])

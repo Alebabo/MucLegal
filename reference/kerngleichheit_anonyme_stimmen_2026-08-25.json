@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "dataset_id": "anonyme-stimmenverteilung-kerngleichheit-2026-08-25",
+  "source": {
+    "title": "statistik-mit-falltext",
+    "google_drive_document_id": "12ElAk3j8x99gIulELGeYY9afEp2iXdSodhPFO2dJqvE",
+    "google_drive_url": "https://docs.google.com/document/d/12ElAk3j8x99gIulELGeYY9afEp2iXdSodhPFO2dJqvE",
+    "revision_id": "AIroW34qg7nf0KQfpDzGYV-dvIAjYMVtFtuByUxYvzqjB2bmOSLP4JEdZveJi1rz2m8phMgoGMvLfyJ5ihBmbSdSlIROw-c4vP9pTMt6Be0",
+    "local_captured_at": "2026-08-25T12:54:57.811Z",
+    "stand_im_dokument": "2026-08-25",
+    "status": "nutzerbereitgestellt_anonym_nicht_juristisch_freigegeben"
+  },
+  "verwendungshinweis": "Die Stimmenverteilungen dienen nur als Kalibrierungs- und Unsicherheitskontext. Sie sind kein juristischer Goldstandard und dürfen Tenor, nicht_umfasst, Tatsachenbasis oder menschliche Freigabe nicht ersetzen.",
+  "klassenabbildung": {
+    "verstoss_besteht_fort": "kerngleich",
+    "verstoss_beseitigt": "beseitigt",
+    "anderer_sachverhalt": "neuer_sachverhalt"
+  },
+  "cases": [
+    {
+      "id": "P01",
+      "tenor": "Es wird untersagt, im geschäftlichen Verkehr mit Verbrauchern die folgende oder eine inhaltsgleiche Klausel zu verwenden: „Die Kosten der Rücksendung trägt der Kunde.“",
+      "urspruenglich_beanstandet": "Die Kosten der Rücksendung trägt der Kunde.",
+      "aktuelle_fassung": "Die unmittelbaren Kosten für die Rücksendung der Ware sind von Ihnen zu tragen.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 80,
+          "verstoss_beseitigt": 20,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "P02",
+      "tenor": "Es wird untersagt, gegenüber Verbrauchern das Widerrufsrecht davon abhängig zu machen, dass die Ware unbenutzt und in der Originalverpackung zurückgesandt wird.",
+      "urspruenglich_beanstandet": "Ein Widerruf ist nur möglich, wenn die Ware unbenutzt und originalverpackt an uns zurückgesandt wird.",
+      "aktuelle_fassung": "Ihr Widerrufsrecht können Sie ausschließlich für unbenutzte Ware in der Originalverpackung ausüben.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 80,
+          "verstoss_beseitigt": 10,
+          "anderer_sachverhalt": 10
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "P03",
+      "tenor": "Es wird untersagt, in Allgemeinen Geschäftsbedingungen gegenüber Verbrauchern eine verschuldensunabhängige Haftung des Verwenders auch für Schäden aus der Verletzung von Leben, Körper oder Gesundheit auszuschließen.",
+      "urspruenglich_beanstandet": "Jegliche Haftung des Anbieters, gleich aus welchem Rechtsgrund, ist ausgeschlossen.",
+      "aktuelle_fassung": "Ansprüche auf Schadensersatz gegen den Anbieter bestehen unter keinen Umständen.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 100,
+          "verstoss_beseitigt": 0,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "P04",
+      "tenor": "Es wird untersagt, Verbrauchern einen Preis für eine Ware anzugeben, ohne den einschließlich Umsatzsteuer und sonstiger Preisbestandteile zu zahlenden Gesamtpreis auszuweisen.",
+      "urspruenglich_beanstandet": "Monatlich 19,90 EUR zuzüglich Mehrwertsteuer und einer Servicegebühr von 2,00 EUR.",
+      "aktuelle_fassung": "Monatlicher Gesamtpreis: 25,68 EUR einschließlich Mehrwertsteuer und Servicegebühr.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 10,
+          "verstoss_beseitigt": 90,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": "verstoss_beseitigt"
+      }
+    },
+    {
+      "id": "P05",
+      "tenor": "Es wird untersagt, bei online abschließbaren Dauerschuldverhältnissen keine unmittelbar und leicht zugängliche Kündigungsschaltfläche mit eindeutiger Beschriftung bereitzustellen.",
+      "urspruenglich_beanstandet": "Kündigungen sind ausschließlich schriftlich an unsere Postanschrift zu richten.",
+      "aktuelle_fassung": "Sie können den Vertrag jederzeit über die ständig verfügbare Schaltfläche „Verträge hier kündigen“ im Fußbereich der Webseite kündigen.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 0,
+          "verstoss_beseitigt": 100,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": "verstoss_beseitigt"
+      }
+    },
+    {
+      "id": "P06",
+      "tenor": "Es wird untersagt, eine Einwilligung in personalisierte Werbung durch ein bereits vorausgewähltes Kontrollkästchen einzuholen.",
+      "urspruenglich_beanstandet": "[vorausgewählt] Ich möchte per E-Mail personalisierte Angebote erhalten.",
+      "aktuelle_fassung": "[nicht vorausgewählt] Ich möchte per E-Mail personalisierte Angebote erhalten und kann meine Einwilligung jederzeit widerrufen.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 30,
+          "verstoss_beseitigt": 60,
+          "anderer_sachverhalt": 10
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": "verstoss_beseitigt"
+      }
+    },
+    {
+      "id": "P07",
+      "tenor": "Es wird untersagt, ein zeitlich unbefristetes Preisangebot mit der Angabe „nur heute“ zu bewerben, wenn der Preis auch an Folgetagen unverändert verlangt wird.",
+      "urspruenglich_beanstandet": "Nur heute: 30 % Rabatt auf alle Tarife!",
+      "aktuelle_fassung": "Wochenend-Aktion: 30 % Rabatt bis Sonntag, 23:59 Uhr. Eine Verlängerung behalten wir uns vor.",
+      "stimmen": {
+        "anzahl": 12,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 42,
+          "verstoss_beseitigt": 50,
+          "anderer_sachverhalt": 8
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": null
+      }
+    },
+    {
+      "id": "P08",
+      "tenor": "Es wird untersagt, die gesetzlichen Mängelrechte eines Verbrauchers pauschal auf sechs Monate ab Übergabe der Ware zu verkürzen.",
+      "urspruenglich_beanstandet": "Die Gewährleistungsfrist beträgt für sämtliche Waren sechs Monate.",
+      "aktuelle_fassung": "Für gebrauchte Waren wird die Verjährungsfrist für Mängelansprüche auf ein Jahr verkürzt; für neue Waren gelten die gesetzlichen Fristen.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 0,
+          "verstoss_beseitigt": 80,
+          "anderer_sachverhalt": 20
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": "verstoss_beseitigt"
+      }
+    },
+    {
+      "id": "P09",
+      "tenor": "Es wird untersagt, einen Preisvorteil unter Bezugnahme auf einen früheren Preis anzukündigen, ohne den niedrigsten Gesamtpreis der letzten 30 Tage anzugeben.",
+      "urspruenglich_beanstandet": "Statt 99,00 EUR jetzt nur 69,00 EUR.",
+      "aktuelle_fassung": "Einführungspreis 69,00 EUR für unser neu erschienenes Modell.",
+      "stimmen": {
+        "anzahl": 11,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 18,
+          "verstoss_beseitigt": 45,
+          "anderer_sachverhalt": 36
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": null
+      }
+    },
+    {
+      "id": "P10",
+      "tenor": "Es wird untersagt, die für eine Newsletter-Werbung erklärte Einwilligung zugleich als Einwilligung in eine Weitergabe der Kontaktdaten an unbestimmte Partnerunternehmen zu behandeln.",
+      "urspruenglich_beanstandet": "Mit der Newsletter-Anmeldung willige ich auch in Angebote unserer Partner ein.",
+      "aktuelle_fassung": "Ich willige ein, dass der Anbieter meine E-Mail-Adresse für eigene Produkthinweise verwendet; eine Weitergabe an Dritte erfolgt nicht.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 0,
+          "verstoss_beseitigt": 90,
+          "anderer_sachverhalt": 10
+        },
+        "pluralitaetsklasse": "verstoss_beseitigt",
+        "mehrheitsklasse": "verstoss_beseitigt"
+      }
+    },
+    {
+      "id": "DAT-01",
+      "tenor": "Es wird untersagt, personenbezogene Daten länger zu speichern, als dies für den angegebenen Zweck erforderlich ist.",
+      "urspruenglich_beanstandet": "IP-Adressen werden dauerhaft gespeichert.",
+      "aktuelle_fassung": "IP-Adressen werden für einen unbegrenzten Zeitraum gespeichert.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 90,
+          "verstoss_beseitigt": 10,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "DAT-02",
+      "tenor": "Es wird untersagt, Empfänger personenbezogener Daten in der Datenschutzerklärung nicht hinreichend zu benennen.",
+      "urspruenglich_beanstandet": "Daten werden an Dritte weitergegeben.",
+      "aktuelle_fassung": "Personenbezogene Daten können mit externen Partnern geteilt werden.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 80,
+          "verstoss_beseitigt": 20,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "DAT-03",
+      "tenor": "Es wird untersagt, im geschäftlichen Verkehr gegenüber Verbrauchern in elektronischen Angeboten personenbezogene Daten für personalisierte Werbung zu verarbeiten, ohne dass die betroffene Person vor Beginn der Verarbeitung durch eine gesonderte aktive Erklärung zugestimmt hat, wenn dies geschieht wie durch die im Fall als Ausgangsklausel wiedergegebene Formulierung „Daten werden zu Werbezwecken genutzt.“",
+      "urspruenglich_beanstandet": "Daten werden zu Werbezwecken genutzt.",
+      "aktuelle_fassung": "Ihre Daten können für personalisierte Marketingmaßnahmen verwendet werden.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 80,
+          "verstoss_beseitigt": 20,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "DAT-04",
+      "tenor": "Es wird untersagt, im geschäftlichen Verkehr gegenüber Verbrauchern in elektronischen Angeboten Analyse- oder Marketingtechnologien auf Endgeräten bereits beim Aufruf des Angebots zu aktivieren, bevor der Verbraucher durch eine gesonderte aktive Erklärung zugestimmt hat, wenn dies geschieht wie durch die im Fall als Ausgangsklausel wiedergegebene Formulierung „Wir setzen Tracking-Cookies ohne Einwilligung ein.“",
+      "urspruenglich_beanstandet": "Wir setzen Tracking-Cookies ohne Einwilligung ein.",
+      "aktuelle_fassung": "Analyse- und Marketingtechnologien werden beim Besuch automatisch aktiviert.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 70,
+          "verstoss_beseitigt": 30,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "DAT-05",
+      "tenor": "Es wird untersagt, im geschäftlichen Verkehr gegenüber Verbrauchern in elektronischen Angeboten eine Einwilligung in die Verarbeitung personenbezogener Daten allein daraus abzuleiten, dass der Verbraucher das Angebot nutzt oder nach Anzeige eines Hinweises weiterbesucht, ohne durch eine gesonderte aktive Erklärung zugestimmt zu haben, wenn dies geschieht wie durch die im Fall als Ausgangsklausel wiedergegebene Formulierung „Mit Nutzung der Website stimmen Sie der Datenverarbeitung zu.“",
+      "urspruenglich_beanstandet": "Mit Nutzung der Website stimmen Sie der Datenverarbeitung zu.",
+      "aktuelle_fassung": "Durch den weiteren Besuch erklären Sie sich mit der Verarbeitung Ihrer Daten einverstanden.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 70,
+          "verstoss_beseitigt": 30,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "DAT-06",
+      "tenor": "Es wird untersagt, den gesetzlichen Widerruf einer erteilten Einwilligung auszuschließen.",
+      "urspruenglich_beanstandet": "Eine erteilte Einwilligung kann nicht widerrufen werden.",
+      "aktuelle_fassung": "Ein Widerruf ist grundsätzlich ausgeschlossen, sobald die Verarbeitung begonnen hat.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 70,
+          "verstoss_beseitigt": 20,
+          "anderer_sachverhalt": 10
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "AGB-07",
+      "tenor": "Es wird untersagt, die Haftung für Schäden jeder Art formularmäßig auszuschließen.",
+      "urspruenglich_beanstandet": "Wir haften nicht für Schäden jeder Art.",
+      "aktuelle_fassung": "Eine Haftung für sämtliche Schäden ist ausgeschlossen.",
+      "stimmen": {
+        "anzahl": 11,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 91,
+          "verstoss_beseitigt": 9,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "AGB-08",
+      "tenor": "Es wird untersagt, die Aufrechnung des Kunden formularmäßig auf unbestrittene Forderungen zu beschränken.",
+      "urspruenglich_beanstandet": "Aufrechnung ist nur mit unbestrittenen Forderungen zulässig.",
+      "aktuelle_fassung": "Eine Aufrechnung ist ausschließlich mit unstreitigen Gegenforderungen möglich.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 90,
+          "verstoss_beseitigt": 10,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "AGB-09",
+      "tenor": "Es wird untersagt, gegenüber Verbrauchern formularmäßig ausschließlich den Gerichtsstand am Unternehmenssitz zu bestimmen.",
+      "urspruenglich_beanstandet": "Gerichtsstand ist stets unser Geschäftssitz.",
+      "aktuelle_fassung": "Für sämtliche Streitigkeiten gilt ausschließlich der Gerichtsstand am Sitz unseres Unternehmens.",
+      "stimmen": {
+        "anzahl": 11,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 100,
+          "verstoss_beseitigt": 0,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    },
+    {
+      "id": "AGB-10",
+      "tenor": "Es wird untersagt, Vertragslaufzeiten formularmäßig automatisch um ein Jahr zu verlängern.",
+      "urspruenglich_beanstandet": "Der Vertrag verlängert sich automatisch um ein Jahr.",
+      "aktuelle_fassung": "Sofern nicht gekündigt wird, setzt sich das Vertragsverhältnis jeweils um weitere zwölf Monate fort.",
+      "stimmen": {
+        "anzahl": 10,
+        "verteilung_pct": {
+          "verstoss_besteht_fort": 70,
+          "verstoss_beseitigt": 30,
+          "anderer_sachverhalt": 0
+        },
+        "pluralitaetsklasse": "verstoss_besteht_fort",
+        "mehrheitsklasse": "verstoss_besteht_fort"
+      }
+    }
+  ]
+}
