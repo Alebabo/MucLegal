@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0WB9RH07RH43DTVCZS4DBT1",
+  "session_id": "01a0380f-9151-7611-b26f-8522b90ec08c",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-25T11:37:58.5299496Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 5,
+  "save_step_count": 2,
+  "files_touched": [
+    "frontend/src/routes/index.tsx",
+    "reference/UX_BERICHT_JURISTIN_2026-08-25.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "9c106c787a09",
+  "checkpoint_transcript_start": 1250,
+  "transcript_lines_at_start": 1250,
+  "compact_transcript_start": 195,
+  "token_usage": {
+    "input_tokens": 283318,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 15191552,
+    "output_tokens": 42158,
+    "api_call_count": 113
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-25T11:37:57.5699659Z",
+    "agent_lines": 543,
+    "agent_removed": 152,
+    "human_added": 5,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 548,
+    "total_lines_changed": 700,
+    "agent_percentage": 99.28571428571429,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 241,
+      "user_lines_removed": 47,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "muclegal/fetch/playwright.py": 100,
+        "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md": 37,
+        "tests/test_playwright_capture.py": 104
+      },
+      "user_removed_per_file": {
+        "muclegal/fetch/playwright.py": 47
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 261,
+      "agent_lines_removed": 0
+    }
+  ]
+}

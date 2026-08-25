@@ -1,0 +1,17 @@
+pushe und deploye bei hetzner
+
+---
+
+pushe und dokumentiere entire
+
+---
+
+alle branchens mergen
+
+---
+
+debuggen und testen und ux bericht erstellen mit verbesserungsvorschlägen. Versetzte dich in die lage der juristin die nichts von technik weiß.&#x20;
+
+---
+
+ändere das dashboard und mache es übersichtlicher
