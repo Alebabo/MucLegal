@@ -1851,3 +1851,34 @@ demselben Paket erneut verglichen und korrekt als `pruefung_unvollstaendig`
 klassifiziert. Solange Decathlon die verbindliche AGB-URL für den transparenten
 Projektbrowser blockiert, ist diese Live-Demo extern begrenzt; die Anwendung umgeht
 den Schutz nicht und stellt den Lauf nicht als belastbaren Änderungsbeleg dar.
+
+# Hetzner-Release enthält das neue UE-Beispielregister nicht
+
+### Symptom
+
+Ein nach dem bisherigen Hetzner-Runbook erzeugtes Release enthält zwar
+`muclegal/llm/tenor_examples.py`, aber nicht die zur Laufzeit geladene Datei
+`reference/ue_examples.json`. Die Tenorhilfe würde deshalb beim Laden oder Auswählen
+der verifizierten UE-Beispiele mit einem nicht lesbaren Beispielregister scheitern.
+
+### Ursache und Diagnose
+
+Der explizite `git archive`-Dateisatz im Runbook wurde vor Einführung des
+versionierten UE-Referenzkorpus festgelegt und umfasste das Verzeichnis `reference`
+nicht. Der lokale Archivinhalt ließ sich mit `tar -tf` prüfen; dort fehlte die von
+`UE_EXAMPLE_SOURCE_PATH` erwartete Datei.
+
+### Lösung
+
+Das Runbook nimmt `reference/ue_examples.json` nun ausdrücklich in jedes Release-
+Archiv auf. Das übrige `reference`-Verzeichnis wird weiterhin nicht pauschal
+ausgerollt. Dadurch bleibt das Release klein und enthält genau die zusätzlich
+benötigte Laufzeitdatei, aber keine sonstigen Arbeitsdokumente.
+
+### Verifikation und verbleibende Grenze
+
+Vor dem Upload werden Archivinhalt und Ausschlussmuster geprüft. Die serverseitige
+Releasevorbereitung muss zusätzlich die Tenortests ausführen oder mindestens das
+Register mit `load_ue_examples()` laden. Künftige neue Laufzeitdateien außerhalb der
+bisher archivierten Pfade müssen weiterhin bewusst in den Release-Dateisatz
+aufgenommen werden.

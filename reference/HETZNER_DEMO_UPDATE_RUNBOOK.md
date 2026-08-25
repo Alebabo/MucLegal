@@ -100,7 +100,8 @@ Dateien noch lokale Änderungen auf:
 
 ```powershell
 git archive --format=tar.gz --output=$Archive $Commit `
-  app.py pyproject.toml muclegal fixtures prompts assets frontend
+  app.py pyproject.toml muclegal fixtures prompts assets frontend `
+  reference/ue_examples.json
 
 tar -tf $Archive | Select-String -Pattern `
   '(?i)(^|/)(\.env|\.muclegal|node_modules|\.output)(/|$)|\.(sqlite3?|warc|pem|key)$'
