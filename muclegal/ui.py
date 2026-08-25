@@ -83,7 +83,7 @@ CAPTURE_ROLE_TITLES = {
 }
 ARTIFACT_DEFINITIONS = {
     "evidence_suitability": ("Hinweis", "Beweiseignung", "text"),
-    "god_mode_authorization": ("Abruf", "Grey-Mode-Autorisierung", "text"),
+    "god_mode_authorization": ("Abruf", "Autorisierungsnachweis", "text"),
     "raw_html": ("Abruf", "Roh-HTML", "text"),
     "response_headers": ("Abruf", "Header", "text"),
     "normalized_text": ("Abruf", "Normalisierter Text", "text"),
@@ -361,8 +361,7 @@ class RunCoordinator:
                 "step": "queued",
                 "state": "queued",
                 "message": (
-                    "Grey Mode aktiviert. Die Checkbox dokumentiert die bestätigte "
-                    "Berechtigungsgrundlage; der Lauf bleibt technisch getrennt gespeichert."
+                    "Autorisierte Erfassung aktiviert und getrennt protokolliert."
                     if run.god_mode_authorized else
                     "Prüflauf angelegt; der Überprüfungsmodus wird bei tatsächlichem Seitenschutz automatisch aktiviert."
                     if run.verification_mode
@@ -746,7 +745,7 @@ class CaseArchive:
                 "Integritätsprüfung fehlgeschlagen; Download wurde gesperrt. " + reasons,
             )
 
-        prefix = "grey-mode-beweispaket" if record.get("god_mode") else "beweispaket"
+        prefix = "autorisiertes-beweispaket" if record.get("god_mode") else "beweispaket"
         archive_path = case_path.parent / f"{prefix}-{case_id}.zip"
         temporary_path = archive_path.with_name(
             f".{archive_path.name}.{uuid.uuid4().hex}.tmp"
@@ -1496,16 +1495,11 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
 
     def validated_case_evidence(monitoring_case, evidence_case_id: str) -> dict:
-        """Load one regular, manifest-valid evidence bundle for the case domain."""
+        """Load one technically suitable, manifest-valid evidence bundle for the case domain."""
         try:
             evidence_detail = archive.detail(evidence_case_id)
         except HTTPException as exc:
             raise HTTPException(404, "BeweisLab-Lauf nicht gefunden.") from exc
-        if evidence_detail.get("god_mode"):
-            raise HTTPException(
-                422,
-                "Grey-Mode-Pakete bleiben von der juristischen Monitoringstrecke getrennt.",
-            )
         if (
             evidence_detail.get("evidence_suitability") != "regulaer"
             and not (
@@ -1584,6 +1578,7 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             "manifest_sha256": verification.manifest_sha256,
             "capture_completeness": evidence_detail.get("capture_completeness"),
             "documents": documents,
+            "grey_mode": bool(evidence_detail.get("god_mode")),
             "demo_only": bool(evidence_detail.get("demo_only")),
             "demo_notice": evidence_detail.get("demo_notice"),
         }
@@ -1681,6 +1676,8 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
             "compared_at": datetime.now(timezone.utc).isoformat(),
             "comparison_method": "manifestgepruefter_wortbasierter_textvergleich",
             **difference_result,
+            "baseline_grey_mode": bool(baseline.get("grey_mode")),
+            "current_grey_mode": bool(current.get("grey_mode")),
             "demo_only": bool(baseline.get("demo_only") or current.get("demo_only")),
             "demo_notice": (
                 current.get("demo_notice")

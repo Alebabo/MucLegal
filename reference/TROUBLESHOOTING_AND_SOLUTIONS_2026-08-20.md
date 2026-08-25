@@ -2297,3 +2297,36 @@ Datenschutz-Druckfassung. Browserkonsole und Warnungsprotokoll blieben leer.
 Eine Cloudflare-Schutzseite enthält keine erreichbaren Rechtstext-Akkordeons. Sie
 kann daher weiterhin nicht aufgeklappt werden und bleibt sichtbar als
 `durch_seitenschutz_begrenzt` klassifiziert; die Änderung umgeht keinen Seitenschutz.
+# Grey-Mode-Beweispaket ließ sich keinem Fall zuordnen
+
+### Symptom
+
+Nach einer erfolgreichen technischen Erfassung im Grey Mode zeigte das BeweisLab zwar
+das getrennt gekennzeichnete Paket, beendete die Fallauswahl aber sofort mit dem Hinweis,
+dass Grey-Mode-Pakete nicht übernommen werden könnten. Ein direkter Aufruf des
+Zuordnungs-Endpunkts endete ebenfalls mit HTTP 422.
+
+### Ursache und Diagnose
+
+Die Trennung zwischen technischer Grey-Mode-Erfassung und juristischer Modellanalyse war
+zu weit umgesetzt: Sowohl das Browser-Frontend als auch `validated_case_evidence`
+verboten jede Fallzuordnung. Eine Zuordnung und der bestehende manifestgeprüfte
+wortbasierte Vergleich sind jedoch rein technische Metadatenoperationen und lösen keine
+juristische KI-Analyse aus.
+
+### Lösung
+
+Technisch geeignete, manifestgültige Grey-Mode-Pakete dürfen jetzt einem Fall derselben
+freigegebenen Domain als Ausgangsbeweis zugeordnet oder mit dessen Ausgangsbeweis
+technisch verglichen werden. Ausgangsbeweis und Vergleich speichern die Grey-Mode-
+Kennzeichnung dauerhaft. Die Oberfläche zeigt dafür auf Nutzerwunsch nur die unbeschriftete
+Autorisierungscheckbox neben der URL und keine zusätzlichen Modushinweise. Die getrennte
+Paketablage und die Sperre gegen juristische Modellaufrufe bleiben unverändert.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests ordnen ein Grey-Mode-Paket erfolgreich als Ausgangsbeweis zu und prüfen
+die Kennzeichnung bei einem technischen Vergleich. Domain-, Manifest- und
+Beweiseignungsprüfung gelten unverändert. Ein nicht technisch geeignetes Paket darf auch
+im Grey Mode nicht als Ausgangsbeweis verwendet werden; die Zuordnung ist keine
+juristische Bewertung und keine menschliche Freigabe eines Befunds.

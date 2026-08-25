@@ -599,11 +599,11 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(case["god_mode"])
         self.assertEqual("regulaer", case["evidence_suitability"])
         self.assertEqual("god_mode_ausdruecklich_ignoriert", case["capture_transparency"]["robots_txt"])
-        self.assertTrue(normalized.startswith("GREY MODE"))
-        self.assertEqual("GREY MODE", manifest["notice"])
+        self.assertTrue(normalized.startswith("AUTORISIERTE ERFASSUNG"))
+        self.assertEqual("AUTORISIERTE ERFASSUNG", manifest["notice"])
         self.assertNotIn("NICHT JURISTISCH VERWERTBAR", normalized)
         self.assertTrue(authorization["activated"])
-        self.assertEqual("GREY MODE", authorization["notice"])
+        self.assertEqual("AUTORISIERTE ERFASSUNG", authorization["notice"])
         self.assertNotIn(
             "optionale_openai_redaktionelle_textanalyse",
             authorization["enabled_functions"],
@@ -635,7 +635,7 @@ class LiveWorkflowTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 ValueError,
-                "ausschließlich für die technische BeweisLab-Erfassung",
+                "ausschließlich für das technische BeweisLab",
             ):
                 workflow.run("https://example.com", god_mode=True)
 
@@ -847,7 +847,7 @@ class LiveWorkflowTests(unittest.TestCase):
 
         self.assertIs(captured, fallback_capture)
         self.assertEqual("<html><main>Schutzseite</main></html>", fallback.call_args.args[0])
-        self.assertIn("Grey Mode", fallback.call_args.kwargs["fallback_reason"])
+        self.assertIn("Autorisierte Erfassung", fallback.call_args.kwargs["fallback_reason"])
         self.assertEqual(target_root, fallback.call_args.args[2].parent)
         self.assertEqual(target_root, fallback.call_args.kwargs["artifact_directory"])
 
@@ -1140,7 +1140,7 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(page["normalized_text_files"])
         self.assertTrue(page["screenshot_files"])
         self.assertTrue(page["document_files"])
-        self.assertIn("GREY MODE", god_pdf_text)
+        self.assertIn("AUTORISIERTE ERFASSUNG", god_pdf_text)
         self.assertNotIn("NICHT JURISTISCH VERWERTBAR", god_pdf_text)
         self.assertEqual("https://shop.test/agb-online", page["captured_url"])
         self.assertTrue(galleries["agb"]["page_artifacts_complete"])
@@ -1336,8 +1336,8 @@ class LiveUiTests(unittest.TestCase):
                 self, url, progress, *, capture_baseline=False, browser_mode=False, god_mode=False
             ):
                 self.received = (url, capture_baseline, browser_mode, god_mode)
-                progress("fetch", "Grey Mode protokolliert")
-                return LiveWorkflowResult("protected", "GREY MODE")
+                progress("fetch", "Autorisierte Erfassung protokolliert")
+                return LiveWorkflowResult("protected", "AUTORISIERTE ERFASSUNG")
 
         with tempfile.TemporaryDirectory() as output:
             workflow = GodModeWorkflow()
@@ -1360,12 +1360,13 @@ class LiveUiTests(unittest.TestCase):
                 ).json()
                 completed = poll(client, started["run_id"])
 
-        self.assertIn('id="grey-mode" type="checkbox"', page.text)
-        self.assertIn("Grey Mode", page.text)
+        self.assertIn('id="authorized-capture" type="checkbox"', page.text)
+        self.assertIn('aria-label="Autorisierte Erfassung aktivieren"', page.text)
+        self.assertNotIn("Grey Mode", page.text)
         self.assertNotIn('id="god-mode-authorized"', page.text)
         self.assertNotIn('id="verification-mode"', page.text)
         self.assertIn(
-            "verification_mode:greyMode.checked,god_mode_authorized:greyMode.checked",
+            "verification_mode:authorizedCapture.checked,god_mode_authorized:authorizedCapture.checked",
             page.text,
         )
         self.assertNotIn("NICHT JURISTISCH VERWERTBAR", page.text)
@@ -1378,7 +1379,7 @@ class LiveUiTests(unittest.TestCase):
         self.assertEqual(
             ("https://authorized.example/", True, True, True), workflow.received
         )
-        self.assertIn("GREY MODE", completed["message"])
+        self.assertIn("AUTORISIERTE ERFASSUNG", completed["message"])
 
     def test_evidence_lab_groups_primary_artifacts_and_exposes_text_per_page(self) -> None:
         with tempfile.TemporaryDirectory() as output:
@@ -1578,8 +1579,8 @@ class LiveUiTests(unittest.TestCase):
                         break
                     time.sleep(0.01)
 
-        self.assertIn('id="grey-mode" type="checkbox"', page.text)
-        self.assertIn("Grey Mode", page.text)
+        self.assertIn('id="authorized-capture" type="checkbox"', page.text)
+        self.assertNotIn("Grey Mode", page.text)
         self.assertNotIn("Automatische Überprüfung", page.text)
         self.assertTrue(started["verification_mode"])
         self.assertFalse(disabled["verification_mode"])
@@ -1867,6 +1868,8 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn('anthropic:"KI-Analyse"', page.text)
         self.assertIn("Beweispaket herunterladen", page.text)
         self.assertIn("Dem Fall zuordnen oder vergleichen", page.text)
+        self.assertNotIn("Grey Mode", page.text)
+        self.assertNotIn("Grey-Mode", page.text)
         self.assertIn('"baseline-evidence"', page.text)
         self.assertIn('"evidence-comparisons"', page.text)
         self.assertIn("Aktuellen Scan zuordnen & vergleichen", page.text)

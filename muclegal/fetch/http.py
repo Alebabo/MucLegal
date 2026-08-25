@@ -255,11 +255,11 @@ class HttpFetcher:
                     target.fetch_result.final_url,
                     artifact_root / "screenshot-full-page.png",
                     protection=(
-                        "Autorisierter Grey-Mode-Zielzustand mit aktivem Seitenschutz."
+                        "Autorisierter Zielzustand mit aktivem Seitenschutz."
                         if self._god_mode and protection else protection
                     ),
                     fallback_reason=(
-                        f"{'Grey Mode: ' if self._god_mode else ''}Der Browserzustand wurde "
+                        f"{'Autorisierte Erfassung: ' if self._god_mode else ''}Der Browserzustand wurde "
                         "gesichert, aber die reguläre Screenshotphase "
                         f"{target.failure_phase or 'unbekannt'} blieb ohne Bild."
                     ),

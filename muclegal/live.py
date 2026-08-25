@@ -47,7 +47,7 @@ ROBOTS_UNCHECKED_NOTICE = (
     "Berechtigung, Nutzungsbedingungen und rechtliche Zulässigkeit sind "
     "eigenverantwortlich zu prüfen."
 )
-GOD_MODE_NOTICE = "GREY MODE"
+GOD_MODE_NOTICE = "AUTORISIERTE ERFASSUNG"
 KNOWN_SITE_LEGAL_PATHS: dict[str, dict[str, tuple[str, ...]]] = {
     "temu.com": {
         "agb": ("/de/terms-of-use.html",),
@@ -175,7 +175,7 @@ class LiveMonitorWorkflow:
     ) -> LiveWorkflowResult:
         if god_mode and not capture_baseline:
             raise ValueError(
-                "Grey Mode ist ausschließlich für die technische BeweisLab-Erfassung zulässig."
+                "Die autorisierte Erfassung ist ausschließlich für das technische BeweisLab zulässig."
             )
         progress = progress or (lambda _step, _message: None)
         session = nullcontext()
@@ -995,7 +995,7 @@ class LiveMonitorWorkflow:
         _write_simple_yaml(transparency_path, capture_transparency)
         if robots_unchecked or god_mode:
             suitability_path = artifacts_dir / (
-                "GREY_MODE.txt"
+                "AUTHORIZED_CAPTURE.txt"
                 if god_mode else "NICHT_BEWEISGEEIGNET.txt"
             )
             suitability_path.write_text(
@@ -1543,7 +1543,7 @@ class LiveMonitorWorkflow:
         bundled_artifacts["capture_transparency"] = transparency_path
         if robots_unchecked or god_mode:
             suitability_path = artifacts_dir / (
-                "GREY_MODE.txt"
+                "AUTHORIZED_CAPTURE.txt"
                 if god_mode else "NICHT_BEWEISGEEIGNET.txt"
             )
             suitability_path.write_text(
@@ -2191,7 +2191,7 @@ def _write_simple_yaml(path: Path, values: dict[str, Any]) -> None:
 
 
 def _mark_god_mode_bundle(bundle: Path) -> None:
-    """Mark derived Grey-Mode images and normalized texts with their capture mode."""
+    """Mark derived images and normalized texts as an authorized capture."""
     from PIL import Image, ImageDraw, ImageFont
 
     for path in sorted(bundle.rglob("*")):
@@ -2264,7 +2264,7 @@ def _mark_god_mode_bundle(bundle: Path) -> None:
 
 
 def _prepend_god_mode_pdf_notice(path: Path) -> None:
-    """Add a neutral Grey-Mode identification page to derived legal print PDFs."""
+    """Add a neutral authorization page to derived legal print PDFs."""
     from reportlab.pdfgen import canvas
 
     reader = PdfReader(str(path))
@@ -2279,7 +2279,7 @@ def _prepend_god_mode_pdf_notice(path: Path) -> None:
     document.setFillColorRGB(1, 1, 1)
     document.setFont("Helvetica-Bold", 20)
     lines = (
-        "GREY MODE",
+        "AUTORISIERTE ERFASSUNG",
         "Browsergenerierte Druckfassung des expandierten DOM",
     )
     y = height * 0.6
@@ -2300,7 +2300,7 @@ def _prepend_god_mode_pdf_notice(path: Path) -> None:
 
 
 def _god_mode_banner_font(image_font: Any, size: int) -> Any:
-    """Load a Unicode font for the Grey-Mode image label."""
+    """Load a Unicode font for the authorized-capture image label."""
     candidates = (
         "DejaVuSans.ttf",
         "arial.ttf",

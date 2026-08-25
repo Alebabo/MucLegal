@@ -11,6 +11,7 @@ export type BaselineEvidence = {
   manifest_sha256: string;
   attached_at: string;
   attached_by: "menschliche_zuordnung_im_beweislab";
+  grey_mode?: boolean;
   demo_only?: boolean;
   demo_notice?: string;
 };
@@ -36,6 +37,8 @@ export type EvidenceComparison = {
     before: string;
     after: string;
   }>;
+  baseline_grey_mode?: boolean;
+  current_grey_mode?: boolean;
   demo_only?: boolean;
   demo_notice?: string;
   technical_only: true;

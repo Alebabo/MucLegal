@@ -562,7 +562,7 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual("success", second["steps"]["manifest"])
         self.assertEqual("skipped", second["steps"]["timestamp"])
 
-    def test_api_attaches_only_regular_manifest_valid_same_domain_evidence(self) -> None:
+    def test_api_attaches_manifest_valid_same_domain_evidence_including_grey_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             live_root = root / "live"
@@ -609,7 +609,7 @@ class MonitoringCaseTests(unittest.TestCase):
                     "/api/v1/cases",
                     json={
                         **clause_payload(),
-                        "fall_id": "VZ-GREY-REJECTION",
+                        "fall_id": "VZ-GREY-ASSIGNMENT",
                         "screenshot": None,
                     },
                 ).json()
@@ -652,8 +652,9 @@ class MonitoringCaseTests(unittest.TestCase):
 
         self.assertEqual(201, regular.status_code)
         self.assertEqual(regular_id, regular.json()["baseline_evidence"]["evidence_case_id"])
-        self.assertEqual(422, grey.status_code)
-        self.assertIn("Grey-Mode", grey.json()["detail"])
+        self.assertEqual(201, grey.status_code)
+        self.assertEqual(grey_id, grey.json()["baseline_evidence"]["evidence_case_id"])
+        self.assertTrue(grey.json()["baseline_evidence"]["grey_mode"])
         self.assertEqual(201, wayback.status_code)
         self.assertEqual(
             wayback_id, wayback.json()["baseline_evidence"]["evidence_case_id"]
@@ -694,6 +695,12 @@ class MonitoringCaseTests(unittest.TestCase):
                 text="Cloudflare-Blockseite",
                 capture_completeness="durch_seitenschutz_begrenzt",
             )
+            grey_current_id = _write_baseline_bundle(
+                live_root,
+                "god-evidence-current",
+                god_mode=True,
+                text="Neue AGB-Klausel in autorisierter Erfassung",
+            )
             with TestClient(app) as client:
                 created = client.post(
                     "/api/v1/cases", json={**clause_payload(), "screenshot": None}
@@ -716,6 +723,10 @@ class MonitoringCaseTests(unittest.TestCase):
                 incomplete = client.post(
                     f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
                     json={"evidence_case_id": incomplete_id},
+                )
+                grey_changed = client.post(
+                    f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
+                    json={"evidence_case_id": grey_current_id},
                 )
                 self_compare = client.post(
                     f"/api/v1/cases/{created['case_id']}/evidence-comparisons",
@@ -760,6 +771,9 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual(
             "pruefung_unvollstaendig", incomplete.json()["comparison"]["status"]
         )
+        self.assertEqual(201, grey_changed.status_code)
+        self.assertFalse(grey_changed.json()["comparison"]["baseline_grey_mode"])
+        self.assertTrue(grey_changed.json()["comparison"]["current_grey_mode"])
         self.assertEqual(422, self_compare.status_code)
 
     def test_missing_element_is_only_reported_with_complete_coverage(self) -> None:

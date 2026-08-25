@@ -94,13 +94,19 @@ müssen vollständig protokolliert werden.
 Spezielle Disclaimer oder Hinweise sind optional und werden vom Nutzer bestimmt.
 Grey-Mode-Artefakte sollten von regulären Beweisen unterscheidbar bleiben.
 
-Die Solloberfläche verwendet die ausdrückliche Checkbox `Autorisiert (Grey Mode)` neben
-der URL. Das Anklicken protokolliert die Nutzerbestätigung, dass Vollmacht und Rechtsrahmen
-vorab geklärt sind, und erzwingt den Browsermodus. Die bestehende Implementierung nutzt
+Die Solloberfläche verwendet neben der URL ausschließlich eine unbeschriftete Checkbox mit
+dem barrierefreien Namen `Autorisierte Erfassung aktivieren`; eine sichtbare Modusbezeichnung
+oder ein Info-Hinweis werden nicht gezeigt. Das Anklicken protokolliert die
+Nutzerbestätigung, dass Vollmacht und Rechtsrahmen vorab geklärt sind, und erzwingt den
+Browsermodus. Die bestehende Implementierung nutzt
 bis zu einer gesonderten Codemigration weiterhin die internen Legacy-Bezeichner
 `god_mode`, `god_mode_authorized` und `god_mode_notice`. Snapshots liegen unter
-`god-mode-snapshots/`, Pakete unter `god-mode-bundles/god-*`; reguläre Falllisten enthalten
-sie nicht. `god_mode_authorization.json` hält Zeitpunkt, Ziel, Vollmachtsgrundlage und
+`god-mode-snapshots/`, Pakete unter `god-mode-bundles/god-*`; die reguläre
+BeweisLab-Archivliste vermischt sie nicht mit regulären Paketen. Ein Mensch kann ein
+technisch geeignetes Grey-Mode-Paket dennoch einem domainpassenden Monitoringfall als
+Ausgangsbeweis oder technischen Vergleich zuordnen. Die Zuordnung speichert die
+Grey-Mode-Kennzeichnung am Fall und startet keine juristische Modellprüfung.
+`god_mode_authorization.json` hält Zeitpunkt, Ziel, Vollmachtsgrundlage und
 freigeschaltete Funktionen vor der Manifestbildung fest. Optional gewählte Hinweise können
 als Banner, Kopfzeile, Manifest-Notice sowie in PDF und ZIP erscheinen. Der Modus löst
 weiterhin keine fremden
@@ -114,7 +120,9 @@ optionalen nutzerbestimmten Hinweise angepasst werden.
 Der Grey Mode ist ausschließlich eine technische Erfassung. Er startet keine KI-Analyse,
 überträgt keinen Seitentext an ein Modell und erzeugt keine KI-Zusammenfassungs- oder
 Kostenartefakte. Juristische Modellprüfungen bleiben der getrennten, menschlich
-freigegebenen Fallmonitor-Spur vorbehalten.
+freigegebenen Fallmonitor-Spur vorbehalten. Die manuelle Fallzuordnung und ein
+manifestgeprüfter wortbasierter Textvergleich sind technische Metadatenoperationen und
+ändern diese Grenze nicht.
 
 ### 5. Cookie- und Session-Persistenz — bestanden
 

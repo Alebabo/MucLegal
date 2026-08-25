@@ -468,6 +468,10 @@ def _validate_baseline_evidence(value: dict) -> dict:
     if not SHA256_PATTERN.fullmatch(cleaned["manifest_sha256"].lower()):
         raise MonitoringCaseError("Manifest-Prüfwert des Ausgangsbeweises ist ungültig.")
     cleaned["manifest_sha256"] = cleaned["manifest_sha256"].lower()
+    grey_mode = value.get("grey_mode", False)
+    if not isinstance(grey_mode, bool):
+        raise MonitoringCaseError("Moduskennzeichnung des Ausgangsbeweises ist ungültig.")
+    cleaned["grey_mode"] = grey_mode
     demo_only = value.get("demo_only", False)
     if not isinstance(demo_only, bool):
         raise MonitoringCaseError("Demo-Kennzeichnung des Ausgangsbeweises ist ungültig.")
@@ -579,6 +583,11 @@ def _validate_evidence_comparison(value: dict) -> dict:
     if cleaned["status"] != "technische_aenderung_erkannt" and cleaned_differences:
         raise MonitoringCaseError("Nur erkannte Änderungen dürfen Textunterschiede enthalten.")
     cleaned["differences"] = cleaned_differences
+    for field in ("baseline_grey_mode", "current_grey_mode"):
+        grey_mode = value.get(field, False)
+        if not isinstance(grey_mode, bool):
+            raise MonitoringCaseError("Moduskennzeichnung des Beweisvergleichs ist ungültig.")
+        cleaned[field] = grey_mode
     demo_only = value.get("demo_only", False)
     if not isinstance(demo_only, bool):
         raise MonitoringCaseError("Demo-Kennzeichnung des Beweisvergleichs ist ungültig.")
