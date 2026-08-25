@@ -634,7 +634,11 @@ LEGAL_EXPANSION_LIMIT = 100
 
 
 _LEGAL_CONTROL_ELIGIBILITY = r"""el => {
-  if (el.closest('nav, header, footer, [role="navigation"], form')) return null;
+  if (el.closest(
+    'nav, header, footer, [role="navigation"], form, x-header, header-sidebar, ' +
+    '[class^="header"], [class*=" header"], [class^="footer"], [class*=" footer"], ' +
+    '[class^="localization"], [class*=" localization"]'
+  )) return null;
   const tag = el.tagName.toLowerCase();
   const role = el.getAttribute('role');
   const text = (el.innerText || el.getAttribute('aria-label') || '').trim();
@@ -837,7 +841,8 @@ def _legal_expansion_summary(
         "complete": not limit_exceeded
         and attempted == eligible
         and changed == attempted
-        and captured == attempted,
+        and captured == attempted
+        and remaining == 0,
     }
 
 

@@ -1443,11 +1443,12 @@ class LiveUiTests(unittest.TestCase):
                 )
 
         self.assertIn('createMenuPill("Screenshots"', page.text)
-        self.assertIn('createDirectPill("Datenschutz-Screenshot"', page.text)
-        self.assertIn('createDirectPill("AGB-Screenshot"', page.text)
+        self.assertIn('createDirectPill("Datenschutz aufgeklappt"', page.text)
+        self.assertIn('createDirectPill("AGB aufgeklappt"', page.text)
+        self.assertIn("expandedLegalChoice", page.text)
+        self.assertIn("if(agb)agb.select(agbWrap)", page.text)
         self.assertIn('createMenuPill("Normalisierter Text"', page.text)
         self.assertIn('createMenuPill("Technische Details"', page.text)
-        self.assertIn('createMenuPill("Druckfassungen"', page.text)
         self.assertEqual("Hauptseite", detail["capture_galleries"]["main"]["title"])
         self.assertTrue(
             detail["capture_galleries"]["agb"]["normalized_text_url"].endswith(

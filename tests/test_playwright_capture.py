@@ -120,6 +120,34 @@ class _CaptureHandler(BaseHTTPRequestHandler):
                 document.getElementById('open-content').hidden=true;
               };</script></main>"""
             self.send_response(200)
+        elif self.path == "/exclusive-accordion":
+            body = b"""<!doctype html><main><h1>Allgemeine Geschaeftsbedingungen</h1>
+              <button aria-expanded='false' aria-controls='part-a'>Klausel A</button>
+              <div id='part-a' hidden>Vollstaendiger Rechtstext A.</div>
+              <button aria-expanded='false' aria-controls='part-b'>Klausel B</button>
+              <div id='part-b' hidden>Vollstaendiger Rechtstext B.</div>
+              <script>document.querySelectorAll('[aria-controls]').forEach(button=>{
+                button.onclick=()=>{
+                  document.querySelectorAll('[aria-controls]').forEach(other=>{
+                    other.setAttribute('aria-expanded','false');
+                    document.getElementById(other.getAttribute('aria-controls')).hidden=true;
+                  });
+                  button.setAttribute('aria-expanded','true');
+                  document.getElementById(button.getAttribute('aria-controls')).hidden=false;
+                };
+              });</script></main>"""
+            self.send_response(200)
+        elif self.path == "/policy-with-site-chrome":
+            body = b"""<!doctype html><body><div class='shopify-policy__container'>
+              <h1>Datenschutzerklaerung</h1><p>Der Rechtstext ist vollstaendig sichtbar.</p>
+              </div><div class='footer color-scheme'><div class='localization-selectors'>
+              <button class='localization-toggle' aria-expanded='false'
+                aria-controls='country'>Deutschland</button><div id='country' hidden>Laenderwahl</div>
+              </div></div><script>document.querySelector('.localization-toggle').onclick=event=>{
+                event.currentTarget.setAttribute('aria-expanded','true');
+                document.getElementById('country').hidden=false;
+              };</script></body>"""
+            self.send_response(200)
         else:
             height = int(self.path.removeprefix("/height/").split("?")[0])
             body = (
@@ -375,6 +403,49 @@ def test_already_open_legal_accordion_is_not_clicked_closed(
     assert coverage["eligible_controls"] == 0
     assert coverage["complete"] is True
     assert captured.capture_completeness == "vollstaendig_erfasst"
+
+
+def test_exclusive_accordion_keeps_all_text_but_reports_remaining_closed_control(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/exclusive-accordion", role="agb"
+        )
+
+    root = Path(captured.artifact_directory)
+    normalized = (root / "normalized-text.txt").read_text("utf-8")
+    coverage = json.loads((root / "content-coverage.json").read_text("utf-8"))[
+        "legal_expansion"
+    ]
+
+    assert "Vollstaendiger Rechtstext A" in normalized
+    assert "Vollstaendiger Rechtstext B" in normalized
+    assert coverage["remaining_collapsed_controls"] == 1
+    assert coverage["complete"] is False
+    assert captured.capture_completeness == "teilweise_erfasst"
+
+
+def test_site_chrome_localization_is_not_treated_as_legal_accordion(
+    tmp_path: Path, capture_server: str
+) -> None:
+    with CaptureRunController(tmp_path) as controller:
+        captured = controller.capture_target(
+            f"{capture_server}/policy-with-site-chrome", role="privacy"
+        )
+
+    root = Path(captured.artifact_directory)
+    interactions = json.loads((root / "interactions.json").read_text("utf-8"))[
+        "interactions"
+    ]
+    coverage = json.loads((root / "content-coverage.json").read_text("utf-8"))[
+        "legal_expansion"
+    ]
+
+    assert not [item for item in interactions if item.get("type") == "legal_expansion"]
+    assert coverage["eligible_controls"] == 0
+    assert coverage["remaining_collapsed_controls"] == 0
+    assert coverage["complete"] is True
 
 
 def test_generic_reject_requires_dialog_and_visible_accept_alternative() -> None:

@@ -2245,3 +2245,55 @@ leitet `/api` mit geändertem Origin und internem Loopback-Host an FastAPI weite
 FastAPI selbst bleibt ausschließlich an `127.0.0.1:8000` gebunden. Eine direkte
 öffentliche Freischaltung des Demo-Endpoints oder des Backend-Ports wurde nicht
 eingeführt.
+
+# Rechtstextansicht bleibt zugeklappt und Länderwahl gilt als Akkordeon
+
+### Symptom
+
+Nach einem erfolgreichen Scan waren die vollständig zusammengeführten AGB- und
+Datenschutz-Druckfassungen nur unter den technischen Details erreichbar. Die direkt
+sichtbaren Schaltflächen öffneten stattdessen den letzten Website-Screenshot, auf dem
+bei wechselseitig ausschließenden Akkordeons naturgemäß nur ein Abschnitt offen sein
+kann. Im Hetzner-Paket für `mirageperfume.com` meldete die Expansionszusammenfassung
+außerdem `complete: true`, obwohl `remaining_collapsed_controls: 1` gespeichert war.
+
+### Ursache und Diagnose
+
+Wenn eine Rechtstextseite kein semantisches `main`, `article` oder `[role=main]`
+enthielt, fiel die Suche auf den gesamten `body` zurück. Shopify-Seiten bilden ihre
+Fußzeile teilweise als `div.footer` statt als echtes `footer`-Element ab. Deshalb
+wurden die dortigen Schalter `Deutschland (EUR €)` und `Deutsch` mit
+`aria-expanded=false` irrtümlich als Rechtstext-Akkordeons behandelt. Unabhängig
+davon berücksichtigte die Berechnung von `complete` die nach allen Klicks noch
+vorhandenen geschlossenen Controls nicht. Die bereits korrekt erzeugte abgeleitete
+Druckfassung war in der Oberfläche fachlich zu weit hinten einsortiert.
+
+### Lösung
+
+Die Akkordeonsuche schließt jetzt neben semantischer Navigation auch typische
+Header-, Footer- und Lokalisierungscontainer aus. `complete` ist nur noch wahr, wenn
+nach dem Scan tatsächlich kein zulässiges geschlossenes Control mehr vorhanden ist.
+Bei exklusiven Akkordeons bleiben alle nacheinander sichtbar gemachten Texte im
+normalisierten Text und in der abgeleiteten Druckfassung erhalten; der visuelle
+Browserzustand wird aber ehrlich als teilweise erfasst gekennzeichnet, wenn nicht
+alle Abschnitte gleichzeitig offen bleiben.
+
+Im BeweisLab heißen die beiden direkten Einstiege jetzt `AGB aufgeklappt` und
+`Datenschutz aufgeklappt`. Sie öffnen die automatisch erzeugte, ausdrücklich als
+abgeleitet gekennzeichnete Druckfassung. Nach einem Scan wird die AGB-Druckfassung
+bevorzugt automatisch angezeigt. Die unveränderten Website-Screenshots bleiben
+getrennt im Menü `Screenshots` erhalten.
+
+### Verifikation und verbleibende Grenze
+
+Eine Chromium-Regression prüft ein exklusives Zwei-Klausel-Akkordeon: Beide Texte
+liegen im Paket, ein verbliebenes geschlossenes Control führt aber korrekt zu
+`teilweise_erfasst`. Eine zweite Regression prüft eine Shopify-artige
+`div.footer`-Länderwahl und bestätigt, dass keine Rechtstextinteraktion protokolliert
+wird. Im lokalen Browser öffnete das bestehende manifestierte Decathlon-Paket direkt
+`Druckfassung · AGB-Seite`; der Klick auf `Datenschutz aufgeklappt` wechselte zur
+Datenschutz-Druckfassung. Browserkonsole und Warnungsprotokoll blieben leer.
+
+Eine Cloudflare-Schutzseite enthält keine erreichbaren Rechtstext-Akkordeons. Sie
+kann daher weiterhin nicht aufgeklappt werden und bleibt sichtbar als
+`durch_seitenschutz_begrenzt` klassifiziert; die Änderung umgeht keinen Seitenschutz.
