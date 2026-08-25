@@ -2401,3 +2401,35 @@ prüft die geöffnete Müller-Differenzansicht auf Desktop- und schmaler Breite 
 Konsole und horizontales Überlaufen. Auf sehr langen Klauseln bleibt die Anzeige
 bewusst ausschnittsweise; die Zahl und Länge der Ausschnitte wird weiterhin im
 Backend begrenzt.
+
+# Resthinweise und Bildbanner überlagerten den reduzierten Demo-Ablauf
+
+### Symptom
+
+Unter den beiden Demo-Schaltflächen standen weiterhin längere Erläuterungssätze. Bei
+einer autorisierten Erfassung wurde außerdem `AUTORISIERTE ERFASSUNG` nachträglich in
+Screenshots, normalisierte Texte und die Rechtstext-Druckfassung eingebracht. Dadurch
+wichen die abgeleiteten Inhalte sichtbar vom tatsächlich erfassten Stand ab.
+
+### Ursache und Diagnose
+
+Die Hinweise waren als feste `small`-Elemente im BeweisLab-Template hinterlegt. Der
+Workflow rief vor der Manifestbildung zusätzlich `_mark_god_mode_bundle` auf; diese
+Nachbearbeitung zeichnete einen Bildbanner ein, stellte dem normalisierten Text eine
+Kopfzeile voran und fügte der Rechtstext-Druckfassung eine zusätzliche PDF-Seite hinzu.
+
+### Lösung
+
+Die beiden Hinweiszeilen und die zugehörige dynamische Müller-Statuszeile wurden entfernt.
+Autorisierte Erfassungen verändern den erfassten Screenshot, den normalisierten Text und
+die Rechtstext-Druckfassung nicht mehr. Die technische Trennung bleibt über den separaten
+Speicherpfad, `case.json`, die Manifest-Notice und `god_mode_authorization.json` vollständig
+erhalten.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests prüfen, dass die Hinweistexte nicht ausgeliefert werden und ein weißer
+synthetischer Screenshot auch nach einer autorisierten Erfassung unverändert weiß bleibt.
+Gleichzeitig müssen Manifest und Autorisierungsprotokoll die interne Kennzeichnung weiter
+enthalten. Der technische PDF-Prüfbericht kann die Autorisierung weiterhin benennen; die
+unveränderten Primär- und Rechtstextartefakte selbst tragen keinen eingebrannten Hinweis.

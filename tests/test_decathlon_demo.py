@@ -49,6 +49,8 @@ def test_local_decathlon_demo_replays_manual_baseline_and_difference_flow() -> N
     assert payload["next_case_id"] == DEMO_BASELINE_ID
     assert 'id="decathlon-demo"' in page.text
     assert "keine Live-Beweise" not in page.text
+    assert "Bereitet zwei eingefrorene Vergleichsstände" not in page.text
+    assert "Erzeugt ausschließlich klar gekennzeichnete lokale Demo-Snapshots" not in page.text
     assert "SYNTHETISCHE DEMO · KEIN LIVE-BEWEIS" not in page.text
     assert DEMO_NOTICE not in page.text
     assert "Synthetisches Demo-Paket herunterladen" not in page.text

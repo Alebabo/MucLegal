@@ -107,9 +107,10 @@ technisch geeignetes Grey-Mode-Paket dennoch einem domainpassenden Monitoringfal
 Ausgangsbeweis oder technischen Vergleich zuordnen. Die Zuordnung speichert die
 Grey-Mode-Kennzeichnung am Fall und startet keine juristische Modellprüfung.
 `god_mode_authorization.json` hält Zeitpunkt, Ziel, Vollmachtsgrundlage und
-freigeschaltete Funktionen vor der Manifestbildung fest. Optional gewählte Hinweise können
-als Banner, Kopfzeile, Manifest-Notice sowie in PDF und ZIP erscheinen. Der Modus löst
-weiterhin keine fremden
+freigeschaltete Funktionen vor der Manifestbildung fest. Nach der Nutzerentscheidung vom
+26.08.2026 bleiben Screenshot, normalisierter Text und Rechtstext-Druckfassung visuell
+unverändert; die Unterscheidung erfolgt über getrennte Speicherpfade, Manifest-Notice und
+Autorisierungsprotokoll. Der Modus löst weiterhin keine fremden
 Logins, Paywalls oder CAPTCHAs und fügt keine Stealth- oder Identitätstäuschung hinzu.
 
 Die bisherigen Regressionstests belegen die getrennte technische Ablage, das Ignorieren

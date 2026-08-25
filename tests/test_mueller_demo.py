@@ -67,6 +67,8 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
     assert page.status_code == 200
     assert 'id="mueller-demo"' in page.text
     assert "/api/v1/demo/mueller" in page.text
+    assert "Hinterlegt die frühere Click-&-Collect-Klauselkombination" not in page.text
+    assert 'id="mueller-demo-status"' not in page.text
     assert prepared.status_code == 200
     assert prepared_again.status_code == 200
     assert payload["fall_id"] == DEMO_FALL_ID

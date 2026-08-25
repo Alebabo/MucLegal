@@ -36,7 +36,6 @@ from muclegal.live import (
     _capture_transparency,
     _discover_legal_pages,
     _legal_subpage_candidates,
-    _mark_god_mode_bundle,
     _select_legal_content_url,
     _select_legal_link,
     changed_excerpts,
@@ -587,7 +586,7 @@ class LiveWorkflowTests(unittest.TestCase):
                 Path(case["artifacts"]["god_mode_authorization"]).read_text(encoding="utf-8")
             )
             with Image.open(case["artifacts"]["screenshot"]) as image:
-                banner_pixel = image.convert("RGB").getpixel((1, 1))
+                screenshot_pixel = image.convert("RGB").getpixel((1, 1))
             archive = CaseArchive(root)
             regular_cases = archive.list()
             god_cases = archive.list_god_mode()
@@ -599,7 +598,7 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(case["god_mode"])
         self.assertEqual("regulaer", case["evidence_suitability"])
         self.assertEqual("god_mode_ausdruecklich_ignoriert", case["capture_transparency"]["robots_txt"])
-        self.assertTrue(normalized.startswith("AUTORISIERTE ERFASSUNG"))
+        self.assertFalse(normalized.startswith("AUTORISIERTE ERFASSUNG"))
         self.assertEqual("AUTORISIERTE ERFASSUNG", manifest["notice"])
         self.assertNotIn("NICHT JURISTISCH VERWERTBAR", normalized)
         self.assertTrue(authorization["activated"])
@@ -616,7 +615,7 @@ class LiveWorkflowTests(unittest.TestCase):
             any(item["label"].startswith("god_mode_ai") for item in manifest["artifacts"])
         )
         self.assertEqual("skipped", result.step_states["anthropic"])
-        self.assertEqual((75, 85, 99), banner_pixel)
+        self.assertEqual((255, 255, 255), screenshot_pixel)
         self.assertEqual([], regular_cases)
         self.assertEqual(1, len(god_cases))
         self.assertFalse(regular_latest_exists)
@@ -1110,17 +1109,8 @@ class LiveWorkflowTests(unittest.TestCase):
                 captured_url="https://shop.test/agb-online",
                 browser_run_root=None,
             )
-            _mark_god_mode_bundle(bundle)
             index = json.loads(
                 Path(bundled["page_artifacts_index"]).read_text(encoding="utf-8")
-            )
-            from pypdf import PdfReader
-
-            god_pdf_text = "\n".join(
-                page.extract_text() or ""
-                for page in PdfReader(
-                    bundle / index["pages"]["agb"]["document_files"][0]["path"]
-                ).pages
             )
             for collection in (
                 "raw_html_files",
@@ -1140,8 +1130,6 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertTrue(page["normalized_text_files"])
         self.assertTrue(page["screenshot_files"])
         self.assertTrue(page["document_files"])
-        self.assertIn("AUTORISIERTE ERFASSUNG", god_pdf_text)
-        self.assertNotIn("NICHT JURISTISCH VERWERTBAR", god_pdf_text)
         self.assertEqual("https://shop.test/agb-online", page["captured_url"])
         self.assertTrue(galleries["agb"]["page_artifacts_complete"])
 

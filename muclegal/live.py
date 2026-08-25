@@ -14,7 +14,7 @@ from urllib.parse import urljoin, urlsplit
 from contextlib import nullcontext
 
 from lxml import html as lxml_html
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
 
 from muclegal.evidence import (
     OpenSslTsaClient,
@@ -1131,9 +1131,6 @@ class LiveMonitorWorkflow:
             }
         _write_json(metrics_path, metrics_document)
 
-        if god_mode:
-            _mark_god_mode_bundle(bundle)
-
         wayback = self.wayback_client.save(outcome.url, bundle)
         bundled_artifacts["wayback_status"] = bundle / "wayback-status.json"
         if wayback.status == "unavailable":
@@ -1609,9 +1606,6 @@ class LiveMonitorWorkflow:
         _write_json(result_assessment_path, result_assessment.to_dict())
         bundled_artifacts["result_assessment"] = result_assessment_path
 
-        if god_mode:
-            _mark_god_mode_bundle(bundle)
-
         wayback = self.wayback_client.save(protected_url, bundle)
         bundled_artifacts["wayback_status"] = bundle / "wayback-status.json"
         progress("manifest", "Der Schutzbefund wird in einem Hash-Manifest gesichert.")
@@ -1964,9 +1958,6 @@ class LiveMonitorWorkflow:
             },
         )
         bundled_artifacts["wayback_status"] = wayback_path
-        if god_mode:
-            _mark_god_mode_bundle(bundle)
-
         manifest = create_manifest(
             bundled_artifacts,
             bundle,
@@ -2188,131 +2179,6 @@ def _write_simple_yaml(path: Path, values: dict[str, Any]) -> None:
             rendered = json.dumps(str(value), ensure_ascii=False)
         lines.append(f"{key}: {rendered}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-
-
-def _mark_god_mode_bundle(bundle: Path) -> None:
-    """Mark derived images and normalized texts as an authorized capture."""
-    from PIL import Image, ImageDraw, ImageFont
-
-    for path in sorted(bundle.rglob("*")):
-        if not path.is_file():
-            continue
-        if path.name in {"normalized_text.txt", "normalized-text.txt"}:
-            text = path.read_text(encoding="utf-8", errors="replace")
-            if not text.startswith(GOD_MODE_NOTICE):
-                path.write_text(
-                    GOD_MODE_NOTICE + "\n\n" + text,
-                    encoding="utf-8",
-                    newline="\n",
-                )
-        if path.name == "expanded-legal-print.pdf":
-            _prepend_god_mode_pdf_notice(path)
-        if path.suffix.casefold() not in {".png", ".jpg", ".jpeg", ".webp"}:
-            continue
-        with Image.open(path) as source:
-            image = source.convert("RGB")
-        banner_height = max(56, min(110, image.height // 8))
-        draw = ImageDraw.Draw(image)
-        draw.rectangle((0, 0, image.width, banner_height), fill="#4b5563")
-        font_size = max(12, min(24, banner_height // 3))
-        font = _god_mode_banner_font(ImageFont, font_size)
-        draw.text((18, banner_height // 3), GOD_MODE_NOTICE, fill="white", font=font)
-        save_format = "JPEG" if path.suffix.casefold() in {".jpg", ".jpeg"} else (
-            "WEBP" if path.suffix.casefold() == ".webp" else "PNG"
-        )
-        image.save(path, save_format)
-
-    for index_path in bundle.rglob("screenshot-index.json"):
-        document = json.loads(index_path.read_text(encoding="utf-8"))
-        for tile in document.get("tiles", []):
-            tile_path = index_path.parent / tile["path"]
-            if tile_path.is_file():
-                tile["sha256"] = sha256_file(tile_path)
-        _write_json(index_path, document)
-    capture_index = bundle / "artifacts" / "capture-index.json"
-    if capture_index.is_file():
-        document = json.loads(capture_index.read_text(encoding="utf-8"))
-        for collection in ("artifacts", "captures", "entries"):
-            for item in document.get(collection, []):
-                relative = item.get("path")
-                if not relative:
-                    continue
-                path = bundle / relative
-                if path.is_file():
-                    item["sha256"] = sha256_file(path)
-                    item["size_bytes"] = path.stat().st_size
-        _write_json(capture_index, document)
-    page_index = bundle / "artifacts" / "page-artifacts-index.json"
-    if page_index.is_file():
-        document = json.loads(page_index.read_text(encoding="utf-8"))
-        for page in document.get("pages", {}).values():
-            for collection in (
-                "raw_html_files",
-                "normalized_text_files",
-                "screenshot_files",
-                "document_files",
-            ):
-                for item in page.get(collection, []):
-                    relative = item.get("path")
-                    if not relative:
-                        continue
-                    path = bundle / relative
-                    if path.is_file():
-                        item["sha256"] = sha256_file(path)
-                        item["size_bytes"] = path.stat().st_size
-        _write_json(page_index, document)
-
-
-def _prepend_god_mode_pdf_notice(path: Path) -> None:
-    """Add a neutral authorization page to derived legal print PDFs."""
-    from reportlab.pdfgen import canvas
-
-    reader = PdfReader(str(path))
-    if not reader.pages:
-        return
-    width = float(reader.pages[0].mediabox.width)
-    height = float(reader.pages[0].mediabox.height)
-    notice_buffer = io.BytesIO()
-    document = canvas.Canvas(notice_buffer, pagesize=(width, height))
-    document.setFillColorRGB(0.29, 0.33, 0.39)
-    document.rect(0, 0, width, height, fill=1, stroke=0)
-    document.setFillColorRGB(1, 1, 1)
-    document.setFont("Helvetica-Bold", 20)
-    lines = (
-        "AUTORISIERTE ERFASSUNG",
-        "Browsergenerierte Druckfassung des expandierten DOM",
-    )
-    y = height * 0.6
-    for line in lines:
-        document.drawCentredString(width / 2, y, line)
-        y -= 34
-    document.save()
-    notice_buffer.seek(0)
-    notice_page = PdfReader(notice_buffer).pages[0]
-    writer = PdfWriter()
-    writer.add_page(notice_page)
-    for page in reader.pages:
-        writer.add_page(page)
-    temporary = path.with_name(f".{path.stem}.god-mode.tmp.pdf")
-    with temporary.open("wb") as handle:
-        writer.write(handle)
-    temporary.replace(path)
-
-
-def _god_mode_banner_font(image_font: Any, size: int) -> Any:
-    """Load a Unicode font for the authorized-capture image label."""
-    candidates = (
-        "DejaVuSans.ttf",
-        "arial.ttf",
-        r"C:\Windows\Fonts\arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    )
-    for candidate in candidates:
-        try:
-            return image_font.truetype(candidate, size=size)
-        except OSError:
-            continue
-    return image_font.load_default(size=size)
 
 
 def _discover_legal_pages(
