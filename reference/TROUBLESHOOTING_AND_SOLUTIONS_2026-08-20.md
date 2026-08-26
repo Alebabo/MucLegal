@@ -2528,3 +2528,33 @@ Der Regressionstest prüft die beiden maßgeblichen Alt-Klauseln, die geänderte
 Manifestprüfung, ZIP-Download und technische Differenzanzeige. Die Quellen sind für die Demo
 eingefroren; sie behaupten keinen späteren Live-Seitenstand und werden nicht automatisch
 aktualisiert.
+
+# Müller-Beweisführung zeigte vollständige AGB-Differenzen statt der Reservieren-Klausel
+
+### Symptom
+
+Die technische Vorher-/Nachher-Ansicht des Müller-Falls meldete mehrere abweichende
+Textbereiche. Darunter befanden sich Überschriften, Quellenhinweise und weitere AGB-Texte,
+obwohl für den Fall ausschließlich die geänderte Reservieren-Klausel relevant ist.
+
+### Ursache und Diagnose
+
+Der historische, aus dem Urteil transkribierte Referenztext enthält neben der Klausel auch
+eine Quellen- und Konstellationsbeschreibung. Der generische wortbasierte Vergleich stellte
+diesen gesamten Referenztext der vollständig erfassten aktuellen Müller-AGB gegenüber und
+erzeugte deshalb technisch korrekte, für die Fallansicht aber zu breite Ausschnitte.
+
+### Lösung
+
+Nur für die feste Müller-Fall-ID wird aus beiden manifestgeprüften AGB-Ständen die jeweilige
+Reservieren-Klausel deterministisch ausgeschnitten. Die Beweisführung speichert und zeigt
+genau einen Textbereich: die frühere Erklärung zum Klick auf „JETZT RESERVIEREN“ und die
+aktuelle Regelung zur Reservierungsbestätigung. Vollständige AGB, Manifest- und Textprüfwerte
+bleiben unverändert; schlägt die Klauselerkennung fehl, greift weiterhin der allgemeine
+technische Vergleich statt eines erfundenen Ausschnitts.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests prüfen beide in der Demo vorkommenden aktuellen Formulierungsvarianten und
+sichern genau einen Vorher-/Nachher-Block ohne nachfolgende AGB-Klauseln. Die Begrenzung ist
+absichtlich an `VZ-MUELLER-CLICK-COLLECT-2025` gebunden und verändert keine anderen Fälle.

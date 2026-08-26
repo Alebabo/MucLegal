@@ -16,6 +16,7 @@ from muclegal.mueller_demo import (
     DEMO_FALL_ID,
     DEMO_NOTICE,
     _case_payload,
+    reservation_clause_difference,
 )
 from muclegal.ui import create_app
 
@@ -97,7 +98,45 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
     assert comparison["status"] == "technische_aenderung_erkannt"
     assert comparison["compared_role"] == "agb"
     assert comparison["demo_only"] is True
-    assert comparison["differences"]
+    assert comparison["difference_summary"] == (
+        "1 abweichender Textbereich in der Reservieren-Klausel erkannt."
+    )
+    assert comparison["differences"] == [
+        {
+            "change_type": "replace",
+            "label": "Reservieren-Klausel geändert",
+            "before": (
+                "Sie übermitteln sodann ein Angebot zum Abschluss eines Kaufvertrages "
+                "durch Anklicken der Schaltfläche „JETZT RESERVIEREN“."
+            ),
+            "after": (
+                "Nach Ihrer Bestellung erhalten Sie eine Reservierungsbestätigung. "
+                "Diese stellt noch keine Annahme Ihres Angebots dar."
+            ),
+        }
+    ]
+
+
+def test_mueller_difference_uses_only_the_current_reservation_clause() -> None:
+    current_full_page = """Allgemeine Geschäftsbedingungen
+Andere unveränderte Klausel.
+Umgehend nach Aufgabe Ihrer Bestellung erhalten Sie von uns eine Bestätigung über
+den Eingang Ihres Angebots („Reservierungsbestätigung“). Die
+Reservierungsbestätigung stellt noch keine Vertragsannahme dar.
+Ein Kaufvertrag kommt nur zustande, wenn Sie die Artikel in der Filiale entgegennehmen.
+Weitere AGB-Klausel."""
+
+    result = reservation_clause_difference(
+        DEMO_FALL_ID, BASELINE_TEXT, current_full_page
+    )
+
+    assert result is not None
+    assert len(result["differences"]) == 1
+    difference = result["differences"][0]
+    assert difference["before"].startswith("Sie übermitteln sodann")
+    assert difference["after"].startswith("Umgehend nach Aufgabe Ihrer Bestellung")
+    assert "Weitere AGB-Klausel" not in difference["after"]
+    assert "Ein Kaufvertrag kommt nur zustande" not in difference["after"]
 
 
 def test_mueller_demo_replaces_its_legacy_demo_baseline_with_wayback_url() -> None:

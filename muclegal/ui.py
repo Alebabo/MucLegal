@@ -36,7 +36,7 @@ from muclegal.evidence import verify_manifest
 from muclegal.evidence.suitability import classify_technical_evidence
 from muclegal.domain_monitor import CaseDomainMonitor
 from muclegal.decathlon_demo import prepare_decathlon_demo
-from muclegal.mueller_demo import prepare_mueller_demo
+from muclegal.mueller_demo import prepare_mueller_demo, reservation_clause_difference
 from muclegal.monitoring_cases import (
     MonitoringCaseError,
     MonitoringCaseRepository,
@@ -1778,8 +1778,15 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         else:
             status = "technische_aenderung_erkannt"
         difference_result = (
-            _technical_text_differences(
-                baseline_document["text"], current_document["text"]
+            (
+                reservation_clause_difference(
+                    monitoring_case.fall_id,
+                    baseline_document["text"],
+                    current_document["text"],
+                )
+                or _technical_text_differences(
+                    baseline_document["text"], current_document["text"]
+                )
             )
             if status == "technische_aenderung_erkannt"
             else {

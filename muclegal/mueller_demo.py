@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from muclegal.decathlon_demo import ensure_demo_bundle
@@ -38,6 +39,69 @@ Kaufvertrag komme nur durch Entgegennahme und Bezahlung in der Filiale zustande.
 Quelle der historischen Formulierungen und Konstellation:
 OLG Stuttgart, Urteil vom 25.11.2025, Az. 6 UKl 1/25 (rechtskräftig).
 """
+
+
+def reservation_clause_difference(
+    fall_id: str, baseline_text: str, current_text: str
+) -> dict | None:
+    """Return the one changed Müller reservation clause without full-page diff noise."""
+
+    if fall_id != DEMO_FALL_ID:
+        return None
+    before_sentences = _sentences(baseline_text)
+    after_sentences = _sentences(current_text)
+    before = next(
+        (sentence for sentence in before_sentences if "jetzt reservieren" in sentence.lower()),
+        "",
+    )
+    after_index = next(
+        (
+            index
+            for index, sentence in enumerate(after_sentences)
+            if "reservierungsbestätigung" in sentence.lower()
+        ),
+        None,
+    )
+    if not before or after_index is None:
+        return None
+    before = _trim_to_phrase(before, "Sie übermitteln sodann")
+    after_parts = [after_sentences[after_index]]
+    if after_index + 1 < len(after_sentences):
+        following = after_sentences[after_index + 1]
+        normalized_following = following.lower()
+        if "keine" in normalized_following and "annahme" in normalized_following:
+            after_parts.append(following)
+    after = " ".join(after_parts)
+    for phrase in ("Umgehend nach Aufgabe Ihrer Bestellung", "Nach Ihrer Bestellung"):
+        trimmed = _trim_to_phrase(after, phrase)
+        if trimmed != after:
+            after = trimmed
+            break
+    if not before or not after:
+        return None
+    return {
+        "difference_summary": (
+            "1 abweichender Textbereich in der Reservieren-Klausel erkannt."
+        ),
+        "differences": [
+            {
+                "change_type": "replace",
+                "label": "Reservieren-Klausel geändert",
+                "before": before,
+                "after": after,
+            }
+        ],
+    }
+
+
+def _sentences(text: str) -> list[str]:
+    compact = re.sub(r"\s+", " ", text).strip()
+    return [item.strip() for item in re.split(r"(?<=[.!?])\s+", compact) if item.strip()]
+
+
+def _trim_to_phrase(value: str, phrase: str) -> str:
+    index = value.lower().find(phrase.lower())
+    return value[index:].strip() if index >= 0 else value.strip()
 
 
 def prepare_mueller_demo(
