@@ -15,10 +15,11 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const items = [
   { to: "/", label: "Home", icon: Home, exact: true },
-  { to: "/hinweise", label: "Hinweise", icon: Info, exact: false },
-  { to: "/archiv", label: "Archiv", icon: Archive, exact: false },
-  { to: "/neu", label: "Neu hinzufügen", icon: Plus, exact: false },
   { to: "/tenorhilfe", label: "Tenorhilfe", icon: FilePenLine, exact: false },
+  { to: "/hinweise", label: "Hinweise", icon: Info, exact: false },
+  { href: "/beweis-labor", label: "BeweisLab", icon: FlaskConical },
+  { to: "/neu", label: "Neu hinzufügen", icon: Plus, exact: false },
+  { to: "/archiv", label: "Archiv", icon: Archive, exact: false },
 ] as const;
 
 export function AppSidebar() {
@@ -59,26 +60,37 @@ export function AppSidebar() {
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-        {items.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            activeOptions={{ exact: item.exact }}
-            title={collapsed ? item.label : undefined}
-            className="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground"
-          >
-            <item.icon className="size-[18px] shrink-0" strokeWidth={1.75} />
-            {!collapsed && <span className="truncate">{item.label}</span>}
-          </Link>
-        ))}
-        <a
-          href="/beweis-labor"
-          title={collapsed ? "BeweisLab" : undefined}
-          className="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          <FlaskConical className="size-[18px] shrink-0" strokeWidth={1.75} />
-          {!collapsed && <span className="truncate">BeweisLab</span>}
-        </a>
+        {items.map((item) => {
+          const content = (
+            <>
+              <item.icon className="size-[18px] shrink-0" strokeWidth={1.75} />
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </>
+          );
+          const className =
+            "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+
+          return "to" in item ? (
+            <Link
+              key={item.to}
+              to={item.to}
+              activeOptions={{ exact: item.exact }}
+              title={collapsed ? item.label : undefined}
+              className={`${className} data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground`}
+            >
+              {content}
+            </Link>
+          ) : (
+            <a
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              className={className}
+            >
+              {content}
+            </a>
+          );
+        })}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
