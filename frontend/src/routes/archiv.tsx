@@ -41,7 +41,7 @@ const toneBadge: Record<Tone, string> = {
 const toneLabel: Record<Tone, string> = {
   danger: "Kritisch",
   success: "In Ordnung",
-  warning: "Prüfung nötig",
+  warning: "Prüfen",
   neutral: "Ausstehend",
 };
 
@@ -98,15 +98,15 @@ function ArchivPage() {
       {section === "faelle" ? (
         <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-card">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[680px] table-fixed text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs tracking-wider text-muted-foreground uppercase">
-                  <th className="px-5 py-4 font-medium">Fall-ID</th>
-                  <th className="px-5 py-4 font-medium">Titel</th>
-                  <th className="px-5 py-4 font-medium">Status</th>
-                  <th className="px-5 py-4 font-medium">Domain</th>
-                  <th className="px-5 py-4 font-medium">Erfasst</th>
-                  <th className="px-5 py-4 font-medium">Confidence</th>
+                  <th className="w-[20%] px-3 py-3 font-medium">Fall-ID</th>
+                  <th className="w-[25%] px-3 py-3 font-medium">Titel</th>
+                  <th className="w-[16%] px-3 py-3 font-medium">Status</th>
+                  <th className="w-[15%] px-3 py-3 font-medium">Domain</th>
+                  <th className="w-[18%] px-3 py-3 font-medium">Erfasst</th>
+                  <th className="w-[6%] px-3 py-3 font-medium">Conf.</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,26 +123,36 @@ function ArchivPage() {
                     }}
                     className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/60"
                   >
-                    <td className="px-5 py-4 font-mono text-xs text-muted-foreground">
-                      {item.fall_id}
+                    <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
+                      <p className="truncate whitespace-nowrap" title={item.fall_id}>
+                        {item.fall_id}
+                      </p>
                     </td>
-                    <td className="px-5 py-4">
-                      <p className="font-medium text-card-foreground">{item.title}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{item.secondary}</p>
+                    <td className="px-3 py-3">
+                      <p
+                        className="truncate whitespace-nowrap font-medium text-card-foreground"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </p>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="overflow-hidden px-3 py-3">
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${toneBadge[item.tone]}`}
+                        className={`inline-flex whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${toneBadge[item.tone]}`}
                       >
                         {toneLabel[item.tone]}
                       </span>
-                      <p className="mt-1 text-xs text-muted-foreground">{item.status}</p>
                     </td>
-                    <td className="px-5 py-4 text-muted-foreground">{item.domain}</td>
-                    <td className="px-5 py-4 text-muted-foreground">
+                    <td
+                      className="truncate whitespace-nowrap px-3 py-3 text-muted-foreground"
+                      title={item.domain}
+                    >
+                      {item.domain}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                       {formatDateTime(item.found_at)}
                     </td>
-                    <td className="px-5 py-4 text-muted-foreground">
+                    <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                       {item.confidence === null ? "—" : `${Math.round(item.confidence * 100)} %`}
                     </td>
                   </tr>
@@ -201,13 +211,6 @@ function tenorStatus(item: TenorArchiveRecord) {
   return item.source === "minimal" ? "Übernommen" : "Prüfung offen";
 }
 
-function strategyLabel(item: TenorArchiveRecord) {
-  if (item.strategy === "complete") return "Vollständiger UE-Entwurf";
-  if (item.strategy === "precise") return "Präzise";
-  if (item.strategy === "neutral") return "Technikneutral";
-  return item.strategy.replaceAll("_", " ");
-}
-
 function TenorArchiveTable({
   tenors,
   loading,
@@ -242,12 +245,11 @@ function TenorArchiveTable({
   return (
     <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
+        <table className="w-full min-w-[680px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs tracking-wider text-muted-foreground uppercase">
               <th className="px-5 py-4 font-medium">Fall-ID</th>
               <th className="px-5 py-4 font-medium">Tenor</th>
-              <th className="px-5 py-4 font-medium">Variante</th>
               <th className="px-5 py-4 font-medium">Status</th>
               <th className="px-5 py-4 font-medium">Gespeichert</th>
             </tr>
@@ -275,7 +277,6 @@ function TenorArchiveTable({
                     {item.text}
                   </p>
                 </td>
-                <td className="px-5 py-4 text-muted-foreground">{strategyLabel(item)}</td>
                 <td className="px-5 py-4">
                   <span className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
                     {tenorStatus(item)}
@@ -312,7 +313,7 @@ function TenorDetail({ item, onClose }: { item: TenorArchiveRecord; onClose: () 
             <p className="font-mono text-xs text-muted-foreground">{item.fall_id}</p>
             <h2 className="mt-1 text-2xl tracking-tight text-card-foreground">{item.title}</h2>
             <p className="mt-2 text-xs text-muted-foreground">
-              {strategyLabel(item)} · {tenorStatus(item)} · {formatDateTime(item.created_at)}
+              {tenorStatus(item)} · {formatDateTime(item.created_at)}
             </p>
           </div>
           <button

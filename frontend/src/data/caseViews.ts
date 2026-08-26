@@ -4,6 +4,7 @@ import {
   type EngineAssessment,
   type MonitoringCase,
 } from "../lib/monitoring-api";
+import { compactArchiveCaseTitle } from "../lib/archive-formatting";
 
 export type CaseView = DemoCase & {
   source: "backend" | "demo";
@@ -36,7 +37,7 @@ const decisionPresentation: Record<
 
 function titleFor(item: MonitoringCase) {
   const firstLine = item.monitoring_target.split(/\r?\n/)[0]?.trim();
-  return firstLine || item.fall_id;
+  return compactArchiveCaseTitle(item.description, firstLine || item.fall_id);
 }
 
 function pendingAssessment(item: MonitoringCase): EngineAssessment {

@@ -15,6 +15,7 @@ import {
   nextRequiredIntakeFact,
   nextWrappedIndex,
 } from "../src/lib/minimal-tenor-logic.ts";
+import { compactArchiveCaseTitle } from "../src/lib/archive-formatting.ts";
 import { composeDictationText, mergeDictationSegments } from "../src/lib/dictation.ts";
 import { splitAlternativeLabels, splitLineValues } from "../src/lib/monitoring-form.ts";
 import {
@@ -181,6 +182,30 @@ test("finds archived tenors by Aktenzeichen for the /tenor mode", () => {
   assert.deepEqual(filterTenorArchiveOptions(archive, "Az. VZ-MUELLER"), [archive[0]]);
   assert.deepEqual(filterTenorArchiveOptions(archive, "müller handels"), [archive[0]]);
   assert.deepEqual(filterTenorArchiveOptions(archive, "abholfrist"), [archive[0]]);
+});
+
+test("keeps archive case titles compact and meaningful", () => {
+  assert.equal(
+    compactArchiveCaseTitle(
+      "Historischer Müller-Click-&-Collect-Fall nach dem rechtskräftigen Urteil des OLG Stuttgart.",
+      "Technisch prüfen, ob die aktuelle AGB-Fassung weiterhin betroffen ist.",
+    ),
+    "Müller-Click-&-Collect-Fall",
+  );
+  assert.equal(
+    compactArchiveCaseTitle(
+      "Klar gekennzeichneter synthetischer Decathlon-Demofall für die lokale Vorführung der technischen Differenzanzeige.",
+      "VZ-DECATHLON-GESAMTBEWEIS-2026",
+    ),
+    "Synthetischer Decathlon-Demofall",
+  );
+  assert.match(
+    compactArchiveCaseTitle(
+      "Ein sehr ausführlicher Falltitel mit zahlreichen zusätzlichen Einzelheiten für das Archiv.",
+      "Fallback",
+    ),
+    /^.{1,47}…$/u,
+  );
 });
 
 test("replaces cumulative dictation results instead of appending them twice", () => {
