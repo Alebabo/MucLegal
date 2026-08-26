@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import shutil
 import textwrap
 import uuid
@@ -9,15 +10,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+from pypdf import PdfReader
 
 from muclegal.evidence import create_manifest, sha256_file, verify_manifest
 from muclegal.monitoring_cases import MonitoringCaseRepository
+from muclegal.normalize import normalize_plain_text
 
 
 DEMO_FALL_ID = "VZ-DECATHLON-GESAMTBEWEIS-2026"
-DEMO_BASELINE_ID = "demo-decathlon-webarchiv"
-DEMO_CURRENT_ID = "demo-decathlon-aktuell"
+DEMO_BASELINE_ID = "demo-decathlon-webarchiv-20241008"
+DEMO_CURRENT_ID = "demo-decathlon-pdf-20260720"
 DEMO_NOTICE = "Technischer Referenzdatensatz (demo_only=true)."
+DEMO_FIXTURE_REVISION = "decathlon-agb-webarchive-20241008-vs-pdf-20260720-v1"
 DEMO_BASELINE_URL = (
     "https://web.archive.org/web/20241008191055/"
     "https://www.decathlon.de/AGB_lp-P7ELHE"
@@ -27,42 +31,51 @@ DEMO_CURRENT_URL = (
     "allgemeine-geschaeftsbedingungen-agb-webshop_917fe9ac-dc2d-4705-a58b-63c393960b57"
 )
 
-BASELINE_TEXT = """Webarchiv-Ausgangsstand Oktober 2024
+FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "decathlon_demo"
+BASELINE_TEXT_PATH = FIXTURE_ROOT / "agb-webarchiv-2024-10-08.txt"
+BASELINE_HTML_PATH = FIXTURE_ROOT / "agb-webarchiv-2024-10-08.html"
+BASELINE_DOCUMENT_PATH = FIXTURE_ROOT / "agb-webarchiv-2024-10-08.pdf"
+CURRENT_DOCUMENT_PATH = FIXTURE_ROOT / "agb-webshop-verbraucher-2026-07-20.pdf"
 
-Teillieferungen sind jedoch, nach vorherigem Hinweis, möglich, sofern eine Komplettlieferung nicht durchgeführt werden kann.
-
-Du stellst decathlon.de von allen Ansprüchen Dritter frei, die decathlon.de aus oder im Zusammenhang mit den von dir hochgeladenen, bearbeiteten oder erstellten Motiven entstehen.
-"""
-
-CURRENT_TEXT = """Aktueller Vergleichsstand Juli 2026
-
-Teillieferungen erfolgen nur, soweit sie für dich zumutbar sind, keine zusätzlichen Versandkosten entstehen und deine gesetzlichen Rechte gewahrt bleiben.
-
-Eine Freistellung gilt nur für Ansprüche aufgrund einer von dir schuldhaft begangenen Rechtsverletzung. Sie gilt nicht, soweit DECATHLON eine gebotene Entfernung schuldhaft versäumt hat.
-"""
+_PDF_GLYPH_TRANSLATION = str.maketrans(
+    {
+        "\ue09d": "+",
+        "\ue081": "(",
+        "\ue082": ")",
+        "\ue088": "-",
+        "\ue0a4": "*",
+    }
+)
 
 
 def prepare_decathlon_demo(
     store_root: str | Path,
     monitoring_cases: MonitoringCaseRepository,
 ) -> dict:
-    """Prepare a local-only, unmistakably synthetic replay of the real UI workflow."""
+    """Prepare the fixed Decathlon Wayback-to-PDF comparison workflow."""
 
     root = Path(store_root).resolve()
+    baseline_text = BASELINE_TEXT_PATH.read_text(encoding="utf-8")
+    current_text = _extract_pdf_text(CURRENT_DOCUMENT_PATH)
     baseline = ensure_demo_bundle(
         root,
         DEMO_BASELINE_ID,
         url=DEMO_BASELINE_URL,
-        text=BASELINE_TEXT,
-        title="Webarchiv · Ausgangsstand",
+        text=baseline_text,
+        title="Webarchiv · 08.10.2024",
         next_case_id=DEMO_CURRENT_ID,
+        document_path=BASELINE_DOCUMENT_PATH,
+        raw_html_path=BASELINE_HTML_PATH,
+        source_kind="webarchive_snapshot",
     )
     current = ensure_demo_bundle(
         root,
         DEMO_CURRENT_ID,
         url=DEMO_CURRENT_URL,
-        text=CURRENT_TEXT,
-        title="Aktuell · Vergleichsstand",
+        text=current_text,
+        title="PDF · Stand 20.07.2026",
+        document_path=CURRENT_DOCUMENT_PATH,
+        source_kind="uploaded_pdf_fixture",
     )
 
     candidates = [case for case in monitoring_cases.list() if case.fall_id == DEMO_FALL_ID]
@@ -96,6 +109,9 @@ def ensure_demo_bundle(
     next_case_id: str | None = None,
     fall_id: str = DEMO_FALL_ID,
     notice: str = DEMO_NOTICE,
+    document_path: Path | None = None,
+    raw_html_path: Path | None = None,
+    source_kind: str = "fixed_text_fixture",
 ) -> dict:
     bundle_root = store_root / "bundles"
     bundle_root.mkdir(parents=True, exist_ok=True)
@@ -107,6 +123,8 @@ def ensure_demo_bundle(
         record = json.loads(case_path.read_text(encoding="utf-8"))
         if record.get("demo_only") is not True:
             raise RuntimeError(f"Bestehendes Paket ist nicht als Demo gekennzeichnet: {target}")
+        if record.get("demo_fixture_revision") != DEMO_FIXTURE_REVISION:
+            raise RuntimeError(f"Bestehendes Demo-Paket hat einen veralteten Quellenstand: {target}")
         verification = verify_manifest(
             record.get("artifacts", {}).get("manifest", ""),
             expected_manifest_sha256=record.get("evidence", {}).get("manifest_sha256"),
@@ -127,44 +145,64 @@ def ensure_demo_bundle(
         normalized = role / "normalized-text.txt"
         raw_html = role / "raw.html"
         preview = role / "preview.png"
+        document = role / "source.pdf" if document_path is not None else None
         capture_index = role / "index.json"
         transparency = temporary / "capture_transparency.yaml"
         interactions = temporary / "screenshot_interactions.json"
         notice_path = temporary / "DEMO_ONLY.txt"
 
         normalized.write_text(text.strip() + "\n", encoding="utf-8", newline="\n")
-        raw_html.write_text(
-            "<!doctype html><html lang=\"de\"><meta charset=\"utf-8\">"
-            f"<title>{html.escape(title)}</title><main><h1>{html.escape(title)}</h1>"
-            f"<pre>{html.escape(text.strip())}</pre></main></html>",
-            encoding="utf-8",
-            newline="\n",
-        )
+        if raw_html_path is not None:
+            shutil.copyfile(raw_html_path, raw_html)
+        else:
+            raw_html.write_text(
+                "<!doctype html><html lang=\"de\"><meta charset=\"utf-8\">"
+                f"<title>{html.escape(title)}</title><main><h1>{html.escape(title)}</h1>"
+                f"<pre>{html.escape(text.strip())}</pre></main></html>",
+                encoding="utf-8",
+                newline="\n",
+            )
+        if document is not None and document_path is not None:
+            shutil.copyfile(document_path, document)
         _write_demo_preview(preview, title, text)
+        source_path = raw_html_path or document_path
+        source_sha256 = (
+            sha256_file(source_path) if source_path is not None else sha256_file(normalized)
+        )
         transparency.write_text(
-            "capture_type: synthetische_demo\n"
+            f"capture_type: {source_kind}\n"
             "live_fetch: false\n"
             "browser_capture: false\n"
-            "robots_txt: nicht_anwendbar_synthetische_demo\n"
+            f"source_url: {url}\n"
+            f"source_sha256: {source_sha256}\n"
+            "robots_txt: nicht_anwendbar_fester_quellenstand\n"
             "legal_assessment: false\n",
             encoding="utf-8",
             newline="\n",
         )
         interactions.write_text("[]\n", encoding="utf-8", newline="\n")
         notice_path.write_text(notice + "\n", encoding="utf-8", newline="\n")
+        capture_files = {
+            "normalized_text": "normalized-text.txt",
+            "raw_html": "raw.html",
+            "preview": "preview.png",
+        }
+        if document is not None:
+            capture_files["document"] = "source.pdf"
         capture_index.write_text(
             json.dumps(
                 {
                     "version": 1,
                     "role": "agb",
                     "title": title,
-                    "capture_type": "synthetische_demo",
+                    "capture_type": source_kind,
                     "live_fetch": False,
-                    "files": {
-                        "normalized_text": "normalized-text.txt",
-                        "raw_html": "raw.html",
-                        "preview": "preview.png",
+                    "source": {
+                        "url": url,
+                        "sha256": source_sha256,
+                        "kind": source_kind,
                     },
+                    "files": capture_files,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -182,6 +220,8 @@ def ensure_demo_bundle(
             "raw_html": raw_html,
             "screenshot_interactions": interactions,
         }
+        if document is not None:
+            manifested["agb_pdf"] = document
         manifest = create_manifest(manifested, temporary, notice=notice)
         temporary.rename(target)
 
@@ -197,6 +237,7 @@ def ensure_demo_bundle(
             "fall_id": fall_id,
             "demo_only": True,
             "demo_notice": notice,
+            "demo_fixture_revision": DEMO_FIXTURE_REVISION,
             "demo_next_case_id": next_case_id,
             "god_mode": False,
             "evidence_suitability": "synthetische_demo",
@@ -209,17 +250,19 @@ def ensure_demo_bundle(
                 "confidence": 0.0,
             },
             "technical_result": {
-                "code": "synthetische_demo",
-                "label": "Synthetischer Demo-Snapshot",
+                "code": source_kind,
+                "label": title,
                 "meaning": notice,
-                "next_action": "Nur den lokalen UI-Ablauf vorführen.",
+                "next_action": "Fest hinterlegten Quellenstand technisch vergleichen.",
                 "tone": "warning",
-                "what_was_found": "Eingefrorener Referenzdatensatz wurde geladen.",
+                "what_was_found": "Fest hinterlegter AGB-Quellenstand wurde geladen.",
             },
             "capture_transparency": {
-                "robots_txt": "nicht_anwendbar_synthetische_demo",
-                "capture_type": "synthetische_demo",
+                "robots_txt": "nicht_anwendbar_fester_quellenstand",
+                "capture_type": source_kind,
                 "live_fetch": False,
+                "source_url": url,
+                "source_sha256": source_sha256,
             },
             "artifacts": {
                 "agb_screenshot": final_path(preview),
@@ -234,13 +277,13 @@ def ensure_demo_bundle(
             "capture_galleries": {
                 "agb": {
                     "title": title,
-                    "mode": "synthetische_demo",
+                    "mode": source_kind,
                     "capture_completeness": "vollstaendig_erfasst",
                     "index": "capture/agb/index.json",
                     "preview": "capture/agb/preview.png",
                     "tiles": [],
                     "originals": ["capture/agb/preview.png"],
-                    "documents": [],
+                    "documents": (["capture/agb/source.pdf"] if document is not None else []),
                     "raw_html": "capture/agb/raw.html",
                 }
             },
@@ -250,8 +293,14 @@ def ensure_demo_bundle(
                 "screenshot_sha256": sha256_file(target / "capture" / "agb" / "preview.png"),
                 "warc_status": "nicht_anwendbar_synthetische_demo",
                 "timestamp_status": "nicht_anwendbar_synthetische_demo",
+                "source_sha256": source_sha256,
             },
         }
+        if document is not None:
+            record["artifacts"]["agb_pdf"] = final_path(document)
+            record["evidence"]["agb_pdf_sha256"] = sha256_file(
+                target / "capture" / "agb" / "source.pdf"
+            )
         case_path.write_text(
             json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True),
             encoding="utf-8",
@@ -284,6 +333,23 @@ def _write_demo_preview(path: Path, title: str, text: str) -> None:
     image.save(path, format="PNG")
 
 
+def _extract_pdf_text(path: Path) -> str:
+    reader = PdfReader(path, strict=False)
+    if reader.is_encrypted or not reader.pages:
+        raise RuntimeError(f"Fest hinterlegte Decathlon-PDF ist nicht lesbar: {path}")
+    pages: list[str] = []
+    for page in reader.pages:
+        extracted = (page.extract_text(extraction_mode="layout") or "").translate(
+            _PDF_GLYPH_TRANSLATION
+        )
+        lines = [re.sub(r"[ \t]+", " ", line).strip() for line in extracted.splitlines()]
+        pages.append("\n".join(lines))
+    text = normalize_plain_text("\n\n".join(pages))
+    if len(re.sub(r"\s+", "", text)) < 1_000:
+        raise RuntimeError(f"Fest hinterlegte Decathlon-PDF enthält zu wenig Text: {path}")
+    return text
+
+
 def _case_payload() -> dict:
     return {
         "fall_id": DEMO_FALL_ID,
@@ -291,21 +357,21 @@ def _case_payload() -> dict:
         "source_url": "https://www.decathlon.de/AGB_lp-P7ELHE",
         "violation_type": "klausel",
         "description": (
-            "Klar gekennzeichneter synthetischer Decathlon-Demofall für die lokale "
-            "Vorführung der manuellen Beweiszuordnung und technischen Differenzanzeige."
+            "Fest hinterlegter Decathlon-AGB-Vergleich zwischen dem Webarchiv-Stand "
+            "vom 08.10.2024 und dem PDF-Stand vom 20.07.2026."
         ),
         "tenor_element": (
-            "Synthetischer Demo-Tenor: Teillieferungs- und Freistellungsklauseln werden "
-            "ausschließlich zur Vorführung des technischen Vergleichs gegenübergestellt."
+            "Teillieferungs- und Freistellungsklauseln werden im archivierten und im "
+            "aktuellen AGB-Stand technisch gegenübergestellt."
         ),
         "monitoring_target": (
-            "Synthetischen aktuellen Demo-Snapshot technisch gegen den eingefrorenen "
-            "Webarchiv-Demo-Ausgangsstand vergleichen. Keine juristische Bewertung."
+            "Die AGB-PDF vom 20.07.2026 technisch gegen den Webarchiv-Ausgangsstand "
+            "vom 08.10.2024 vergleichen. Keine juristische Bewertung."
         ),
         "relevant_page_types": ["AGB"],
         "target_urls": [DEMO_CURRENT_URL],
         "nicht_umfasst": ["Sämtliche Aussagen über einen tatsächlichen Live-Seitenstand."],
-        "clause_text": BASELINE_TEXT.strip(),
+        "clause_text": BASELINE_TEXT_PATH.read_text(encoding="utf-8").strip(),
         "element_label": None,
         "element_labels": [],
         "element_function": None,

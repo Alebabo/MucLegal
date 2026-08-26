@@ -2493,3 +2493,36 @@ Regressionstests sichern das BeweisLab-Popup und die direkte Öffnung des überg
 Der Browser-Smoke-Test prüft zusätzlich, dass die URL nach der Zuordnung unverändert bleibt
 und erst der Klick zu `/hinweise` wechselt. Wird die Benachrichtigung geschlossen, bleibt
 der Vergleich gespeichert; der Fall ist weiterhin über die Hinweise-Navigation erreichbar.
+
+# Decathlon-Demo verwendete zwei verkürzte Textkonstanten statt der festen Quellen
+
+### Symptom
+
+Der Decathlon-Demofall zeigte zwar eine Wayback-URL und einen aktuellen AGB-Pfad, erzeugte
+beide Vergleichsstände intern jedoch nur aus zwei kurzen Textkonstanten. Damit stammte weder
+der vollständige Altstand aus der archivierten Seite noch der vollständige neue Stand aus der
+vom Nutzer bereitgestellten AGB-PDF.
+
+### Ursache und Diagnose
+
+`decathlon_demo.py` war ursprünglich als vollständig synthetischer, netzunabhängiger
+Klickpfad angelegt. Die echte manifestierte Wayback-Erfassung vom 08.10.2024 war zwar im
+lokalen Beweisbestand vorhanden, wurde aber nicht als feste Demoquelle eingebunden. Die neue
+14-seitige AGB-PDF mit Stand 20.07.2026 war ebenfalls noch kein Repository-Asset.
+
+### Lösung
+
+Die Demo besitzt nun versionierte, feste Quellen: archiviertes HTML, normalisierter Text und
+die daraus erzeugte Rechtstext-PDF des Wayback-Stands vom 08.10.2024 sowie die bytegenau
+übernommene AGB-PDF vom 20.07.2026. Für den aktuellen Stand wird der Text seitenweise aus
+der PDF extrahiert; die Original-PDF bleibt selbst manifestiertes Vergleichsartefakt und wird
+im BeweisLab direkt angezeigt. Neue Paket-IDs verhindern, dass ältere verkürzte Demo-Pakete
+unbemerkt weiterverwendet werden.
+
+### Verifikation und verbleibende Grenze
+
+Der Regressionstest prüft die beiden maßgeblichen Alt-Klauseln, die geänderten PDF-Klauseln,
+14 PDF-Seiten, Byte- und SHA-256-Gleichheit der eingebetteten PDF, Quellenrevision,
+Manifestprüfung, ZIP-Download und technische Differenzanzeige. Die Quellen sind für die Demo
+eingefroren; sie behaupten keinen späteren Live-Seitenstand und werden nicht automatisch
+aktualisiert.

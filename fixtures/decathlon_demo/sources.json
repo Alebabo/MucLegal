@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "baseline": {
+    "kind": "webarchive_snapshot",
+    "original_url": "https://www.decathlon.de/AGB_lp-P7ELHE",
+    "wayback_url": "https://web.archive.org/web/20241008191055/https://www.decathlon.de/AGB_lp-P7ELHE",
+    "memento_datetime": "2024-10-08T19:10:55Z",
+    "files": {
+      "agb-webarchiv-2024-10-08.html": "bafc467bdb22d10a444baff9a502b83f18eaf0397716690478ee2473adbeff98",
+      "agb-webarchiv-2024-10-08.pdf": "3f93146dbb5213b79ad133b9ca9a15b1feb52dcc1374408c0ff2fd6e45d66945",
+      "agb-webarchiv-2024-10-08.txt": "33547383cc64995bdb5e0efa09bb26091202ab698b6db08a8a304113293473cb"
+    }
+  },
+  "current": {
+    "kind": "uploaded_pdf_fixture",
+    "original_filename": "20260422_AGB Webshop Verbraucher .pdf",
+    "document_title": "20260720_AGB Webshop Verbraucher",
+    "document_stand": "2026-07-20",
+    "files": {
+      "agb-webshop-verbraucher-2026-07-20.pdf": "a31d2190a36ed9e76224287a27d59cb87e026132e141bab0edadf73ce277358e"
+    }
+  }
+}
