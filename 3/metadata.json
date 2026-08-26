@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0YXCYEFQM5CH5B3Y3KZDRGG",
+  "session_id": "01a03d06-0052-7b22-812d-d41916abb578",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T11:35:20.6002779Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "muclegal/templates/evidence_lab.html",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_mueller_demo.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "d86ae22225b3",
+  "checkpoint_transcript_start": 1860,
+  "transcript_lines_at_start": 1860,
+  "compact_transcript_start": 280,
+  "token_usage": {
+    "input_tokens": 78168,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 4926464,
+    "output_tokens": 14007,
+    "api_call_count": 40
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T11:35:19.953861Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 38,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 38,
+    "total_lines_changed": 39,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
