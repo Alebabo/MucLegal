@@ -51,6 +51,37 @@ Neu hinzufügen und Archiv** durch den Demoablauf. In der Tenorhilfe öffnet `/t
 Tenorsuche; archivierte Entwürfe lassen sich dort insbesondere über ihr Aktenzeichen aufrufen
 und zur Bearbeitung übernehmen.
 
+### Demo-Videos
+
+Die folgenden rund einminütigen Videos zeigen die zentralen Abläufe des Prototyps. Ein Klick
+auf das jeweilige Vorschaubild öffnet das Video.
+
+#### Tenorhilfe im Freitextmodus
+
+Freie Sachverhaltseingabe mit schrittweiser Überführung in einen strukturierten UE-Entwurf.
+
+[![Demo der Tenorhilfe im Freitextmodus](assets/demo-videos/tenorhilfe-freitext.webp)](assets/demo-videos/tenorhilfe-freitext.mp4)
+
+[▶ Video abspielen](assets/demo-videos/tenorhilfe-freitext.mp4)
+
+#### Tenorhilfe mit strukturierter Maske
+
+Geführte Erfassung von Fall, Schuldner, Fallgruppe und beanstandeter Praxis vor der
+menschlichen Freigabe.
+
+[![Demo der Tenorhilfe mit strukturierter Maske](assets/demo-videos/tenorhilfe-maske.webp)](assets/demo-videos/tenorhilfe-maske.mp4)
+
+[▶ Video abspielen](assets/demo-videos/tenorhilfe-maske.mp4)
+
+#### BeweisLab und technischer Vergleich
+
+Live-Erfassung einer öffentlichen Seite, Zuordnung zum Fall und nachvollziehbarer Vergleich
+der gesicherten Beweisstände.
+
+[![Demo von BeweisLab und technischem Vergleich](assets/demo-videos/beweislab.webp)](assets/demo-videos/beweislab.mp4)
+
+[▶ Video abspielen](assets/demo-videos/beweislab.mp4)
+
 ### Vollständige Funktionsdokumentation
 
 Das ausführliche
