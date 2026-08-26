@@ -3,8 +3,12 @@
   "checkpoint_id": "01M0Z0JR8R9DRCBJB3TCSYWBB1",
   "strategy": "manual-commit",
   "branch": "agent/live-url-ui",
-  "checkpoints_count": 4,
-  "files_touched": null,
+  "checkpoints_count": 5,
+  "files_touched": [
+    "muclegal/templates/evidence_lab.html",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_live_ui.py"
+  ],
   "sessions": [
     {
       "metadata": "/0/metadata.json",
@@ -19,13 +23,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1427140,
+    "input_tokens": 1566724,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 47579264,
-    "output_tokens": 129759,
-    "api_call_count": 1302
+    "cache_read_tokens": 52490240,
+    "output_tokens": 149669,
+    "api_call_count": 1372
   }
 }
