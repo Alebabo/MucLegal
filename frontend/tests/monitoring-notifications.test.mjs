@@ -72,10 +72,21 @@ test("accepts only the versioned BeweisLab comparison handoff", () => {
 
 test("opens a clicked BeweisLab comparison directly on the matching hint", () => {
   assert.match(hintsSource, /if \(!stored\) return;\s*openEvidence\(stored\.case_id\)/);
+  assert.match(
+    hintsSource,
+    /getElementById\(`engine-assessment-\$\{caseId\}`\)[\s\S]*getElementById\(`differenz-\$\{caseId\}`\)/,
+  );
   assert.doesNotMatch(
     hintsSource,
     /showChangeNotification\(\s*stored\.notification_id,\s*stored\.case_id/,
   );
+});
+
+test("shows the engine verdict first when a hint is opened", () => {
+  assert.match(hintsSource, /Kerngleichheits-Engine/);
+  assert.match(hintsSource, /Die Engine stuft den geprüften Stand als kerngleich ein\./);
+  assert.match(hintsSource, /Die Engine stuft den geprüften Stand als nicht kerngleich ein\./);
+  assert.match(hintsSource, /Noch nicht bewertet/);
 });
 
 test("does not misreport unchanged, reference, incomplete or failed runs as differences", () => {

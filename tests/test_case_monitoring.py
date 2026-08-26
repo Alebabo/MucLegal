@@ -547,6 +547,10 @@ class MonitoringCaseTests(unittest.TestCase):
                 first = _poll(client, started.json()["run_id"])
                 second_start = client.post("/api/v1/runs", json={"case_id": case_id})
                 second = _poll(client, second_start.json()["run_id"])
+                case_with_assessment = client.get(
+                    f"/api/v1/monitoring-cases/{case_id}"
+                ).json()
+                listed_case = client.get("/api/v1/monitoring-cases").json()["cases"][0]
 
         self.assertEqual(201, created.status_code)
         self.assertEqual(403, before_review.status_code)
@@ -561,6 +565,22 @@ class MonitoringCaseTests(unittest.TestCase):
         self.assertEqual("success", second["steps"]["warc"])
         self.assertEqual("success", second["steps"]["manifest"])
         self.assertEqual("skipped", second["steps"]["timestamp"])
+        self.assertEqual(
+            "kerngleich",
+            case_with_assessment["latest_engine_assessment"]["classification"],
+        )
+        self.assertEqual(
+            "unveraendert_fortbestehend",
+            case_with_assessment["latest_engine_assessment"]["status"],
+        )
+        self.assertIn(
+            "weiterhin festgestellt",
+            case_with_assessment["latest_engine_assessment"]["reasoning"],
+        )
+        self.assertEqual(
+            case_with_assessment["latest_engine_assessment"],
+            listed_case["latest_engine_assessment"],
+        )
 
     def test_api_attaches_manifest_valid_same_domain_evidence_including_grey_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

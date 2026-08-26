@@ -1,11 +1,16 @@
 import { lottoDemoCases, type DemoCase, type Tone } from "./lottoDemoCases";
-import { useMonitoringCases, type MonitoringCase } from "../lib/monitoring-api";
+import {
+  useMonitoringCases,
+  type EngineAssessment,
+  type MonitoringCase,
+} from "../lib/monitoring-api";
 
 export type CaseView = DemoCase & {
   source: "backend" | "demo";
   decision: MonitoringCase["decision"] | null;
   baselineEvidence: MonitoringCase["baseline_evidence"];
   latestEvidenceComparison: MonitoringCase["latest_evidence_comparison"];
+  engineAssessment: EngineAssessment;
 };
 
 const decisionPresentation: Record<
@@ -32,6 +37,22 @@ const decisionPresentation: Record<
 function titleFor(item: MonitoringCase) {
   const firstLine = item.monitoring_target.split(/\r?\n/)[0]?.trim();
   return firstLine || item.fall_id;
+}
+
+function pendingAssessment(item: MonitoringCase): EngineAssessment {
+  const hasComparison = item.latest_evidence_comparison !== null;
+  return {
+    classification: "noch_nicht_bewertet",
+    status: "noch_nicht_bewertet",
+    reasoning: hasComparison
+      ? "Der technische BeweisLab-Vergleich liegt vor, wurde von der Kerngleichheits-Engine aber noch nicht bewertet."
+      : "Für diesen Fall liegt noch kein abgeschlossener Kerngleichheitslauf vor.",
+    confidence: null,
+    assessed_at: null,
+    run_id: null,
+    superseded_by_comparison: false,
+    freigabe_durch_mensch: null,
+  };
 }
 
 function toCaseView(item: MonitoringCase): CaseView {
@@ -94,6 +115,7 @@ function toCaseView(item: MonitoringCase): CaseView {
     decision: item.decision,
     baselineEvidence: item.baseline_evidence,
     latestEvidenceComparison: item.latest_evidence_comparison,
+    engineAssessment: item.latest_engine_assessment ?? pendingAssessment(item),
   };
 }
 
@@ -103,6 +125,23 @@ const demoViews: CaseView[] = lottoDemoCases.map((item) => ({
   decision: null,
   baselineEvidence: null,
   latestEvidenceComparison: null,
+  engineAssessment: {
+    classification:
+      item.tone === "danger"
+        ? "kerngleich"
+        : item.tone === "success"
+          ? "nicht_kerngleich"
+          : item.tone === "warning"
+            ? "unklar"
+            : "noch_nicht_bewertet",
+    status: item.status,
+    reasoning: item.evidence.einordnung,
+    confidence: item.confidence,
+    assessed_at: item.found_at,
+    run_id: null,
+    superseded_by_comparison: false,
+    freigabe_durch_mensch: null,
+  },
 }));
 
 export function useCaseViews() {

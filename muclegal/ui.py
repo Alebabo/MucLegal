@@ -495,6 +495,94 @@ class RunCoordinator:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
 
+def _latest_engine_assessment(
+    domain_monitor: CaseDomainMonitor | None,
+    monitoring_case,
+) -> dict | None:
+    """Return a small, public view of the latest persisted monitoring verdict."""
+    if domain_monitor is None:
+        return None
+    latest_path = (domain_monitor.store / monitoring_case.case_id / "latest.json").resolve()
+    try:
+        latest_path.relative_to(domain_monitor.store)
+        result = json.loads(latest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(result, dict) or result.get("case_id") != monitoring_case.case_id:
+        return None
+
+    status = str(result.get("status") or "").strip()
+    classifications = {
+        "kerngleich_wiederaufgetreten": "kerngleich",
+        "unveraendert_fortbestehend": "kerngleich",
+        "beseitigt": "nicht_kerngleich",
+        "neuer_sachverhalt": "nicht_kerngleich",
+        "unsicher": "unklar",
+        "pruefung_unvollstaendig": "unklar",
+        "referenzzustand_dokumentiert": "noch_nicht_bewertet",
+    }
+    classification = classifications.get(status)
+    if classification is None:
+        return None
+
+    reasons = {
+        "kerngleich_wiederaufgetreten": (
+            "Die Engine hat die gemeldete Verletzungsform im aktuellen Prüfumfang "
+            "auf einer weiteren Fundstelle wiedergefunden."
+        ),
+        "unveraendert_fortbestehend": (
+            "Die Engine hat die gemeldete Verletzungsform auf der bekannten "
+            "Fundstelle weiterhin festgestellt."
+        ),
+        "beseitigt": (
+            "Im vollständig erfassten Prüfumfang hat die Engine die gemeldete "
+            "Verletzungsform nicht mehr festgestellt."
+        ),
+        "neuer_sachverhalt": (
+            "Die Engine bewertet den aktuellen Fund als neuen, nicht kerngleichen Sachverhalt."
+        ),
+        "unsicher": (
+            "Die Engine konnte die Kerngleichheit nicht eindeutig bestimmen; "
+            "eine menschliche Prüfung ist erforderlich."
+        ),
+        "pruefung_unvollstaendig": (
+            "Der technische Prüfumfang war unvollständig. Deshalb liegt noch "
+            "kein belastbarer Kerngleichheitsbefund vor."
+        ),
+        "referenzzustand_dokumentiert": (
+            "Dieser Lauf dokumentiert zunächst den Referenzzustand. Eine "
+            "Wiederholungsbewertung liegt noch nicht vor."
+        ),
+    }
+    created_at = str(result.get("created_at") or "").strip() or None
+    comparison = monitoring_case.latest_evidence_comparison
+    compared_at = (
+        str(comparison.get("compared_at") or "").strip()
+        if isinstance(comparison, dict)
+        else ""
+    )
+    superseded = bool(created_at and compared_at and compared_at > created_at)
+    if superseded:
+        classification = "noch_nicht_bewertet"
+        reasoning = (
+            "Der geöffnete BeweisLab-Vergleich ist neuer als der letzte Engine-Lauf. "
+            "Dieser aktuelle Stand wurde daher noch nicht auf Kerngleichheit bewertet."
+        )
+    else:
+        reasoning = reasons[status]
+
+    return {
+        "classification": classification,
+        "status": status,
+        "reasoning": reasoning,
+        "confidence": None,
+        "assessed_at": created_at,
+        "run_id": str(result.get("run_id") or "").strip() or None,
+        "superseded_by_comparison": superseded,
+        "freigabe_durch_mensch": result.get("freigabe_durch_mensch"),
+    }
+
+
 class CaseArchive:
     def __init__(self, store_root: str | Path) -> None:
         self.store_root = Path(store_root).resolve()
@@ -1473,7 +1561,14 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
     async def list_monitoring_cases():
         if monitoring_cases is None:
             raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
-        return {"cases": [item.to_dict() for item in monitoring_cases.list()]}
+        records = []
+        for item in monitoring_cases.list():
+            record = item.to_dict()
+            record["latest_engine_assessment"] = _latest_engine_assessment(
+                domain_monitor, item
+            )
+            records.append(record)
+        return {"cases": records}
 
     @app.post("/api/v1/demo/decathlon", include_in_schema=False)
     async def prepare_local_decathlon_demo(request: Request):
@@ -1500,7 +1595,12 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         if monitoring_cases is None:
             raise HTTPException(404, "Fallbezogene Erfassung ist nicht konfiguriert.")
         try:
-            return monitoring_cases.get(case_id).to_dict()
+            item = monitoring_cases.get(case_id)
+            record = item.to_dict()
+            record["latest_engine_assessment"] = _latest_engine_assessment(
+                domain_monitor, item
+            )
+            return record
         except KeyError as exc:
             raise HTTPException(404, "Monitoringfall nicht gefunden.") from exc
 

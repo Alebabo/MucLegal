@@ -20,6 +20,7 @@ import {
   monitoringCasesQueryKey,
   reviewMonitoringCase,
   startMonitoringRun,
+  type EngineAssessment,
 } from "../lib/monitoring-api";
 import {
   claimMonitoringChangeNotification,
@@ -72,6 +73,46 @@ const toneLabel: Record<Tone, string> = {
   neutral: "Ausstehend",
 };
 
+const enginePresentation: Record<
+  EngineAssessment["classification"],
+  {
+    label: string;
+    summary: string;
+    icon: typeof Scale;
+    className: string;
+    iconClassName: string;
+  }
+> = {
+  kerngleich: {
+    label: "Kerngleich",
+    summary: "Die Engine stuft den geprüften Stand als kerngleich ein.",
+    icon: AlertTriangle,
+    className: "border-danger/40 bg-danger/5",
+    iconClassName: "bg-danger/10 text-danger",
+  },
+  nicht_kerngleich: {
+    label: "Nicht kerngleich",
+    summary: "Die Engine stuft den geprüften Stand als nicht kerngleich ein.",
+    icon: CheckCircle2,
+    className: "border-success/40 bg-success/5",
+    iconClassName: "bg-success/10 text-success",
+  },
+  unklar: {
+    label: "Nicht eindeutig",
+    summary: "Die Engine konnte die Kerngleichheit nicht abschließend bestimmen.",
+    icon: HelpCircle,
+    className: "border-warning/50 bg-warning/5",
+    iconClassName: "bg-warning/10 text-warning",
+  },
+  noch_nicht_bewertet: {
+    label: "Noch nicht bewertet",
+    summary: "Für den aktuellen Stand liegt noch kein Engine-Befund vor.",
+    icon: Clock,
+    className: "border-border bg-muted/50",
+    iconClassName: "bg-background text-muted-foreground",
+  },
+};
+
 const notificationToneClass: Record<MonitoringChangeNotification["tone"], string> = {
   danger: "border-danger/40 text-danger",
   success: "border-success/40 text-success",
@@ -122,6 +163,7 @@ function HinweisePage() {
     const caseId = pendingEvidenceId.current;
     if (!caseId || openId !== caseId) return;
     const target =
+      document.getElementById(`engine-assessment-${caseId}`) ??
       document.getElementById(`differenz-${caseId}`) ??
       document.getElementById(`beweisfuehrung-${caseId}`);
     if (!target) return;
@@ -273,6 +315,8 @@ function HinweisePage() {
           {cases.map((c) => {
             const Icon = toneIcon[c.tone];
             const isOpen = openId === c.case_id;
+            const assessment = enginePresentation[c.engineAssessment.classification];
+            const AssessmentIcon = assessment.icon;
             return (
               <li
                 key={c.case_id}
@@ -326,7 +370,66 @@ function HinweisePage() {
 
                   {isOpen && (
                     <div className="mt-5 border-t border-border pt-4">
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+                      <section
+                        id={`engine-assessment-${c.case_id}`}
+                        className={`scroll-mt-8 rounded-xl border p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${assessment.className}`}
+                        aria-labelledby={`engine-assessment-title-${c.case_id}`}
+                        tabIndex={-1}
+                      >
+                        <div className="flex items-start gap-4">
+                          <span
+                            className={`grid size-11 shrink-0 place-items-center rounded-full ${assessment.iconClassName}`}
+                          >
+                            <AssessmentIcon className="size-6" strokeWidth={1.8} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                              Kerngleichheits-Engine
+                            </p>
+                            <h2
+                              id={`engine-assessment-title-${c.case_id}`}
+                              className="mt-1 text-2xl font-semibold tracking-tight text-foreground"
+                            >
+                              {assessment.label}
+                            </h2>
+                            <p className="mt-1 text-sm font-medium text-foreground">
+                              {assessment.summary}
+                            </p>
+                            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                              {c.engineAssessment.reasoning}
+                            </p>
+                            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                              {c.engineAssessment.confidence !== null && (
+                                <span>
+                                  Sicherheit: {Math.round(c.engineAssessment.confidence * 100)} %
+                                </span>
+                              )}
+                              {c.engineAssessment.assessed_at && (
+                                <span>
+                                  Bewertet: {formatDateTime(c.engineAssessment.assessed_at)}
+                                </span>
+                              )}
+                              {c.engineAssessment.classification !== "noch_nicht_bewertet" &&
+                                c.engineAssessment.freigabe_durch_mensch === null && (
+                                  <span>Engine-Vorprüfung · menschliche Freigabe offen</span>
+                                )}
+                            </div>
+                            {c.source === "backend" &&
+                              c.decision === "freigegeben" &&
+                              c.engineAssessment.classification === "noch_nicht_bewertet" && (
+                                <button
+                                  type="button"
+                                  onClick={() => void startRun(c.case_id, c.fall_id)}
+                                  className="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                                >
+                                  Kerngleichheitsprüfung starten
+                                </button>
+                              )}
+                          </div>
+                        </div>
+                      </section>
+
+                      <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5">
                         <p className="text-xs font-medium tracking-wider text-primary uppercase">
                           Tenor / Formulierungsvorschlag
                         </p>

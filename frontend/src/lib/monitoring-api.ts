@@ -44,6 +44,17 @@ export type EvidenceComparison = {
   technical_only: true;
 };
 
+export type EngineAssessment = {
+  classification: "kerngleich" | "nicht_kerngleich" | "unklar" | "noch_nicht_bewertet";
+  status: string;
+  reasoning: string;
+  confidence: number | null;
+  assessed_at: string | null;
+  run_id: string | null;
+  superseded_by_comparison: boolean;
+  freigabe_durch_mensch: string | null;
+};
+
 export type MonitoringCase = {
   case_id: string;
   fall_id: string;
@@ -67,6 +78,7 @@ export type MonitoringCase = {
   decided_at: string | null;
   baseline_evidence: BaselineEvidence | null;
   latest_evidence_comparison: EvidenceComparison | null;
+  latest_engine_assessment?: EngineAssessment | null;
 };
 
 export type MonitoringCaseCreate = Omit<
@@ -77,6 +89,7 @@ export type MonitoringCaseCreate = Omit<
   | "decided_at"
   | "baseline_evidence"
   | "latest_evidence_comparison"
+  | "latest_engine_assessment"
 >;
 
 export type MonitoringRun = {
