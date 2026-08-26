@@ -1,0 +1,64 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0YKQDTRH20V04RQ40M4NT1W",
+  "session_id": "01a03d06-0052-7b22-812d-d41916abb578",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T08:45:29.9188116Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "frontend/src/components/AppSidebar.tsx",
+    "muclegal/templates/evidence_lab.html"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "0a5360539e07",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 120617,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3080960,
+    "output_tokens": 14055,
+    "api_call_count": 41
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T08:45:29.8097122Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 24,
+    "human_modified": 50,
+    "human_removed": 0,
+    "total_committed": 24,
+    "total_lines_changed": 74,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 37,
+      "user_lines_removed": 25,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "frontend/src/components/AppSidebar.tsx": 34,
+        "muclegal/templates/evidence_lab.html": 3
+      },
+      "user_removed_per_file": {
+        "frontend/src/components/AppSidebar.tsx": 22,
+        "muclegal/templates/evidence_lab.html": 3
+      }
+    }
+  ]
+}

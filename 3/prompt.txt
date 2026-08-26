@@ -1,0 +1,5 @@
+Ändere die Reihenfogr der Reier in der Navbar: Home, Tenorhilfe, Hinweis. BeweisLab, neu hinzzfügn und archiv
+
+---
+
+alle änderungn pushen und hetner aktualisieren
