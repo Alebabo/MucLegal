@@ -2361,7 +2361,9 @@ Der Netto-Fall wird deshalb nicht für den Live-Demo-Pfad verwendet. Als Ersatz 
 der Müller-Click-&-Collect-Fall: Seine aktuelle AGB-Seite ist mit dem transparenten
 Projekt-User-Agent als HTML erreichbar. Der historische Ausgangsstand wird dabei
 ausdrücklich als synthetische, aus dem veröffentlichten Urteil transkribierte
-Demo-Referenz gekennzeichnet; der aktuelle Stand wird regulär live erfasst.
+Demo-Referenz gekennzeichnet; als historische Fundstelle ist der Wayback-Stand vom
+03.07.2025 (`https://web.archive.org/web/20250703135028/https://www.mueller.de/unternehmen/agb/`)
+hinterlegt. Der aktuelle Stand wird weiterhin regulär live erfasst.
 
 ### Verifikation und verbleibende Grenze
 

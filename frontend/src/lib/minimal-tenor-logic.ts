@@ -7,6 +7,14 @@ export type SearchableCase = {
   secondary: string;
 };
 
+export type SearchableTenorArchive = {
+  tenor_id: string;
+  fall_id: string;
+  title: string;
+  schuldner: string;
+  text: string;
+};
+
 function normalizeCaseSearch(value: string) {
   return value
     .trim()
@@ -24,6 +32,21 @@ export function filterCaseOptions<T extends SearchableCase>(cases: T[], query: s
       normalizeCaseSearch(
         `${item.title} ${item.fall_id} ${item.domain} ${item.secondary}`,
       ).includes(normalizedQuery),
+    )
+    .slice(0, limit);
+}
+
+export function filterTenorArchiveOptions<T extends SearchableTenorArchive>(
+  tenors: T[],
+  query: string,
+  limit = 6,
+) {
+  const normalizedQuery = normalizeCaseSearch(query).replace(/^az\.?\s*/, "");
+  return tenors
+    .filter((item) =>
+      normalizeCaseSearch(`${item.fall_id} ${item.title} ${item.schuldner} ${item.text}`).includes(
+        normalizedQuery,
+      ),
     )
     .slice(0, limit);
 }

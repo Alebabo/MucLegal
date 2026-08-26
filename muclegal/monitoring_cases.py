@@ -243,6 +243,58 @@ class MonitoringCaseRepository:
             )
         return self.get(case_id)
 
+    def set_demo_baseline_evidence(self, case_id: str, evidence: dict) -> MonitoringCase:
+        """Refresh an internal demo baseline while keeping real evidence immutable."""
+        existing = self.get(case_id)
+        current = existing.baseline_evidence
+        if current is not None and current.get("demo_only") is not True:
+            raise MonitoringCaseError(
+                "Ein regulärer Ausgangsbeweis kann nicht durch einen Demo-Stand ersetzt werden."
+            )
+        cleaned = _validate_baseline_evidence(evidence)
+        if cleaned["demo_only"] is not True:
+            raise MonitoringCaseError("Eine Demo-Quelle muss als demo_only gekennzeichnet sein.")
+        unchanged_fields = (
+            "evidence_case_id",
+            "requested_url",
+            "captured_url",
+            "captured_at",
+            "manifest_sha256",
+            "documents",
+            "grey_mode",
+            "demo_only",
+            "demo_notice",
+        )
+        if current is not None and all(
+            current.get(field) == cleaned.get(field) for field in unchanged_fields
+        ):
+            return existing
+        cleaned["attached_at"] = datetime.now(timezone.utc).isoformat()
+        cleaned["attached_by"] = (
+            "demo_vorbereitung" if current is None else "demo_quellenaktualisierung"
+        )
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT relevant_page_types_json FROM monitoring_cases WHERE case_id = ?",
+                (case_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(case_id)
+            stored_profile = json.loads(row["relevant_page_types_json"])
+            if isinstance(stored_profile, list):
+                stored_profile = {
+                    "page_types": stored_profile,
+                    "target_urls": [],
+                    "nicht_umfasst": [],
+                    "element_labels": [],
+                }
+            stored_profile["baseline_evidence"] = cleaned
+            connection.execute(
+                "UPDATE monitoring_cases SET relevant_page_types_json = ? WHERE case_id = ?",
+                (json.dumps(stored_profile, ensure_ascii=False), case_id),
+            )
+        return self.get(case_id)
+
     def record_evidence_comparison(self, case_id: str, comparison: dict) -> MonitoringCase:
         """Persist a technical BeweisLab comparison without changing the baseline."""
         existing = self.get(case_id)

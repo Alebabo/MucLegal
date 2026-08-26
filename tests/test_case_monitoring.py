@@ -173,6 +173,40 @@ def element_payload() -> dict:
 
 
 class MonitoringCaseTests(unittest.TestCase):
+    def test_regular_baseline_cannot_be_replaced_by_demo_source(self) -> None:
+        baseline_text = f"Allgemeine Geschäftsbedingungen\n{CLAUSE}"
+        regular = {
+            "evidence_case_id": "evidence-baseline-regular",
+            "requested_url": "https://example.test/agb",
+            "captured_url": "https://example.test/agb",
+            "captured_at": "2026-08-24T10:00:00+00:00",
+            "manifest_sha256": "a" * 64,
+            "documents": [
+                {
+                    "role": "agb",
+                    "text": baseline_text,
+                    "sha256": hashlib.sha256(baseline_text.encode()).hexdigest(),
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.create(clause_payload())
+            repository.attach_baseline_evidence(case.case_id, regular)
+            replacement = {
+                **regular,
+                "evidence_case_id": "demo-baseline-replacement",
+                "demo_only": True,
+                "demo_notice": "Interne Demoquelle.",
+            }
+
+            with self.assertRaisesRegex(
+                MonitoringCaseError,
+                "regulärer Ausgangsbeweis",
+            ):
+                repository.set_demo_baseline_evidence(case.case_id, replacement)
+
     def test_manually_attached_baseline_turns_first_run_into_comparison(self) -> None:
         pages = {
             "https://example.test/sitemap.xml": b"<urlset/>",

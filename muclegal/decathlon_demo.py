@@ -112,6 +112,7 @@ def ensure_demo_bundle(
     document_path: Path | None = None,
     raw_html_path: Path | None = None,
     source_kind: str = "fixed_text_fixture",
+    fixture_revision: str = DEMO_FIXTURE_REVISION,
 ) -> dict:
     bundle_root = store_root / "bundles"
     bundle_root.mkdir(parents=True, exist_ok=True)
@@ -123,7 +124,7 @@ def ensure_demo_bundle(
         record = json.loads(case_path.read_text(encoding="utf-8"))
         if record.get("demo_only") is not True:
             raise RuntimeError(f"Bestehendes Paket ist nicht als Demo gekennzeichnet: {target}")
-        if record.get("demo_fixture_revision") != DEMO_FIXTURE_REVISION:
+        if record.get("demo_fixture_revision") != fixture_revision:
             raise RuntimeError(f"Bestehendes Demo-Paket hat einen veralteten Quellenstand: {target}")
         verification = verify_manifest(
             record.get("artifacts", {}).get("manifest", ""),
@@ -237,7 +238,7 @@ def ensure_demo_bundle(
             "fall_id": fall_id,
             "demo_only": True,
             "demo_notice": notice,
-            "demo_fixture_revision": DEMO_FIXTURE_REVISION,
+            "demo_fixture_revision": fixture_revision,
             "demo_next_case_id": next_case_id,
             "god_mode": False,
             "evidence_suitability": "synthetische_demo",

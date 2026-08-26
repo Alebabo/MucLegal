@@ -7,6 +7,7 @@ import {
   extractLegalBases,
   filterCaseOptions,
   filterModeCommands,
+  filterTenorArchiveOptions,
   hasConcreteViolationLocation,
   inferFallgruppe,
   isAllowedUeAutocompleteSegment,
@@ -156,6 +157,30 @@ test("filters the current case source supplied by the Tenorhilfe", () => {
 
   assert.deepEqual(filterCaseOptions(backendCases, "müller"), backendCases);
   assert.deepEqual(filterCaseOptions(backendCases, "lotto"), []);
+});
+
+test("finds archived tenors by Aktenzeichen for the /tenor mode", () => {
+  const archive = [
+    {
+      tenor_id: "tenor-1",
+      fall_id: "VZ-MUELLER-2025-0417",
+      title: "Müller Click & Collect",
+      schuldner: "Müller Handels GmbH & Co. KG",
+      text: "Der Schuldnerin wird untersagt, eine Abholfrist irreführend darzustellen.",
+    },
+    {
+      tenor_id: "tenor-2",
+      fall_id: "VZ-ANDERS-2026-0002",
+      title: "Anderer Fall",
+      schuldner: "Beispiel GmbH",
+      text: "Ein anderer archivierter Tenor.",
+    },
+  ];
+
+  assert.deepEqual(filterTenorArchiveOptions(archive, "VZ-MUELLER-2025-0417"), [archive[0]]);
+  assert.deepEqual(filterTenorArchiveOptions(archive, "Az. VZ-MUELLER"), [archive[0]]);
+  assert.deepEqual(filterTenorArchiveOptions(archive, "müller handels"), [archive[0]]);
+  assert.deepEqual(filterTenorArchiveOptions(archive, "abholfrist"), [archive[0]]);
 });
 
 test("replaces cumulative dictation results instead of appending them twice", () => {

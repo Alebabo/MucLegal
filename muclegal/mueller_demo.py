@@ -8,10 +8,18 @@ from muclegal.monitoring_cases import MonitoringCaseRepository
 
 
 DEMO_FALL_ID = "VZ-MUELLER-CLICK-COLLECT-2025"
-DEMO_BASELINE_ID = "demo-mueller-agb-alt"
+DEMO_BASELINE_ID = "demo-mueller-agb-webarchiv-20250703"
+DEMO_BASELINE_URL = (
+    "https://web.archive.org/web/20250703135028/"
+    "https://www.mueller.de/unternehmen/agb/"
+)
 DEMO_CURRENT_URL = "https://www.mueller.de/unternehmen/agb/"
 DEMO_SOURCE_URL = "https://www.landesrecht-bw.de/bsbw/document/NJRE001626589"
-DEMO_NOTICE = "Technischer Referenzdatensatz (demo_only=true)."
+DEMO_NOTICE = (
+    "Technischer Referenzdatensatz (demo_only=true): Wayback-Fundstelle mit "
+    "aus dem veröffentlichten Urteil transkribiertem Klauselausschnitt."
+)
+DEMO_FIXTURE_REVISION = "mueller-agb-webarchive-20250703-v1"
 
 BASELINE_TEXT = """Historischer Ausgangsstand · OLG Stuttgart, 25.11.2025, 6 UKl 1/25
 
@@ -42,39 +50,40 @@ def prepare_mueller_demo(
     baseline = ensure_demo_bundle(
         root,
         DEMO_BASELINE_ID,
-        url=DEMO_CURRENT_URL,
+        url=DEMO_BASELINE_URL,
         text=BASELINE_TEXT,
-        title="Müller-AGB · historischer Ausgangsstand",
+        title="Müller-AGB · Webarchiv 03.07.2025",
         fall_id=DEMO_FALL_ID,
         notice=DEMO_NOTICE,
+        source_kind="webarchive_reference_with_judgment_excerpt",
+        fixture_revision=DEMO_FIXTURE_REVISION,
     )
 
     candidates = [case for case in monitoring_cases.list() if case.fall_id == DEMO_FALL_ID]
     monitoring_case = candidates[0] if candidates else monitoring_cases.create(_case_payload())
-    if monitoring_case.baseline_evidence is None:
-        normalized_text = BASELINE_TEXT.strip()
-        monitoring_case = monitoring_cases.attach_baseline_evidence(
-            monitoring_case.case_id,
-            {
-                "evidence_case_id": DEMO_BASELINE_ID,
-                "requested_url": DEMO_CURRENT_URL,
-                "captured_url": DEMO_CURRENT_URL,
-                "captured_at": baseline["captured_at"],
-                "manifest_sha256": baseline["manifest_sha256"],
-                "documents": [
-                    {
-                        "role": "agb",
-                        "text": normalized_text,
-                        "sha256": hashlib.sha256(
-                            normalized_text.encode("utf-8")
-                        ).hexdigest(),
-                    }
-                ],
-                "grey_mode": False,
-                "demo_only": True,
-                "demo_notice": DEMO_NOTICE,
-            },
-        )
+    normalized_text = BASELINE_TEXT.strip()
+    monitoring_case = monitoring_cases.set_demo_baseline_evidence(
+        monitoring_case.case_id,
+        {
+            "evidence_case_id": DEMO_BASELINE_ID,
+            "requested_url": DEMO_BASELINE_URL,
+            "captured_url": DEMO_BASELINE_URL,
+            "captured_at": baseline["captured_at"],
+            "manifest_sha256": baseline["manifest_sha256"],
+            "documents": [
+                {
+                    "role": "agb",
+                    "text": normalized_text,
+                    "sha256": hashlib.sha256(
+                        normalized_text.encode("utf-8")
+                    ).hexdigest(),
+                }
+            ],
+            "grey_mode": False,
+            "demo_only": True,
+            "demo_notice": DEMO_NOTICE,
+        },
+    )
 
     return {
         "demo_only": True,
@@ -82,6 +91,7 @@ def prepare_mueller_demo(
         "fall_id": monitoring_case.fall_id,
         "monitoring_case_id": monitoring_case.case_id,
         "baseline_evidence_case_id": DEMO_BASELINE_ID,
+        "baseline_url": DEMO_BASELINE_URL,
         "baseline_attached": True,
         "current_url": DEMO_CURRENT_URL,
         "judgment_url": DEMO_SOURCE_URL,

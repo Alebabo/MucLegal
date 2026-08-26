@@ -21,6 +21,7 @@ import {
   extractLegalBases,
   filterCaseOptions,
   filterModeCommands,
+  filterTenorArchiveOptions,
   inferFallgruppe,
   isTenor,
   modeCommands,
@@ -164,6 +165,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   const [selectedCase, setSelectedCase] = useState<CaseView | null>(null);
   const [commandIndex, setCommandIndex] = useState(0);
   const [caseIndex, setCaseIndex] = useState(0);
+  const [archiveIndex, setArchiveIndex] = useState(0);
   const [pdf, setPdf] = useState<File | null>(null);
   const [pdfExtraction, setPdfExtraction] = useState<TenorPdfExtraction | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -182,6 +184,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   const [activeArchive, setActiveArchive] = useState<TenorArchiveRecord | null>(null);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [archiveLoadError, setArchiveLoadError] = useState("");
+  const [archiveEntries, setArchiveEntries] = useState<TenorArchiveRecord[] | null>(null);
   const [revisionInput, setRevisionInput] = useState("");
   const [revisionHistory, setRevisionHistory] = useState<string[]>([]);
   const [lastGenerationContext, setLastGenerationContext] = useState("");
@@ -220,16 +223,21 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     [clarifiedContext, pdfExtraction],
   );
   const contextLength = sourceContext.length;
-  const correctionMode = mode === "tenor" || isTenor(sourceContext);
+  const correctionMode = Boolean(activeArchive) || (mode !== "tenor" && isTenor(sourceContext));
   const slashMatch = context.match(/(?:^|\s)\/([^\s]*)$/);
   const slashQuery = slashMatch?.[1]?.toLocaleLowerCase("de") ?? "";
   const showModeMenu = Boolean(slashMatch);
   const filteredCommands = filterModeCommands(slashQuery);
   const caseMatches =
     mode === "fälle" && !selectedCase ? filterCaseOptions(caseQuery.cases, context) : [];
+  const archiveMatches =
+    mode === "tenor" && !activeArchive
+      ? filterTenorArchiveOptions(archiveEntries ?? [], context)
+      : [];
   const canRequestQuestions =
     !showModeMenu &&
     !correctionMode &&
+    mode !== "tenor" &&
     (mode !== "fälle" || Boolean(selectedCase)) &&
     contextLength >= 20 &&
     !pdfLoading &&
@@ -249,6 +257,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     void listTenorArchiveEntries()
       .then(({ tenors }) => {
         if (cancelled) return;
+        setArchiveEntries(tenors);
         const archivedTenor = tenors.find((item) => item.tenor_id === initialArchiveId);
         if (!archivedTenor) {
           setArchiveLoadError("Der archivierte Tenor wurde nicht gefunden.");
@@ -278,6 +287,29 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
   }, [initialArchiveId]);
 
   useEffect(() => {
+    if (mode !== "tenor" || activeArchive || archiveEntries !== null) return;
+    let cancelled = false;
+    setArchiveLoading(true);
+    setArchiveLoadError("");
+    void listTenorArchiveEntries()
+      .then(({ tenors }) => {
+        if (!cancelled) setArchiveEntries(tenors);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setArchiveLoadError(
+          error instanceof Error ? error.message : "Das Tenorarchiv konnte nicht geladen werden.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setArchiveLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeArchive, archiveEntries, mode]);
+
+  useEffect(() => {
     if (!correctionMode || generated || context.trim().length < 4) {
       setSuggestion(null);
       return;
@@ -295,6 +327,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
 
   useEffect(() => {
     setCaseIndex(0);
+    setArchiveIndex(0);
   }, [context]);
 
   useEffect(() => {
@@ -383,7 +416,23 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     setContext(nextMode === "fälle" ? "" : contextWithoutCommand);
     setCommandIndex(0);
     setCaseIndex(0);
+    setArchiveIndex(0);
     setGenerated(false);
+    setSuggestion(null);
+    setGenerationError("");
+    window.requestAnimationFrame(() => contextInput.current?.focus());
+  };
+
+  const chooseArchivedTenor = (item: TenorArchiveRecord) => {
+    setMode("tenor");
+    setActiveArchive(item);
+    setSelectedCase(null);
+    setArchiveIndex(0);
+    setContext(item.text);
+    setGenerated(false);
+    setRevisionInput("");
+    setRevisionHistory([]);
+    setLastGenerationContext("");
     setSuggestion(null);
     setGenerationError("");
     window.requestAnimationFrame(() => contextInput.current?.focus());
@@ -568,6 +617,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
     setSelectedCase(null);
     setCommandIndex(0);
     setCaseIndex(0);
+    setArchiveIndex(0);
     pdfSession.current += 1;
     setPdf(null);
     setPdfExtraction(null);
@@ -622,6 +672,10 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
       });
       setContext(proposalText);
       setActiveArchive(archivedTenor);
+      setArchiveEntries((current) => [
+        archivedTenor,
+        ...(current ?? []).filter((item) => item.tenor_id !== archivedTenor.tenor_id),
+      ]);
       setGenerated(false);
     } catch (error) {
       setArchiveError(
@@ -653,7 +707,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
           <ArrowLeft className="size-4" />
         </Link>
         <span className="text-xs font-medium tracking-wide text-slate-300">Tenorhilfe</span>
-        {context || pdf || generated ? (
+        {context || mode || pdf || generated ? (
           <button
             type="button"
             onClick={reset}
@@ -669,12 +723,12 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
 
       {!generated ? (
         <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col px-6 pb-28 pt-[8vh]">
-          {archiveLoading && (
+          {archiveLoading && initialArchiveId && (
             <p className="mb-6 flex items-center gap-2 text-sm text-slate-400" aria-live="polite">
               <Loader2 className="size-4 animate-spin" /> Archivierter Tenor wird geladen …
             </p>
           )}
-          {archiveLoadError && (
+          {archiveLoadError && initialArchiveId && (
             <p role="alert" className="mb-6 text-sm text-red-600">
               {archiveLoadError}
             </p>
@@ -727,7 +781,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                   {selectedCase
                     ? ` · ${selectedCase.title}`
                     : activeArchive
-                      ? ` · ${activeArchive.title}`
+                      ? ` · ${activeArchive.title} · Az. ${activeArchive.fall_id}`
                       : ""}
                 </strong>
               )}
@@ -749,6 +803,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing) return;
                   const highlightedCase = caseMatches[caseIndex] ?? caseMatches[0];
+                  const highlightedArchive = archiveMatches[archiveIndex] ?? archiveMatches[0];
                   if (showModeMenu && event.key === "ArrowDown" && filteredCommands.length > 0) {
                     event.preventDefault();
                     setCommandIndex((current) =>
@@ -776,6 +831,32 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                   }
                   if (
                     !showModeMenu &&
+                    mode === "tenor" &&
+                    !activeArchive &&
+                    event.key === "ArrowDown" &&
+                    archiveMatches.length > 0
+                  ) {
+                    event.preventDefault();
+                    setArchiveIndex((current) =>
+                      nextWrappedIndex(current, archiveMatches.length, 1),
+                    );
+                    return;
+                  }
+                  if (
+                    !showModeMenu &&
+                    mode === "tenor" &&
+                    !activeArchive &&
+                    event.key === "ArrowUp" &&
+                    archiveMatches.length > 0
+                  ) {
+                    event.preventDefault();
+                    setArchiveIndex((current) =>
+                      nextWrappedIndex(current, archiveMatches.length, -1),
+                    );
+                    return;
+                  }
+                  if (
+                    !showModeMenu &&
                     mode === "fälle" &&
                     !selectedCase &&
                     event.key === "ArrowUp" &&
@@ -795,6 +876,11 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                     setMode(null);
                     return;
                   }
+                  if (event.key === "Escape" && mode === "tenor" && !activeArchive) {
+                    event.preventDefault();
+                    setMode(null);
+                    return;
+                  }
                   if (
                     event.key === "Backspace" &&
                     mode &&
@@ -804,6 +890,7 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                     event.preventDefault();
                     setMode(null);
                     setSelectedCase(null);
+                    setActiveArchive(null);
                     setSuggestion(null);
                     return;
                   }
@@ -822,6 +909,16 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                     chooseCase(highlightedCase);
                     return;
                   }
+                  if (
+                    event.key === "Enter" &&
+                    mode === "tenor" &&
+                    !activeArchive &&
+                    highlightedArchive
+                  ) {
+                    event.preventDefault();
+                    chooseArchivedTenor(highlightedArchive);
+                    return;
+                  }
                   if (event.key === "Tab" && suggestion) {
                     event.preventDefault();
                     acceptSuggestion();
@@ -831,9 +928,11 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                   pdf
                     ? ""
                     : mode === "fälle"
-                      ? "Tippe den Namen oder die Fall-ID …"
+                      ? "Tippe den Namen oder das Aktenzeichen …"
                       : mode === "tenor"
-                        ? "Füge einen Tenor ein oder schreibe ihn weiter …"
+                        ? activeArchive
+                          ? "Tenor bearbeiten …"
+                          : "Aktenzeichen, Titel oder Schuldner suchen …"
                         : "Beschreibe den Sachverhalt oder droppe ein PDF oder diktiere den Sachverhalt …"
                 }
                 aria-label="Sachverhalt oder Tenor"
@@ -902,6 +1001,52 @@ export function MinimalTenorView({ initialArchiveId }: { initialArchiveId?: stri
                   ))
                 ) : (
                   <p className="px-3 py-2 text-xs text-slate-400">Kein Fall gefunden.</p>
+                )}
+              </div>
+            )}
+            {mode === "tenor" && !activeArchive && !showModeMenu && (
+              <div
+                role="listbox"
+                aria-label="Archivierten Tenor auswählen"
+                className="ml-14 mt-1 max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-white py-0.5 shadow-md"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {archiveLoading ? (
+                  <p className="px-3 py-2 text-xs text-slate-400">Tenorarchiv wird geladen …</p>
+                ) : archiveLoadError ? (
+                  <p className="px-3 py-2 text-xs text-red-600" role="alert">
+                    Tenorarchiv konnte nicht geladen werden.
+                  </p>
+                ) : archiveMatches.length > 0 ? (
+                  archiveMatches.map((item, index) => (
+                    <button
+                      key={item.tenor_id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === archiveIndex}
+                      onMouseEnter={() => setArchiveIndex(index)}
+                      onClick={() => chooseArchivedTenor(item)}
+                      className={`flex w-full items-baseline gap-2 px-3 py-2 text-left transition ${index === archiveIndex ? "bg-slate-200" : "hover:bg-slate-100"}`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold text-slate-900">
+                          {item.title}
+                        </span>
+                        <span className="block truncate text-[10px] text-slate-400">
+                          {item.schuldner}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-mono text-[9px] text-slate-500">
+                        Az. {item.fall_id}
+                      </span>
+                    </button>
+                  ))
+                ) : archiveEntries?.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-slate-400">Noch kein Tenor archiviert.</p>
+                ) : (
+                  <p className="px-3 py-2 text-xs text-slate-400">
+                    Kein Tenor zu diesem Aktenzeichen gefunden.
+                  </p>
                 )}
               </div>
             )}

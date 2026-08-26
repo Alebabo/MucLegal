@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -10,9 +11,11 @@ from muclegal.monitoring_cases import MonitoringCaseRepository
 from muclegal.mueller_demo import (
     BASELINE_TEXT,
     DEMO_BASELINE_ID,
+    DEMO_BASELINE_URL,
     DEMO_CURRENT_URL,
     DEMO_FALL_ID,
     DEMO_NOTICE,
+    _case_payload,
 )
 from muclegal.ui import create_app
 
@@ -73,11 +76,14 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
     assert prepared_again.status_code == 200
     assert payload["fall_id"] == DEMO_FALL_ID
     assert payload["current_url"] == DEMO_CURRENT_URL
+    assert payload["baseline_url"] == DEMO_BASELINE_URL
     assert payload["baseline_attached"] is True
     assert prepared_again.json()["monitoring_case_id"] == payload["monitoring_case_id"]
 
     case_payload = monitoring_case.json()
     assert case_payload["baseline_evidence"]["evidence_case_id"] == DEMO_BASELINE_ID
+    assert case_payload["baseline_evidence"]["requested_url"] == DEMO_BASELINE_URL
+    assert case_payload["baseline_evidence"]["captured_url"] == DEMO_BASELINE_URL
     assert case_payload["baseline_evidence"]["demo_only"] is True
     assert "JETZT RESERVIEREN" in case_payload["clause_text"]
     assert case_payload["clause_text"] == BASELINE_TEXT.strip()
@@ -92,3 +98,53 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
     assert comparison["compared_role"] == "agb"
     assert comparison["demo_only"] is True
     assert comparison["differences"]
+
+
+def test_mueller_demo_replaces_its_legacy_demo_baseline_with_wayback_url() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        repository = MonitoringCaseRepository(
+            root / "reviews.sqlite3", root / "case-intake"
+        )
+        legacy_case = repository.create(_case_payload())
+        normalized_text = BASELINE_TEXT.strip()
+        repository.attach_baseline_evidence(
+            legacy_case.case_id,
+            {
+                "evidence_case_id": "demo-mueller-agb-alt",
+                "requested_url": DEMO_CURRENT_URL,
+                "captured_url": DEMO_CURRENT_URL,
+                "captured_at": "2026-08-25T00:00:00+00:00",
+                "manifest_sha256": "a" * 64,
+                "documents": [
+                    {
+                        "role": "agb",
+                        "text": normalized_text,
+                        "sha256": hashlib.sha256(
+                            normalized_text.encode("utf-8")
+                        ).hexdigest(),
+                    }
+                ],
+                "grey_mode": False,
+                "demo_only": True,
+                "demo_notice": "Veraltete Müller-Demoquelle.",
+            },
+        )
+        app = create_app(
+            root / "latest-case.json",
+            root / "reviews.sqlite3",
+            anthropic_ready=False,
+            monitoring_cases=repository,
+        )
+        with TestClient(app) as client:
+            prepared = client.post("/api/v1/demo/mueller")
+            refreshed = client.get(
+                f"/api/v1/monitoring-cases/{legacy_case.case_id}"
+            ).json()["baseline_evidence"]
+
+    assert prepared.status_code == 200
+    assert prepared.json()["monitoring_case_id"] == legacy_case.case_id
+    assert refreshed["evidence_case_id"] == DEMO_BASELINE_ID
+    assert refreshed["requested_url"] == DEMO_BASELINE_URL
+    assert refreshed["captured_url"] == DEMO_BASELINE_URL
+    assert refreshed["attached_by"] == "demo_quellenaktualisierung"
