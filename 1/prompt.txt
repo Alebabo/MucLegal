@@ -1,0 +1,9 @@
+für den Kerngleichheitscheck kannst du das als hilfe nutzen [https://drive.google.com/open?REDACTED&usp=drive\_copy](https://drive.google.com/open?REDACTED\&usp=drive_copy)
+
+---
+
+kopiere es lokal und baue es vielleiht als kontext ein?
+
+---
+
+push und bei hetzner deployen
