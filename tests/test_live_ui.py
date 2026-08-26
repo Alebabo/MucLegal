@@ -1855,27 +1855,33 @@ class LiveUiTests(unittest.TestCase):
         self.assertNotIn("Anthropic wurde nicht aufgerufen", page.text)
         self.assertIn('anthropic:"KI-Analyse"', page.text)
         self.assertIn("Beweispaket herunterladen", page.text)
-        self.assertIn("Dem Fall zuordnen oder vergleichen", page.text)
-        self.assertIn("function visibleRunMessage(run)", page.text)
-        self.assertIn(
-            "Seitenschutz oder technischer Fehlerzustand erfasst. Details stehen im Schutzbericht.",
+        self.assertIn("Fallbezug", page.text)
+        self.assertNotIn(
+            "Ohne Ausgangsbeweis wird dieser technische Stand",
             page.text,
         )
+        self.assertIn("function visibleRunMessage(run)", page.text)
+        self.assertIn("function visibleTraceMessage(value)", page.text)
+        self.assertIn(
+            "AUTORISIERTE ERFASSUNG · ",
+            page.text,
+        )
+        self.assertIn("Technische Erfassung abgeschlossen.", page.text)
+        self.assertNotIn("Details stehen im Schutzbericht.", page.text)
         self.assertIn("Grey Mode", page.text)
         self.assertNotIn("Grey-Mode", page.text)
         self.assertIn('"baseline-evidence"', page.text)
         self.assertIn('"evidence-comparisons"', page.text)
-        self.assertIn("Aktuellen Scan zuordnen & vergleichen", page.text)
+        self.assertIn("Zuordnen & vergleichen", page.text)
         self.assertIn("cases.length===1", page.text)
-        self.assertIn("Passender Fall automatisch gewählt", page.text)
-        self.assertIn("Scan ist dem Fall zugeordnet", page.text)
+        self.assertIn("Fall automatisch gewählt", page.text)
+        self.assertNotIn("Prüfung wird wegen des Seitenschutzes", page.text)
+        self.assertIn("Differenz erkannt", page.text)
         self.assertIn("muclegal:evidence-comparison-notification:v1", page.text)
         self.assertIn("monitoringUiUrl", page.text)
         self.assertIn("openMonitoringNotification", page.text)
         self.assertIn('id="comparison-notification"', page.text)
-        self.assertIn("Differenz erkannt", page.text)
         self.assertIn("showMonitoringNotification", page.text)
-        self.assertIn("Technische Differenz erkannt", page.text)
         self.assertIn("evidenceSubjectHost", page.text)
         self.assertIn("web.archive.org", page.text)
         self.assertIn("Fall öffnen", page.text)

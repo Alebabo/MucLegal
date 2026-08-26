@@ -2609,15 +2609,17 @@ kompakten Trace vermischte sie jedoch Laufstatus und Beweiseignungsbewertung.
 
 ### Lösung
 
-Nur die sichtbare Abschlussmeldung des Prüfverlaufs wird auf eine neutrale technische
-Kurzfassung abgebildet: „Seitenschutz oder technischer Fehlerzustand erfasst. Details stehen
-im Schutzbericht.“ Im Grey Mode bleibt der Präfix „AUTORISIERTE ERFASSUNG“ erhalten. Die
-Backendklassifikation, Manifestdaten, Schutzberichte und Downloadartefakte werden nicht
-verändert.
+Nur die sichtbare Abschlussmeldung des Prüfverlaufs wird auf „Technische Erfassung
+abgeschlossen“ abgebildet. Auch aus den einzelnen sichtbaren Trace-Schritten werden
+Disclaimer-Sätze entfernt; technische Angaben zu Status, HTTP-Code und erfasstem
+Browserzustand bleiben stehen. Im Grey Mode bleibt ausschließlich der Statuspräfix
+„AUTORISIERTE ERFASSUNG“ erhalten. Die Backendklassifikation, Manifestdaten, Schutzberichte
+und Downloadartefakte werden nicht verändert.
 
 ### Verifikation und verbleibende Grenze
 
-Ein Template-Regressionstest sichert die neue Trace-Abbildung. Browser-Smoke-Tests prüfen
-normale und autorisierte Schutzläufe sowie die fehlende alte Formulierung im sichtbaren
-`run-state`. In technischen Artefakten darf die präzise Beweiseignungsbewertung weiterhin
-enthalten sein, weil sie dort die Grenzen der Erfassung dokumentiert.
+Ein Template-Regressionstest sichert die neue Trace-Abbildung und das Entfernen der
+Disclaimer-Sätze. Browser-Smoke-Tests prüfen normale und autorisierte Schutzläufe sowie die
+fehlenden Disclaimer im sichtbaren `run-state` und Ereignisprotokoll. In technischen
+Artefakten darf die präzise Beweiseignungsbewertung weiterhin enthalten sein, weil sie dort
+die Grenzen der Erfassung dokumentiert.
