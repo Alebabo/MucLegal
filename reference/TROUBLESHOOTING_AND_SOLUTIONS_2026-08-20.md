@@ -2558,3 +2558,36 @@ technische Vergleich statt eines erfundenen Ausschnitts.
 Regressionstests prüfen beide in der Demo vorkommenden aktuellen Formulierungsvarianten und
 sichern genau einen Vorher-/Nachher-Block ohne nachfolgende AGB-Klauseln. Die Begrenzung ist
 absichtlich an `VZ-MUELLER-CLICK-COLLECT-2025` gebunden und verändert keine anderen Fälle.
+
+# Kompakte Demo- und Grey-Mode-Steuerung wirkte nach dem ersten Klick funktionslos
+
+### Symptom
+
+Nach dem Verschieben der beiden Demo-Schaltflächen und des Grey Mode in den kompakten
+Seitenleistenbereich wirkte die Müller-Vorbereitung nach dem ersten Klick funktionslos.
+Beim Grey Mode war der aktive Zustand außer am kleinen nativen Checkbox-Häkchen kaum
+erkennbar, insbesondere in der eingeklappten Seitenleiste und auf schmalen Bildschirmen.
+
+### Ursache und Diagnose
+
+Der Müller-Endpunkt antwortete auf Hetzner mit HTTP 200 und lieferte Fall-ID, aktuelle URL
+und angehängten Ausgangsbeweis vollständig zurück. Der Button blieb nach diesem Erfolg
+jedoch dauerhaft `disabled`. Der Browser-Smoke-Test des Grey Mode sendete
+`verification_mode=true` und `god_mode_authorized=true`, erzeugte einen `god-…`-Fall und
+zeigte keine Konsolenfehler. Damit war die Grey-Mode-Funktion technisch intakt, ihre
+Aktivierung im verkleinerten Bedienelement aber visuell zu schwach rückgemeldet.
+
+### Lösung
+
+Der Müller-Button wird nur während des API-Aufrufs deaktiviert und nach erfolgreicher
+Vorbereitung wieder freigegeben. Ein aktivierter Grey Mode hebt nun die gesamte kompakte
+Steuerfläche kontrastreich hervor. Die Checkbox bleibt die alleinige, ausdrückliche
+Autorisierung; Demo-Schaltflächen aktivieren den Grey Mode weiterhin niemals automatisch.
+
+### Verifikation und verbleibende Grenze
+
+Der Template-Regressionstest sichert die erneute Freigabe des Müller-Buttons und die
+Checked-State-Darstellung. Im Browser werden Request-Body, `god-…`-Fall-ID,
+„AUTORISIERTE ERFASSUNG“, wiederholbarer Müller-Klick und fehlende Konsolenfehler geprüft.
+Der aktive Grey Mode wird absichtlich nicht über Seitenaufrufe hinweg gespeichert und muss
+für jede neue Sitzung ausdrücklich aktiviert werden.

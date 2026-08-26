@@ -74,6 +74,8 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
     assert "/api/v1/demo/mueller" in page.text
     assert "Hinterlegt die frühere Click-&-Collect-Klauselkombination" not in page.text
     assert 'id="mueller-demo-status"' not in page.text
+    assert ".grey-mode-tool:has(input:checked)" in page.text
+    assert "muellerLaunch.disabled=false;input.focus()" in page.text
     document = lxml_html.fromstring(page.text)
     sidebar_footer = document.xpath(
         "//*[@id='theme-toggle']/ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' aura-sidebar-foot ')][1]"
