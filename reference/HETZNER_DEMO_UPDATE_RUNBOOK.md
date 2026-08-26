@@ -200,8 +200,9 @@ Zugangsdaten prüfen:
 1. Ohne Zugangsdaten erscheint HTTP 401 beziehungsweise die Passwortabfrage.
 2. `/` zeigt den Fallmonitor.
 3. `/tenorhilfe` lädt und eine synthetische Eingabe erreicht den erwarteten Zustand.
-4. `/beweis-labor` zeigt URL-Feld, unbeschriftete Autorisierungscheckbox, Verlauf,
-   Vorschau und Downloadbereich.
+4. `/beweis-labor` zeigt URL-Feld, Verlauf, Vorschau und Downloadbereich; Müller-,
+   Decathlon-, Dark-Mode- und Grey-Mode-Steuerung liegen kompakt unten in der
+   Seitenleiste beziehungsweise auf Mobilgeräten rechts unten.
 5. Ein kleiner Lauf mit `https://example.com` erzeugt ausschließlich technische
    Artefakte im isolierten Demo-Speicher.
 6. Browserkonsole und Serverjournal enthalten keine neuen Fehler.

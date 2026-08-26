@@ -1350,7 +1350,7 @@ class LiveUiTests(unittest.TestCase):
 
         self.assertIn('id="authorized-capture" type="checkbox"', page.text)
         self.assertIn('aria-label="Autorisierte Erfassung aktivieren"', page.text)
-        self.assertNotIn("Grey Mode", page.text)
+        self.assertIn("Grey Mode", page.text)
         self.assertNotIn('id="god-mode-authorized"', page.text)
         self.assertNotIn('id="verification-mode"', page.text)
         self.assertIn(
@@ -1568,7 +1568,7 @@ class LiveUiTests(unittest.TestCase):
                     time.sleep(0.01)
 
         self.assertIn('id="authorized-capture" type="checkbox"', page.text)
-        self.assertNotIn("Grey Mode", page.text)
+        self.assertIn("Grey Mode", page.text)
         self.assertNotIn("Automatische Überprüfung", page.text)
         self.assertTrue(started["verification_mode"])
         self.assertFalse(disabled["verification_mode"])
@@ -1856,7 +1856,7 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn('anthropic:"KI-Analyse"', page.text)
         self.assertIn("Beweispaket herunterladen", page.text)
         self.assertIn("Dem Fall zuordnen oder vergleichen", page.text)
-        self.assertNotIn("Grey Mode", page.text)
+        self.assertIn("Grey Mode", page.text)
         self.assertNotIn("Grey-Mode", page.text)
         self.assertIn('"baseline-evidence"', page.text)
         self.assertIn('"evidence-comparisons"', page.text)

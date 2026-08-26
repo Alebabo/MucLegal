@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from lxml import html as lxml_html
 
 from muclegal.decathlon_demo import ensure_demo_bundle
 from muclegal.monitoring_cases import MonitoringCaseRepository
@@ -73,6 +74,17 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
     assert "/api/v1/demo/mueller" in page.text
     assert "Hinterlegt die frühere Click-&-Collect-Klauselkombination" not in page.text
     assert 'id="mueller-demo-status"' not in page.text
+    document = lxml_html.fromstring(page.text)
+    sidebar_footer = document.xpath(
+        "//*[@id='theme-toggle']/ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' aura-sidebar-foot ')][1]"
+    )[0]
+    assert sidebar_footer.xpath(".//*[@id='authorized-capture']")
+    assert sidebar_footer.xpath(".//*[@id='mueller-demo']")
+    assert sidebar_footer.xpath(".//*[@id='decathlon-demo']")
+    assert not document.xpath("//*[@id='run-form']//*[@id='authorized-capture']")
+    assert not document.xpath(
+        "//*[@id='run-form']//*[@id='mueller-demo' or @id='decathlon-demo']"
+    )
     assert prepared.status_code == 200
     assert prepared_again.status_code == 200
     assert payload["fall_id"] == DEMO_FALL_ID

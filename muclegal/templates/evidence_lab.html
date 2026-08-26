@@ -53,25 +53,29 @@
     .aura-sidebar.collapsed .aura-mark { display:grid; }
     .aura-sidebar.collapsed .expand-icon { display:block; }
     .expand-icon { display:none; }
-    .aura-sidebar-foot { border-top:1px solid var(--line); padding:12px; }
+    .aura-sidebar-foot { display:grid; gap:5px; border-top:1px solid var(--line); padding:10px 12px 12px; }
     .aura-collapse { width:100%; }
     .lab-page { min-width:0; flex:1; }
     main { width:min(960px,calc(100% - 64px)); margin:48px auto 70px; }
     .page-title { margin:0; font-size:30px; font-weight:800; letter-spacing:-.045em; line-height:1.05; }
     .page-intro { max-width:620px; margin-top:12px; color:var(--muted); font-size:14px; }
     .hero { max-width:780px; }
-    .demo-preset { display:flex; align-items:center; gap:12px; margin-top:12px; color:var(--muted); font-size:12px; }
-    .demo-preset button { border:1px solid var(--line); border-radius:999px; padding:8px 12px; background:transparent; color:var(--ink); cursor:pointer; }
-    .demo-preset button:hover { background:var(--soft); }
+    .sidebar-demo-actions,.sidebar-mode-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+    .demo-quick,.grey-mode-tool,.sidebar-mode-actions .theme-toggle { min-width:0; min-height:34px; display:flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--line); background:transparent; color:var(--muted); padding:6px 7px; font-size:10px; line-height:1.15; cursor:pointer; }
+    .demo-quick:hover,.grey-mode-tool:hover,.sidebar-mode-actions .theme-toggle:hover { background:var(--sidebar-accent); color:var(--ink); }
+    .demo-short { display:none; font-weight:800; }
+    .grey-mode-tool input { width:15px; height:15px; flex:0 0 auto; margin:0; accent-color:#555; cursor:pointer; }
+    .grey-mode-tool .aura-label,.demo-quick .aura-label { min-width:0; text-align:center; }
+    .aura-sidebar.collapsed .sidebar-demo-actions,.aura-sidebar.collapsed .sidebar-mode-actions { grid-template-columns:1fr; }
+    .aura-sidebar.collapsed .demo-quick,.aura-sidebar.collapsed .grey-mode-tool,.aura-sidebar.collapsed .sidebar-mode-actions .theme-toggle { width:36px; min-height:34px; justify-self:center; padding:6px; }
+    .aura-sidebar.collapsed .demo-short { display:inline; }
     .page-intro + .hero { margin-top:40px; }
     .kicker { color:var(--green); font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
     h2,p { margin:0; }
-    .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; margin-top:10px; }
+    .url-form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-top:10px; }
     .url-input { width:100%; height:50px; border:1px solid var(--line); border-radius:11px; background:var(--surface); color:var(--ink); padding:0 15px; box-shadow:0 1px 2px rgb(15 23 42 / .04); }
     .start { height:50px; display:inline-flex; align-items:center; justify-content:center; gap:9px; border:0; border-radius:11px; background:var(--green); color:#fff; padding:0 20px; font-weight:760; cursor:pointer; }
     .start:hover { background:var(--green-dark); }
-    .authorization-control { width:50px; height:50px; display:grid; place-items:center; border:1px solid #a5a5a5; background:#f3f3f3; cursor:pointer; }
-    .authorization-control input { width:22px; height:22px; margin:0; accent-color:#555; cursor:pointer; }
     .start:disabled,.url-input:disabled { opacity:.55; cursor:not-allowed; }
     .spinner { width:17px; height:17px; border:2px solid #ffffff66; border-top-color:#fff; border-radius:50%; animation:spin .75s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
@@ -164,7 +168,7 @@
     .dark .theme-dark-logo { display:block; }
     .aura-sidebar.collapsed .theme-toggle-label { display:none; }
     .aura-sidebar.collapsed .theme-toggle { justify-content:center; }
-    .dark .authorization-control { border-color:#4b5563; background:#1f2937; }
+    .dark .grey-mode-tool { border-color:#4b5563; }
     .dark .protection { border-color:#b97724; background:#382712; color:#f8d8a6; }
     .dark .pill-wrap.warning { border-color:#a66f2c; background:#352712; color:#f3cf9b; }
     .dark .pill-wrap.unavailable { background:#1b2534; color:#788596; }
@@ -173,11 +177,11 @@
     .dark .comparison-notification { border-color:#a66f2c; }
     .dark .comparison-notification-icon { background:#3d2a12; color:#f3cf9b; }
     .dark .download:hover { background:var(--sidebar-accent); }
-    [class*="pill"],.url-input,.start,.authorization-control,.trace,.protection,.download,.viewer,.gallery-controls button,.legal-link,.popover { border-radius:0 !important; box-shadow:none !important; }
+    [class*="pill"],.url-input,.start,.trace,.protection,.download,.viewer,.gallery-controls button,.legal-link,.popover { border-radius:0 !important; box-shadow:none !important; }
     .start,.download { text-transform:uppercase; letter-spacing:.12em; font-size:11px; font-weight:800; }
     .kicker,.text-xs { letter-spacing:.12em; text-transform:uppercase; }
     [hidden] { display:none !important; }
-    @media (max-width:767px) { .aura-sidebar { display:none; } main { width:min(100% - 48px,960px); margin-top:40px; } .url-form { grid-template-columns:1fr; } .start { width:100%; } .run-state { max-width:45%; } .viewer { min-height:360px; } .viewer-body,.empty { min-height:315px; } .case-linker { grid-template-columns:1fr; } .comparison-notification { right:16px; bottom:16px; } }
+    @media (max-width:767px) { .aura-sidebar { position:static; width:0; height:0; flex-basis:0; border:0; } .aura-brand,.aura-nav,.aura-collapse { display:none; } .aura-sidebar-foot { position:fixed; z-index:65; right:12px; bottom:12px; display:flex; width:auto; gap:3px; border:1px solid var(--line); background:var(--sidebar); padding:4px; box-shadow:0 8px 28px rgb(15 23 42 / .16); } .sidebar-demo-actions,.sidebar-mode-actions { display:flex; gap:3px; } .demo-quick,.grey-mode-tool,.sidebar-mode-actions .theme-toggle { width:34px; min-height:32px; padding:5px; } .demo-short { display:inline; } .aura-sidebar-foot .aura-label { display:none; } main { width:min(100% - 48px,960px); margin-top:40px; } .url-form { grid-template-columns:1fr; } .start { width:100%; } .run-state { max-width:45%; } .viewer { min-height:360px; } .viewer-body,.empty { min-height:315px; } .case-linker { grid-template-columns:1fr; } .comparison-notification { right:16px; bottom:64px; } }
   </style>
 </head>
 <body>
@@ -192,7 +196,17 @@
       <a href="/neu" data-react-route="/neu" title="Neu hinzufügen"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg><span class="aura-label">Neu hinzufügen</span></a>
       <a href="/archiv" data-react-route="/archiv" title="Archiv"><svg class="aura-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M5 6v15h14V6"></path><path d="M8 3h8l2 3H6l2-3Z"></path><path d="M9 11h6"></path></svg><span class="aura-label">Archiv</span></a>
     </nav>
-    <div class="aura-sidebar-foot"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Dark Mode aktivieren" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg><span class="theme-toggle-label aura-label">Dark Mode</span></button><button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon collapse-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><svg class="aura-icon expand-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m12 9 3 3-3 3"></path></svg><span class="aura-label">Einklappen</span></button></div>
+    <div class="aura-sidebar-foot">
+      <div class="sidebar-demo-actions" aria-label="Demo-Vorbereitung">
+        <button id="mueller-demo" class="demo-quick" type="button" title="Müller-AGB-Demo vorbereiten" aria-label="Müller-AGB-Demo vorbereiten"><span class="demo-short" aria-hidden="true">M</span><span class="demo-button-label aura-label">Müller</span></button>
+        <button id="decathlon-demo" class="demo-quick" type="button" title="Decathlon-Demo vorbereiten" aria-label="Decathlon-Demo vorbereiten"><span class="demo-short" aria-hidden="true">D</span><span class="demo-button-label aura-label">Decathlon</span></button>
+      </div>
+      <div class="sidebar-mode-actions">
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Dark Mode aktivieren" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg><span class="theme-toggle-label aura-label">Dark Mode</span></button>
+        <label class="grey-mode-tool" for="authorized-capture" title="Grey Mode aktivieren"><input id="authorized-capture" type="checkbox" aria-label="Autorisierte Erfassung aktivieren"><span class="aura-label">Grey Mode</span></label>
+      </div>
+      <button id="aura-collapse" class="aura-collapse" type="button" aria-label="Seitenleiste einklappen"><svg class="aura-icon collapse-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg><svg class="aura-icon expand-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m12 9 3 3-3 3"></path></svg><span class="aura-label">Einklappen</span></button>
+    </div>
   </aside>
   <div class="lab-page">
   <main>
@@ -202,11 +216,8 @@
       <div class="kicker">URL prüfen</div>
       <form id="run-form" class="url-form">
         <input id="url" class="url-input" type="text" inputmode="url" required maxlength="2048" placeholder="https://www.beispiel.de" aria-label="Öffentliche URL">
-        <label class="authorization-control" for="authorized-capture"><input id="authorized-capture" type="checkbox" aria-label="Autorisierte Erfassung aktivieren"></label>
         <button id="run-button" class="start" type="submit"><span id="spinner" class="spinner" hidden></span><span id="start-label">Erfassung starten</span></button>
       </form>
-      <div class="demo-preset"><button id="mueller-demo" type="button">Müller-AGB-Demo vorbereiten</button></div>
-      <div class="demo-preset"><button id="decathlon-demo" type="button">Decathlon-Demo vorbereiten</button></div>
     </section>
 
     <details id="trace-panel" class="trace" hidden>
@@ -271,12 +282,13 @@
   const primaryArtifacts=new Set(["requested_page_screenshot","screenshot","agb_screenshot","privacy_screenshot","normalized_text"]);
   const technicalOrder=["report","legal_pages","protection_report","previous_normalized_text","diff","page_artifacts_index","capture_index","capture_metrics","run_result","screenshot_interactions","capture_transparency","raw_html","response_headers","warc","cdx","warc_status","manifest","manifest_digest","timestamp_query","timestamp_response","wayback_status"];
   const roleOrder=["main","requested","agb","privacy"];
-  const form=document.getElementById("run-form"),input=document.getElementById("url"),start=document.getElementById("run-button"),spinner=document.getElementById("spinner"),startLabel=document.getElementById("start-label"),trace=document.getElementById("trace-panel"),events=document.getElementById("events"),result=document.getElementById("result"),pills=document.getElementById("pills"),protection=document.getElementById("protection-warning"),authorizedCapture=document.getElementById("authorized-capture"),caseLinker=document.getElementById("case-linker"),baselineCase=document.getElementById("baseline-case"),attachBaseline=document.getElementById("attach-baseline"),caseLinkerStatus=document.getElementById("case-linker-status"),comparisonNotification=document.getElementById("comparison-notification"),comparisonNotificationOpen=document.getElementById("comparison-notification-open"),comparisonNotificationCase=document.getElementById("comparison-notification-case"),comparisonNotificationClose=document.getElementById("comparison-notification-close"),demoLaunch=document.getElementById("decathlon-demo"),muellerLaunch=document.getElementById("mueller-demo");
+  const form=document.getElementById("run-form"),input=document.getElementById("url"),start=document.getElementById("run-button"),spinner=document.getElementById("spinner"),startLabel=document.getElementById("start-label"),trace=document.getElementById("trace-panel"),events=document.getElementById("events"),result=document.getElementById("result"),pills=document.getElementById("pills"),protection=document.getElementById("protection-warning"),authorizedCapture=document.getElementById("authorized-capture"),caseLinker=document.getElementById("case-linker"),baselineCase=document.getElementById("baseline-case"),attachBaseline=document.getElementById("attach-baseline"),caseLinkerStatus=document.getElementById("case-linker-status"),comparisonNotification=document.getElementById("comparison-notification"),comparisonNotificationOpen=document.getElementById("comparison-notification-open"),comparisonNotificationCase=document.getElementById("comparison-notification-case"),comparisonNotificationClose=document.getElementById("comparison-notification-close"),demoLaunch=document.getElementById("decathlon-demo"),muellerLaunch=document.getElementById("mueller-demo"),demoLaunchLabel=demoLaunch.querySelector(".demo-button-label"),muellerLaunchLabel=muellerLaunch.querySelector(".demo-button-label");
   let currentEvidenceCaseId="",currentDemoNextCaseId="",matchingCases=new Map(),pendingMonitoringNotification=null;
   let currentInfo="";
   async function api(url,options){const response=await fetch(url,options);if(!response.ok){let message=`HTTP ${response.status}`;try{message=(await response.json()).detail||message}catch(_){}throw new Error(message)}return response.json()}
-  muellerLaunch.addEventListener("click",async()=>{muellerLaunch.disabled=true;muellerLaunch.textContent="Müller-Fall wird vorbereitet …";try{const prepared=await api("/api/v1/demo/mueller",{method:"POST"});input.value=prepared.current_url;muellerLaunch.textContent="Müller-Fall ist bereit";input.focus()}catch(error){muellerLaunch.textContent=error.message;muellerLaunch.disabled=false}});
-  demoLaunch.addEventListener("click",async()=>{demoLaunch.disabled=true;demoLaunch.textContent="Demo wird vorbereitet …";try{const prepared=await api("/api/v1/demo/decathlon",{method:"POST"});window.location.assign(`/beweis-labor?case_id=${encodeURIComponent(prepared.next_case_id)}`)}catch(error){demoLaunch.textContent=error.message;demoLaunch.disabled=false}});
+  function setDemoButtonState(button,label,text,detail=text){label.textContent=text;button.title=detail;button.setAttribute("aria-label",detail)}
+  muellerLaunch.addEventListener("click",async()=>{muellerLaunch.disabled=true;setDemoButtonState(muellerLaunch,muellerLaunchLabel,"Wird vorbereitet …","Müller-Fall wird vorbereitet");try{const prepared=await api("/api/v1/demo/mueller",{method:"POST"});input.value=prepared.current_url;setDemoButtonState(muellerLaunch,muellerLaunchLabel,"Müller bereit","Müller-Fall ist bereit");input.focus()}catch(error){setDemoButtonState(muellerLaunch,muellerLaunchLabel,"Fehler",error.message);muellerLaunch.disabled=false}});
+  demoLaunch.addEventListener("click",async()=>{demoLaunch.disabled=true;setDemoButtonState(demoLaunch,demoLaunchLabel,"Wird vorbereitet …","Decathlon-Demo wird vorbereitet");try{const prepared=await api("/api/v1/demo/decathlon",{method:"POST"});window.location.assign(`/beweis-labor?case_id=${encodeURIComponent(prepared.next_case_id)}`)}catch(error){setDemoButtonState(demoLaunch,demoLaunchLabel,"Fehler",error.message);demoLaunch.disabled=false}});
   function eventState(run,item,index){if(item.state==="failed")return "failed";if(String(item.state).includes("warning"))return "warning";if(index===(run.audit_log||[]).length-1&&!terminal.has(run.status))return "active";const stepState=(run.steps||{})[item.step];return stepState==="failed"?"failed":(stepState==="warning"?"warning":(stepState==="active"?"active":"done"))}
   function renderRun(run){const state=document.getElementById("run-state"),message=run.message||run.status;state.textContent=terminal.has(run.status)?message:`Aktiv · ${toolLabels[run.current_step]||"Prüfung läuft"}`;state.title=message;state.className="run-state "+(run.status==="completed"?"ok":(run.status.includes("warning")||run.status==="failed"?"warn":""));events.replaceChildren();(run.audit_log||[]).forEach((item,index)=>{const row=document.createElement("div");row.className=`event ${eventState(run,item,index)}`;const dot=document.createElement("span");dot.className="event-dot";dot.setAttribute("aria-hidden","true");const content=document.createElement("div"),top=document.createElement("div");top.className="event-top";const tool=document.createElement("b");tool.textContent=toolLabels[item.step]||item.step;const time=document.createElement("time");const date=new Date(item.timestamp);time.textContent=Number.isNaN(date.valueOf())?"":date.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});const text=document.createElement("p");text.textContent=item.message;top.append(tool,time);content.append(top,text);row.append(dot,content);events.append(row)});events.scrollTop=events.scrollHeight}
   async function streamEvidenceRun(payload){const response=await fetch("/api/v1/evidence-runs/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message=`HTTP ${response.status}`;try{message=(await response.json()).detail||message}catch(_){}throw new Error(message)}if(!response.body)throw new Error("Der Prüfverlauf konnte nicht geöffnet werden.");const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",completed=null;while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines){if(!line.trim())continue;const message=JSON.parse(line);if(message.type==="error")throw new Error(message.detail||"Prüflauf fehlgeschlagen.");if(message.run){renderRun(message.run);if(message.type==="complete")completed=message.run}}if(done)break}if(buffer.trim()){const message=JSON.parse(buffer);if(message.type==="error")throw new Error(message.detail||"Prüflauf fehlgeschlagen.");if(message.run){renderRun(message.run);completed=message.run}}return completed}
