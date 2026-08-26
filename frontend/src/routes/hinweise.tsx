@@ -133,12 +133,7 @@ function HinweisePage() {
   }, [cases, openId]);
 
   const showChangeNotification = useCallback(
-    (
-      runId: string,
-      caseId: string,
-      fallId: string,
-      notification: MonitoringChangeNotification,
-    ) => {
+    (runId: string, caseId: string, fallId: string, notification: MonitoringChangeNotification) => {
       toast.custom(
         (toastId) => {
           const Icon = notification.tone === "success" ? CheckCircle2 : AlertTriangle;
@@ -203,20 +198,8 @@ function HinweisePage() {
       window.history.replaceState(window.history.state, "", currentUrl);
     }
     if (!stored) return;
-    const notification = claimMonitoringChangeNotification(
-      stored.status,
-      stored.notification_id,
-      notifiedRunIds.current,
-    );
-    if (notification) {
-      showChangeNotification(
-        stored.notification_id,
-        stored.case_id,
-        stored.fall_id,
-        notification,
-      );
-    }
-  }, [showChangeNotification]);
+    openEvidence(stored.case_id);
+  }, [openEvidence]);
 
   async function decide(caseId: string, decision: "freigegeben" | "abgelehnt") {
     setActionState((state) => ({ ...state, [caseId]: "Entscheidung wird gespeichert …" }));

@@ -70,6 +70,14 @@ test("accepts only the versioned BeweisLab comparison handoff", () => {
   );
 });
 
+test("opens a clicked BeweisLab comparison directly on the matching hint", () => {
+  assert.match(hintsSource, /if \(!stored\) return;\s*openEvidence\(stored\.case_id\)/);
+  assert.doesNotMatch(
+    hintsSource,
+    /showChangeNotification\(\s*stored\.notification_id,\s*stored\.case_id/,
+  );
+});
+
 test("does not misreport unchanged, reference, incomplete or failed runs as differences", () => {
   for (const status of [
     "unveraendert_fortbestehend",

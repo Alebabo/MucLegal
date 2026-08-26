@@ -2464,3 +2464,32 @@ TypeScript-Prüfung und Browser-End-to-End-Test müssen zusätzlich bestätigen,
 vorbereitete Müller-Fall in `/fälle` auswählbar ist und bis zur Tenorerstellung übernommen
 wird. Die Auswahl lädt höchstens fünf Suchtreffer; durch Eingabe von Fall-ID, Domain oder
 Titel bleibt jeder weitere Backendfall erreichbar.
+
+# BeweisLab verließ die Seite unmittelbar nach einer Scan-Zuordnung
+
+### Symptom
+
+Erkannte ein Vergleich nach der Zuordnung eines Scans eine technische Differenz, wechselte
+die Anwendung sofort vom BeweisLab zu `/hinweise`. Die Benachrichtigung erschien erst dort
+und musste ein zweites Mal angeklickt werden, um den betroffenen Fall zu öffnen.
+
+### Ursache und Diagnose
+
+Der Erfolgszweig für `technische_aenderung_erkannt` rief unmittelbar die Übergabefunktion
+mit `window.location.assign` auf. Im BeweisLab gab es keine eigene, persistente
+Vergleichsbenachrichtigung; die Hinweise-Seite behandelte die Übergabe wiederum wie einen
+neuen Monitoringhinweis.
+
+### Lösung
+
+Das BeweisLab zeigt die Differenz nun als dauerhaft sichtbare, anklickbare Benachrichtigung
+und bleibt nach der Zuordnung auf derselben Seite. Erst der Klick auf die Benachrichtigung
+übergibt die Fall-ID an `/hinweise`. Dort wird der passende Fall unmittelbar aufgeklappt
+und zur Differenzansicht gescrollt, ohne eine zweite Benachrichtigung einzublenden.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests sichern das BeweisLab-Popup und die direkte Öffnung des übergebenen Falls.
+Der Browser-Smoke-Test prüft zusätzlich, dass die URL nach der Zuordnung unverändert bleibt
+und erst der Klick zu `/hinweise` wechselt. Wird die Benachrichtigung geschlossen, bleibt
+der Vergleich gespeichert; der Fall ist weiterhin über die Hinweise-Navigation erreichbar.
