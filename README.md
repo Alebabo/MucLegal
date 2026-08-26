@@ -46,6 +46,11 @@ Anthropic vorprüfen lassen. Auf einer einzigen Prüfseite werden Änderung, KI-
 Unsicherheit und lokale Dokumentationsartefakte gezeigt. Die menschliche Entscheidung wird davon
 getrennt erfasst.
 
+Die aktuelle Navigation führt in der Reihenfolge **Home, Tenorhilfe, Hinweise, BeweisLab,
+Neu hinzufügen und Archiv** durch den Demoablauf. In der Tenorhilfe öffnet `/tenor` die
+Tenorsuche; archivierte Entwürfe lassen sich dort insbesondere über ihr Aktenzeichen aufrufen
+und zur Bearbeitung übernehmen.
+
 ### Vollständige Funktionsdokumentation
 
 Das ausführliche
@@ -65,7 +70,13 @@ Fallbacks, bekannten Grenzen und noch nicht umgesetzter Roadmap.
 
 ### Welche Grenzen gelten?
 
-MucLegal arbeitet ausschließlich mit öffentlich zugänglichen Seiten. Es umgeht keine Logins, Paywalls, CAPTCHAs oder technischen Schutzmaßnahmen und respektiert `robots.txt`. Rohdaten und Dokumentationsartefakte werden nicht zur Analyse an fremde Extraktionsdienste weitergegeben.
+Im Normalbetrieb arbeitet MucLegal ausschließlich mit öffentlich zugänglichen Seiten. Es
+überwindet keine Logins, Paywalls oder CAPTCHAs und respektiert `robots.txt`. Ein ausdrücklich
+aktivierter Grey Mode ist ausschließlich für synthetische, eigene oder anderweitig nachweislich
+autorisierte Challenge-Ziele bestimmt. Aktivierung, Vollmachtsgrundlage und freigeschaltete
+Funktionen werden protokolliert; die dabei erzeugten Artefakte bleiben von normalen Beweisen
+getrennt. Rohdaten und Dokumentationsartefakte werden nicht zur Analyse an fremde
+Extraktionsdienste weitergegeben.
 
 Der aktuelle Stand ist ein Hackathon-Prototyp und noch kein autonomes Produktivsystem. Insbesondere gibt es keine Benutzerverwaltung, kein Mehrmandanten-Dashboard, keine visuelle Screenshot-Analyse und keine automatische rechtliche Freigabe.
 
@@ -115,8 +126,11 @@ Für die Offline-Demo ist kein API-Schlüssel erforderlich. Die optionale Live-V
 
 ## Lokales BeweisLab
 
-Das BeweisLab läuft ausschließlich auf dem lokalen Rechner. Es benötigt für die technische
-Erfassung kein Anthropic-Modell und übermittelt Roh-HTML, Header, DOM, Bilder oder WARC nicht an
+Das BeweisLab läuft standardmäßig auf dem lokalen Rechner. Für die zeitlich begrenzte,
+passwortgeschützte Hackathon-Demo kann derselbe lokale Dienst ausdrücklich auf einem
+Hetzner-Server betrieben werden; seine Beweisartefakte verbleiben dort in einem isolierten
+Demo-Speicher und werden nicht an einen Fremdspeicher übertragen. Die technische Erfassung
+benötigt kein Anthropic-Modell und übermittelt Roh-HTML, Header, DOM, Bilder oder WARC nicht an
 einen fremden Extraktions- oder Speicherdienst.
 
 ```powershell
@@ -147,9 +161,12 @@ nicht per OCR oder Vision ausgewertet. Erst nach menschlicher Fallfreigabe kann 
 zugehörige `case_id` gestartet werden.
 
 Der fallbezogene Lauf prüft die gemeldete Fundstelle, eine öffentliche Sitemap und priorisierte
-interne Links innerhalb eines festen Budgets. AGB werden als HTML oder öffentlich verlinktes PDF
-gesichert. Gemeldete Buttons und andere Elemente werden im gerenderten DOM anhand sichtbarer und
-zugänglicher Eigenschaften geprüft. Ein fehlender Treffer heißt ausschließlich
+interne Links innerhalb eines festen Budgets. Das URL-Budget zählt jeden eindeutigen
+Abrufversuch, also auch durch HTTP-Schutz, Rate-Limits oder Robots-Regeln abgewiesene Ziele.
+Dadurch können Fehlerantworten den Lauf nicht unbemerkt über das vorgesehene Abruflimit hinaus
+verlängern. AGB werden als HTML oder öffentlich verlinktes PDF gesichert. Gemeldete Buttons und
+andere Elemente werden im gerenderten DOM anhand sichtbarer und zugänglicher Eigenschaften
+geprüft. Ein fehlender Treffer heißt ausschließlich
 `nicht_gefunden_im_pruefumfang`; bei Sperren oder unvollständiger Abdeckung lautet das Ergebnis
 `pruefung_unvollstaendig`.
 
@@ -192,6 +209,24 @@ Die versionierte API stellt dafür `POST /api/v1/cases`,
 `POST /api/v1/cases/{case_id}/review` und `POST /api/v1/runs` mit genau einer freigegebenen
 `case_id` bereit. Erstverstöße tragen unveränderlich
 `erstverstoss_festgestellt_durch: "verbraucherzentrale"` und `system_detected: false`.
+
+### Müller-Click-&-Collect-Demo
+
+Die kompakte Müller-Schaltfläche im BeweisLab bereitet den Fall
+`VZ-MUELLER-CLICK-COLLECT-2025` wiederholbar vor. Als historische Fundstelle wird der
+[Wayback-Stand vom 03.07.2025](https://web.archive.org/web/20250703135028/https://www.mueller.de/unternehmen/agb/)
+hinterlegt; der aktuelle Stand stammt aus der Müller-AGB-Seite. In der Beweiskette wird für
+diesen Fall nur der geänderte Bereich der Reservieren-Klausel gegenübergestellt, während die
+vollständigen AGB- und Manifestartefakte erhalten bleiben.
+
+Nach einem aktuellen Beweisvergleich zeigt die Hinweise-Seite den Bereich
+„Kerngleichheits-Engine“. Der Knopf „Kerngleichheit prüfen“ zeigt während des Laufs einen
+Ladekreis und den aktuellen Serverstatus. Ein erneuter Klick auf denselben aktiven Fall hängt
+sich an dessen bestehende Lauf-ID an, statt einen konkurrierenden Lauf zu starten. Nach Abschluss
+werden die Falldaten neu geladen, der Befund fokussiert und als „kerngleich“, „nicht kerngleich“
+oder „nicht eindeutig“ direkt am Knopf ausgegeben. Im derzeit vorbereiteten Müller-Demostand
+lautet der technische Engine-Befund **nicht kerngleich / beseitigt**, weil die aktuelle
+Reservierungsbestätigung ausdrücklich noch keine Vertragsannahme darstellt.
 
 Die linke Seite zeigt den juristischen Ablauf und den technischen Pipeline- und Hashstatus. In der intern
 scrollbaren Proof-Seitenleiste lassen sich alle vollständigen Dokumentationspakete nach URL und Zeitpunkt
