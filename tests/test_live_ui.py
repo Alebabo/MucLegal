@@ -1856,6 +1856,11 @@ class LiveUiTests(unittest.TestCase):
         self.assertIn('anthropic:"KI-Analyse"', page.text)
         self.assertIn("Beweispaket herunterladen", page.text)
         self.assertIn("Dem Fall zuordnen oder vergleichen", page.text)
+        self.assertIn("function visibleRunMessage(run)", page.text)
+        self.assertIn(
+            "Seitenschutz oder technischer Fehlerzustand erfasst. Details stehen im Schutzbericht.",
+            page.text,
+        )
         self.assertIn("Grey Mode", page.text)
         self.assertNotIn("Grey-Mode", page.text)
         self.assertIn('"baseline-evidence"', page.text)

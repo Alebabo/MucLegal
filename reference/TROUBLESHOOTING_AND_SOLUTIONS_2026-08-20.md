@@ -2591,3 +2591,33 @@ Checked-State-Darstellung. Im Browser werden Request-Body, `god-…`-Fall-ID,
 „AUTORISIERTE ERFASSUNG“, wiederholbarer Müller-Klick und fehlende Konsolenfehler geprüft.
 Der aktive Grey Mode wird absichtlich nicht über Seitenaufrufe hinweg gespeichert und muss
 für jede neue Sitzung ausdrücklich aktiviert werden.
+
+# Beweiseignungshinweis erschien als Abschlussmeldung im Prüfverlauf
+
+### Symptom
+
+Bei einem Schutz- oder Fehlerzustand zeigte die kompakte Abschlusszeile des Prüfverlaufs den
+Satz „Nicht als Beleg verwendbar – nur Hinweis“. Diese Formulierung erschien dort unabhängig
+davon, ob der Nutzer Grey Mode ausdrücklich aktiviert hatte.
+
+### Ursache und Diagnose
+
+Die UI übernahm `LiveWorkflowResult.message` unverändert in `run-state`. Dieselbe Nachricht
+dient backendseitig der technischen Beweiseignung und enthält deshalb die ausführliche
+Abgrenzung zwischen einem gespeicherten Schutzzustand und dem nicht erfassten Inhalt. Im
+kompakten Trace vermischte sie jedoch Laufstatus und Beweiseignungsbewertung.
+
+### Lösung
+
+Nur die sichtbare Abschlussmeldung des Prüfverlaufs wird auf eine neutrale technische
+Kurzfassung abgebildet: „Seitenschutz oder technischer Fehlerzustand erfasst. Details stehen
+im Schutzbericht.“ Im Grey Mode bleibt der Präfix „AUTORISIERTE ERFASSUNG“ erhalten. Die
+Backendklassifikation, Manifestdaten, Schutzberichte und Downloadartefakte werden nicht
+verändert.
+
+### Verifikation und verbleibende Grenze
+
+Ein Template-Regressionstest sichert die neue Trace-Abbildung. Browser-Smoke-Tests prüfen
+normale und autorisierte Schutzläufe sowie die fehlende alte Formulierung im sichtbaren
+`run-state`. In technischen Artefakten darf die präzise Beweiseignungsbewertung weiterhin
+enthalten sein, weil sie dort die Grenzen der Erfassung dokumentiert.
