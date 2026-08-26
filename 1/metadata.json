@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M0Z635R5Z3KW74RG8BPYGPM6",
+  "session_id": "01a03d06-0052-7b22-812d-d41916abb578",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T14:07:21.9616067Z",
+  "branch": "agent/live-url-ui",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/routes/hinweise.tsx",
+    "muclegal/domain_monitor.py",
+    "muclegal/ui.py",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_case_monitoring.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "3ee518c0c861",
+  "checkpoint_transcript_start": 3458,
+  "transcript_lines_at_start": 3458,
+  "compact_transcript_start": 535,
+  "token_usage": {
+    "input_tokens": 190333,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 7789568,
+    "output_tokens": 21635,
+    "api_call_count": 66
+  },
+  "session_metrics": {
+    "turn_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T14:07:18.7539104Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 153,
+    "human_modified": 9,
+    "human_removed": 0,
+    "total_committed": 153,
+    "total_lines_changed": 162,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

@@ -3,8 +3,14 @@
   "checkpoint_id": "01M0Z635R5Z3KW74RG8BPYGPM6",
   "strategy": "manual-commit",
   "branch": "agent/live-url-ui",
-  "checkpoints_count": 2,
-  "files_touched": null,
+  "checkpoints_count": 3,
+  "files_touched": [
+    "frontend/src/routes/hinweise.tsx",
+    "muclegal/domain_monitor.py",
+    "muclegal/ui.py",
+    "reference/TROUBLESHOOTING_AND_SOLUTIONS_2026-08-20.md",
+    "tests/test_case_monitoring.py"
+  ],
   "sessions": [
     {
       "metadata": "/0/metadata.json",
@@ -12,13 +18,20 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1130135,
+    "input_tokens": 1320468,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 36570496,
-    "output_tokens": 93596,
-    "api_call_count": 1196
+    "cache_read_tokens": 44360064,
+    "output_tokens": 115231,
+    "api_call_count": 1262
   }
 }
