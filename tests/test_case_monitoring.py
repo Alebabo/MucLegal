@@ -5,6 +5,7 @@ import hashlib
 import json
 import sqlite3
 import tempfile
+import threading
 import time
 import unittest
 from contextlib import contextmanager
@@ -616,6 +617,56 @@ class MonitoringCaseTests(unittest.TestCase):
             listed_case["latest_engine_assessment"],
         )
 
+    def test_repeated_start_for_same_case_reattaches_to_active_run(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/agb": (
+                f"<html><body><main><p>{CLAUSE}</p></main></body></html>"
+            ).encode(),
+        }
+
+        class BlockingFetcher(FakeFetcher):
+            def fetch(self, url: str) -> FetchResult:
+                if url == "https://example.test/agb":
+                    started.set()
+                    release.wait(timeout=2)
+                return super().fetch(url)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fetcher = BlockingFetcher(pages)
+            cases = MonitoringCaseRepository(root / "reviews.sqlite3", root / "intake")
+            case = cases.review(cases.create(clause_payload()).case_id, "freigegeben")
+            workflow = LiveMonitorWorkflow(
+                root / "live", ROOT / "fixtures" / "tenor.json", fetcher=fetcher
+            )
+            monitor = CaseDomainMonitor(
+                root / "domain",
+                fetcher=fetcher,
+                policy=ScanPolicy(max_urls=5, max_seconds=5),
+            )
+            app = create_app(
+                workflow.latest_case_path,
+                root / "reviews.sqlite3",
+                workflow=workflow,
+                anthropic_ready=False,
+                monitoring_cases=cases,
+                domain_monitor=monitor,
+            )
+            with TestClient(app) as client:
+                first = client.post("/api/v1/runs", json={"case_id": case.case_id})
+                self.assertTrue(started.wait(timeout=1))
+                repeated = client.post("/api/v1/runs", json={"case_id": case.case_id})
+                release.set()
+                completed = _poll(client, first.json()["run_id"])
+
+        self.assertEqual(202, first.status_code)
+        self.assertEqual(202, repeated.status_code)
+        self.assertEqual(first.json()["run_id"], repeated.json()["run_id"])
+        self.assertIn(completed["status"], TERMINAL_RUN_STATUSES)
+
     def test_api_attaches_manifest_valid_same_domain_evidence_including_grey_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -905,6 +956,39 @@ class MonitoringCaseTests(unittest.TestCase):
             if item["url"] == "https://example.test/shop"
         )
         self.assertFalse(optional_failure["required_by_case_profile"])
+
+    def test_url_budget_counts_failed_fetch_attempts(self) -> None:
+        links = "".join(f"<a href='/optional-{index}'>Link {index}</a>" for index in range(10))
+        pages = {
+            "https://example.test/sitemap.xml": b"<urlset/>",
+            "https://example.test/agb": (
+                f"<html><body><p>{CLAUSE}</p>{links}</body></html>"
+            ).encode(),
+        }
+
+        class CountingFetcher(FakeFetcher):
+            def __init__(self, configured_pages: dict[str, bytes]) -> None:
+                super().__init__(configured_pages)
+                self.calls: list[str] = []
+
+            def fetch(self, url: str) -> FetchResult:
+                self.calls.append(url)
+                return super().fetch(url)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = MonitoringCaseRepository(root / "cases.sqlite3", root / "intake")
+            case = repository.review(repository.create(clause_payload()).case_id, "freigegeben")
+            fetcher = CountingFetcher(pages)
+            result = CaseDomainMonitor(
+                root / "monitor",
+                fetcher=fetcher,
+                policy=ScanPolicy(max_urls=3, max_seconds=5),
+            ).run(case)
+
+        # The sitemap lookup happens before the bounded crawl; only three crawl URLs may follow.
+        self.assertEqual(4, len(fetcher.calls))
+        self.assertTrue(result.coverage["budget_exhausted"])
 
     def test_missing_dom_inspector_makes_element_coverage_incomplete(self) -> None:
         pages = {

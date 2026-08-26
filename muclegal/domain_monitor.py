@@ -112,7 +112,7 @@ class CaseDomainMonitor:
         with ExitStack() as browser_stack:
             browser_session_started = False
             while queue:
-                if len(visited) >= self.policy.max_urls or time.monotonic() - started >= self.policy.max_seconds:
+                if len(seen) >= self.policy.max_urls or time.monotonic() - started >= self.policy.max_seconds:
                     budget_exhausted = True
                     break
                 url, depth, source, required = queue.popleft()

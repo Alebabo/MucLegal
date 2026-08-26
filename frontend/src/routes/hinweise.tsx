@@ -125,6 +125,17 @@ const MONITORING_POLL_INTERVAL_MS = 500;
 // Keep the UI attached for one additional minute so artifact creation can finish.
 const MONITORING_POLL_ATTEMPTS = (11 * 60 * 1_000) / MONITORING_POLL_INTERVAL_MS;
 
+const monitoringResultLabel: Record<string, string> = {
+  referenzzustand_dokumentiert: "Referenzzustand dokumentiert.",
+  unveraendert_fortbestehend: "Ergebnis: kerngleich – die Verletzungsform besteht fort.",
+  beseitigt: "Ergebnis: nicht kerngleich – die beanstandete Verletzungsform wurde beseitigt.",
+  kerngleich_wiederaufgetreten: "Ergebnis: kerngleich – die Verletzungsform ist wiederaufgetreten.",
+  neuer_sachverhalt: "Ergebnis: nicht kerngleich – neuer Sachverhalt.",
+  unsicher: "Ergebnis: nicht eindeutig – menschliche Prüfung erforderlich.",
+  pruefung_unvollstaendig: "Ergebnis: Prüfung unvollständig – menschliche Prüfung erforderlich.",
+  failed: "Die Kerngleichheitsprüfung ist fehlgeschlagen.",
+};
+
 function relativeTime(iso: string | null) {
   if (!iso) return "geplant";
   const now = Date.now();
@@ -288,7 +299,12 @@ function HinweisePage() {
         setActionState((state) => ({ ...state, [caseId]: run.message }));
       }
       if (terminal.has(run.status)) {
-        await queryClient.invalidateQueries({ queryKey: monitoringCasesQueryKey });
+        await queryClient.refetchQueries({ queryKey: monitoringCasesQueryKey, type: "active" });
+        setActionState((state) => ({
+          ...state,
+          [caseId]: monitoringResultLabel[run.status] ?? run.message,
+        }));
+        openEvidence(caseId);
         const notification = claimMonitoringChangeNotification(
           run.status,
           run.run_id,
@@ -445,6 +461,15 @@ function HinweisePage() {
                                     : "Kerngleichheit prüfen"}
                                 </button>
                               )}
+                            {actionState[c.case_id] && (
+                              <p
+                                className="mt-3 text-sm font-medium text-foreground"
+                                role="status"
+                                aria-live="polite"
+                              >
+                                {actionState[c.case_id]}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </section>
@@ -674,17 +699,20 @@ function HinweisePage() {
                                   event.stopPropagation();
                                   void startRun(c.case_id, c.fall_id);
                                 }}
-                                className="bg-primary px-4 py-2 text-sm text-primary-foreground"
+                                disabled={runPending}
+                                aria-busy={runPending}
+                                className="inline-flex items-center gap-2 bg-primary px-4 py-2 text-sm text-primary-foreground disabled:cursor-wait disabled:opacity-70"
                               >
-                                Monitoring starten
+                                {runPending && (
+                                  <LoaderCircle
+                                    className="size-4 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                {runPending ? "Monitoring läuft …" : "Monitoring starten"}
                               </button>
                             )}
                           </div>
-                          {actionState[c.case_id] && (
-                            <p className="mt-3 text-sm text-muted-foreground" role="status">
-                              {actionState[c.case_id]}
-                            </p>
-                          )}
                         </div>
                       )}
                     </div>

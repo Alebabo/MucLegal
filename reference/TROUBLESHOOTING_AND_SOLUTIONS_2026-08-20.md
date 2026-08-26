@@ -2623,3 +2623,36 @@ Disclaimer-Sätze. Browser-Smoke-Tests prüfen normale und autorisierte Schutzl�
 fehlenden Disclaimer im sichtbaren `run-state` und Ereignisprotokoll. In technischen
 Artefakten darf die präzise Beweiseignungsbewertung weiterhin enthalten sein, weil sie dort
 die Grenzen der Erfassung dokumentiert.
+
+# Müller-Kerngleichheitsprüfung wirkte trotz laufendem Serverprozess ergebnislos
+
+### Symptom
+
+Nach dem Klick auf „Kerngleichheit prüfen“ erschien längere Zeit kein sichtbarer Befund.
+Erneute Klicks lieferten HTTP 409. Der konkrete Hetzner-Lauf blieb 219 Sekunden im Schritt
+`fetch`, bevor er mit `beseitigt` abschloss.
+
+### Ursache und Diagnose
+
+Der Domainlauf begrenzte `max_urls` anhand der erfolgreich abgerufenen Seiten. Abgewiesene
+403-, 429- und Robots-Ziele wurden zwar protokolliert, aber nicht auf das URL-Budget
+angerechnet. Dadurch konnte der Müller-Lauf weit mehr als die vorgesehenen 50 Abrufversuche
+abarbeiten. Im Frontend stand die laufende Statusmeldung nur am unteren Ende der geöffneten
+Karte; direkt am Kerngleichheitsknopf war lediglich der Ladekreis sichtbar. Ein zweiter
+Startversuch konnte sich außerdem nicht an den bereits laufenden Fall anhängen.
+
+### Lösung
+
+Das URL-Budget zählt nun jeden eindeutigen Abrufversuch, unabhängig von dessen Erfolg. Ein
+wiederholter Start desselben Falls erhält die vorhandene Lauf-ID und setzt deren Polling fort;
+andere parallele Läufe bleiben weiterhin gesperrt. Laufstatus und abschließender, verständlich
+übersetzter Kerngleichheitsbefund stehen direkt unter dem Prüfknopf. Nach einem terminalen
+Status werden die Falldaten aktiv neu geladen und der Befund fokussiert. Auch der zweite
+„Monitoring starten“-Knopf ist während desselben Laufs deaktiviert und zeigt den Ladekreis.
+
+### Verifikation und verbleibende Grenze
+
+Regressionstests decken fehlgeschlagene Abrufe im URL-Budget und das Wiederanhängen an eine
+aktive Fallprüfung ab. Frontend-Test, Typecheck und Build sichern den sichtbaren Statuspfad.
+Ein einzelner bereits begonnener HTTP-Abruf kann sein eigenes konfiguriertes Timeout weiterhin
+ausschöpfen; das globale URL- und Zeitbudget wird jeweils zwischen zwei Abrufen geprüft.

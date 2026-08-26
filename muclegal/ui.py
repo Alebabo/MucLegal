@@ -336,6 +336,14 @@ class RunCoordinator:
             if self._active_run_id:
                 active = self._runs[self._active_run_id]
                 if active.status not in TERMINAL_RUN_STATUSES:
+                    active_case_id = (active.monitoring_result or {}).get("case_id")
+                    if (
+                        case_id
+                        and not direct_url
+                        and not url
+                        and active_case_id == case_id
+                    ):
+                        return RunState(**active.to_dict())
                     raise RuntimeError("Es läuft bereits eine Prüfung.")
             if self.case_repository is not None and not direct_url:
                 if not case_id or url:
