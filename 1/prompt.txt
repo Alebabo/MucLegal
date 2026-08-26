@@ -1,0 +1,5 @@
+im archiv müssen die titl der fälle kürzer sien damit es auh´ch fast ein one liner sein kann. Außerdem den reiter "**Variante** " aus dem Tenor archiv entfernen
+
+---
+
+wenn man auf kerngleichheit prüfen geht dann muss ein ladekres auf dem buttin erscheinen
