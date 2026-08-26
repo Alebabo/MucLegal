@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   HelpCircle,
+  LoaderCircle,
   Scale,
   X,
 } from "lucide-react";
@@ -151,6 +152,7 @@ function HinweisePage() {
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<Record<string, string>>({});
+  const [runningCaseIds, setRunningCaseIds] = useState<Set<string>>(() => new Set());
   const notifiedRunIds = useRef(new Set<string>());
   const pendingEvidenceId = useRef<string | null>(null);
 
@@ -261,6 +263,7 @@ function HinweisePage() {
   }
 
   async function startRun(caseId: string, fallId: string) {
+    setRunningCaseIds((current) => new Set(current).add(caseId));
     setActionState((state) => ({ ...state, [caseId]: "Monitoringlauf wird gestartet …" }));
     try {
       let run = await startMonitoringRun(caseId);
@@ -305,6 +308,12 @@ function HinweisePage() {
         ...state,
         [caseId]: error instanceof Error ? error.message : "Monitoringlauf fehlgeschlagen.",
       }));
+    } finally {
+      setRunningCaseIds((current) => {
+        const next = new Set(current);
+        next.delete(caseId);
+        return next;
+      });
     }
   }
 
@@ -317,6 +326,7 @@ function HinweisePage() {
             const isOpen = openId === c.case_id;
             const assessment = enginePresentation[c.engineAssessment.classification];
             const AssessmentIcon = assessment.icon;
+            const runPending = runningCaseIds.has(c.case_id);
             return (
               <li
                 key={c.case_id}
@@ -420,9 +430,19 @@ function HinweisePage() {
                                 <button
                                   type="button"
                                   onClick={() => void startRun(c.case_id, c.fall_id)}
-                                  className="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                                  disabled={runPending}
+                                  aria-busy={runPending}
+                                  className="mt-4 inline-flex min-w-56 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
                                 >
-                                  Kerngleichheitsprüfung starten
+                                  {runPending && (
+                                    <LoaderCircle
+                                      className="size-4 animate-spin"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                  {runPending
+                                    ? "Kerngleichheit wird geprüft …"
+                                    : "Kerngleichheit prüfen"}
                                 </button>
                               )}
                           </div>
