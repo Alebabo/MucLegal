@@ -4,410 +4,58 @@
 
 # MucLegal
 
-## Für alle, die das Problem verstehen wollen
+MucLegal ist ein Hackathon-Prototyp für die laufende Kontrolle von Unterlassungserklärungen. Er erkennt, wenn eine bereits untersagte Geschäftspraxis auf einer öffentlichen Webseite verändert wieder auftaucht – etwa unter einer anderen URL, auf einer anderen Ebene oder mit einer neuen Formulierung.
 
-### Worum geht es?
+Die Software trifft keine autonome Rechtsentscheidung. Sie sammelt technische Anhaltspunkte, erstellt eine begründete Vorprüfung zur **kerngleichen Verletzungsform** und überlässt die Freigabe einem Menschen.
 
-Wenn ein Unternehmen eine rechtswidrige Geschäftspraxis unterlassen muss, ist der Fall damit noch nicht unbedingt erledigt. Dieselbe Praxis kann später in leicht veränderter Form wieder auftauchen – zum Beispiel auf einer anderen Unterseite, im Warenkorb oder mit einer neuen Formulierung.
+## Der Kern: Hashing spart Modellkosten
 
-Ein einfacher Textvergleich übersieht solche Varianten häufig. MucLegal unterstützt deshalb bei der entscheidenden Frage: **Ist die neue Darstellung im Kern derselbe bereits untersagte Verstoß?** Juristisch spricht man von einer kerngleichen Verletzungsform.
+Jeder erfasste Seitenstand wird lokal normalisiert: dynamisches Rauschen wie Cookie-Banner, Session-IDs oder laufende Countdown-Werte wird entfernt. Erst danach bildet MucLegal einen SHA-256-Hash.
 
-### Was macht MucLegal?
+```text
+öffentliche Seite → normalisieren → SHA-256 vergleichen
+                                  ├─ unverändert: Ende, kein LLM-Aufruf
+                                  └─ verändert: Diff + juristische Vorprüfung
+```
 
-MucLegal beobachtet öffentlich erreichbare Webseiten und dokumentiert nachvollziehbar, wenn sich eine rechtlich relevante Aussage ändert:
+Damit bleibt der häufige tägliche Prüfschritt deterministisch und ohne laufende KI-Kosten. Ein kostenpflichtiger Modellaufruf erfolgt nur, wenn sich der relevante normalisierte Inhalt tatsächlich geändert hat. Die teure Prüfung wird so vom Regelfall zum Ausnahmefall.
 
-1. Die Seite wird abgerufen und der unveränderte Ausgangszustand wird lokal gesichert.
-2. Unwichtiges Seitenrauschen wie Cookie-Hinweise oder laufende Countdown-Zahlen wird ausgeblendet.
-3. Eine echte Textänderung wird sichtbar hervorgehoben.
-4. Eine KI erstellt eine begründete juristische Vorprüfung anhand des hinterlegten Unterlassungstenors.
-5. Die zugehörigen Dokumentationsartefakte werden mit Prüfsummen, Webarchiv und Zeitstempel gesichert.
-6. Ein Mensch prüft das Ergebnis und trifft die abschließende Entscheidung.
+## Compliance-orientiertes Crawling
 
-MucLegal entscheidet also **nicht selbst über einen Rechtsverstoß**. Die Software bereitet den Fall strukturiert auf und macht die Prüfung schneller und nachvollziehbarer.
+MucLegal arbeitet mit einem transparenten Projekt-User-Agent und ausschließlich auf öffentlich erreichbaren Seiten. Im Normalbetrieb:
 
-### Für wen ist das gedacht?
+- wird `robots.txt` geprüft und beachtet,
+- gelten feste URL-, Timeout- und Wiederholungslimits,
+- werden Logins, Paywalls, CAPTCHAs und technische Schutzmaßnahmen nicht umgangen,
+- bleiben HTML, Header, Screenshots, WARC und Hash-Manifeste lokal,
+- werden Abrufstatus, Grenzen und Beweisartefakte nachvollziehbar protokolliert.
 
-- Verbraucherzentralen und Wettbewerbsverbände
-- Industrie- und Handelskammern
-- Kanzleien und Rechtsabteilungen
-- Stellen, die die Einhaltung von Unterlassungserklärungen kontrollieren
+Ist `robots.txt` nicht eindeutig prüfbar, wird dieser Zustand sichtbar als ungeprüft dokumentiert. Eine technische Erfassung wird nie als juristische Bewertung ausgegeben.
 
-### Was kann der aktuelle Stand bereits?
+## Ablauf
 
-Die Demo enthält einen menschlich freizugebenden Tenor-Entwurf sowie zwölf künstlich
-erstellte und klar gekennzeichnete Prüfszenarien. Zwei davon bilden den kurzen Golden Path:
+1. Öffentliche Seite regelkonform abrufen.
+2. Inhalt deterministisch normalisieren und hashen.
+3. Nur bei einer Hash-Änderung den relevanten Diff untersuchen.
+4. Kerngleichheit gegen den hinterlegten Tenor vorprüfen.
+5. Beweise mit Screenshot, WARC/CDX, SHA-256-Manifest, Zeitstempelversuch und PDF/ZIP sichern.
+6. Ergebnis durch einen Menschen freigeben oder verwerfen.
 
-- **Im Kern wiederholter Verstoß:** Die Formulierung hat sich geändert, die beanstandete Wirkung bleibt jedoch gleich.
-- **Nicht vom Verbot umfasst:** Die neue Darstellung fällt nach der Vorprüfung nicht unter den hinterlegten Tenor.
+## Lokal starten
 
-Neben den reproduzierbaren Offline-Szenarien kann der Monitor echte öffentliche URLs abrufen,
-normalisieren, als Full-Page-Screenshot dokumentieren und bei einer späteren Änderung live durch
-Anthropic vorprüfen lassen. Auf einer einzigen Prüfseite werden Änderung, KI-Begründung,
-Unsicherheit und lokale Dokumentationsartefakte gezeigt. Die menschliche Entscheidung wird davon
-getrennt erfasst.
-
-Die aktuelle Navigation führt in der Reihenfolge **Home, Tenorhilfe, Hinweise, BeweisLab,
-Neu hinzufügen und Archiv** durch den Demoablauf. In der Tenorhilfe öffnet `/tenor` die
-Tenorsuche; archivierte Entwürfe lassen sich dort insbesondere über ihr Aktenzeichen aufrufen
-und zur Bearbeitung übernehmen.
-
-### Demo-Videos
-
-Die folgenden rund einminütigen Videos zeigen die zentralen Abläufe des Prototyps. Ein Klick
-auf das jeweilige Vorschaubild öffnet das Video.
-
-#### Tenorhilfe im Freitextmodus
-
-Freie Sachverhaltseingabe mit schrittweiser Überführung in einen strukturierten UE-Entwurf.
-
-[![Demo der Tenorhilfe im Freitextmodus](assets/demo-videos/tenorhilfe-freitext.webp)](assets/demo-videos/tenorhilfe-freitext.mp4)
-
-[▶ Video abspielen](assets/demo-videos/tenorhilfe-freitext.mp4)
-
-#### Tenorhilfe mit strukturierter Maske
-
-Geführte Erfassung von Fall, Schuldner, Fallgruppe und beanstandeter Praxis vor der
-menschlichen Freigabe.
-
-[![Demo der Tenorhilfe mit strukturierter Maske](assets/demo-videos/tenorhilfe-maske.webp)](assets/demo-videos/tenorhilfe-maske.mp4)
-
-[▶ Video abspielen](assets/demo-videos/tenorhilfe-maske.mp4)
-
-#### BeweisLab und technischer Vergleich
-
-Live-Erfassung einer öffentlichen Seite, Zuordnung zum Fall und nachvollziehbarer Vergleich
-der gesicherten Beweisstände.
-
-[![Demo von BeweisLab und technischem Vergleich](assets/demo-videos/beweislab.webp)](assets/demo-videos/beweislab.mp4)
-
-[▶ Video abspielen](assets/demo-videos/beweislab.mp4)
-
-### Vollständige Funktionsdokumentation
-
-Das ausführliche
-[`MucLegal-Funktionshandbuch`](reference/MUCLEGAL_FUNKTIONSHANDBUCH.md) beschreibt den
-gesamten aktuellen Produkt- und Technikstand. Es enthält insbesondere:
-
-- alle Oberflächen und Benutzerabläufe von Dashboard, Fallmonitor, Archiv,
-  Tenorhilfe und BeweisLab,
-- HTTP-, Browser-, Robots-, Consent-, Screenshot- und Rechtstexterfassung,
-- Normalisierung, Hashvergleich, Klauselpaarung und Kerngleichheitsprüfung,
-- Beweisartefakte, WARC/CDX, Manifest, RFC-3161, Wayback, PDF und ZIP,
-- Datenmodelle, REST-API, CLI, Persistenz und Konfiguration sowie
-- Sicherheitsgrenzen, bekannte Einschränkungen, Tests und einen empfohlenen Demoablauf.
-
-Das Handbuch unterscheidet ausdrücklich zwischen implementierten Funktionen, technischen
-Fallbacks, bekannten Grenzen und noch nicht umgesetzter Roadmap.
-
-### Welche Grenzen gelten?
-
-Im Normalbetrieb arbeitet MucLegal ausschließlich mit öffentlich zugänglichen Seiten. Es
-überwindet keine Logins, Paywalls oder CAPTCHAs und respektiert `robots.txt`. Ein ausdrücklich
-aktivierter Grey Mode ist ausschließlich für synthetische, eigene oder anderweitig nachweislich
-autorisierte Challenge-Ziele bestimmt. Aktivierung, Vollmachtsgrundlage und freigeschaltete
-Funktionen werden protokolliert; die dabei erzeugten Artefakte bleiben von normalen Beweisen
-getrennt. Rohdaten und Dokumentationsartefakte werden nicht zur Analyse an fremde
-Extraktionsdienste weitergegeben.
-
-Der aktuelle Stand ist ein Hackathon-Prototyp und noch kein autonomes Produktivsystem. Insbesondere gibt es keine Benutzerverwaltung, kein Mehrmandanten-Dashboard, keine visuelle Screenshot-Analyse und keine automatische rechtliche Freigabe.
-
-<p align="center">
-  <img src="assets/muclegal-logo-dark.png" alt="MucLegal – technischer Teil" width="520">
-</p>
-
-# Technischer Teil
-
-## Funktionsumfang
-
-Der aktuelle Golden Path umfasst:
-
-- kontrollierten HTTP-Abruf mit identifizierbarem User-Agent, Timeout und begrenzten Wiederholungen
-- Prüfung von `robots.txt` und Abbruch bei Login-, CAPTCHA- oder Blockseiten
-- lokale Ablage von HTML, Response-Headern, Zeitpunkten und Snapshot-Metadaten
-- Playwright-Full-Page-Screenshot mit eigenem SHA-256-Hash und Vorschau im Proof-Panel
-- deterministische NFKC-Normalisierung mit `trafilatura` und eng begrenzten CSS-Regeln
-- klauselscharfer Split, Klausel-Hashes und strukturelle Zuordnung von Umformulierungen
-- SHA-256-Hashvergleich, Text-Diff und Sicherheitsabbruch bei verdächtig kurzer Extraktion
-- schema-validierte juristische Vorprüfung mit Offline-Fixtures oder Anthropic
-- Vierklassen-Validierung mit wörtlichem Belegzitat und `unsicher`-Fallback
-- WARC/CDX-Erzeugung und Validierung mit `warcio`
-- Hash-Manifest und RFC-3161-Zeitstempel mit dokumentiertem Offline-Fallback
-- PDF-Prüfbericht und eine FastAPI-Ein-Seiten-Ansicht
-- getrennte Speicherung von Modellbewertung und menschlicher Freigabe
-- SQLite-erzwungene Append-only-Regeln für Befunde und Dokumentationspakete
-- versionierte REST-Schnittstelle unter `/api/v1/`
-- versionierte Eval-Suite mit maschinenlesbarem und fachlichem Bericht
-
-Die vollständige Funktionsbeschreibung steht im
-[`MucLegal-Funktionshandbuch`](reference/MUCLEGAL_FUNKTIONSHANDBUCH.md). Eine kompaktere
-technische Übergabe mit Architektur, Datenflüssen, Befehlen und offenen Punkten steht zusätzlich
-in [`CONTEXT.md`](CONTEXT.md).
-
-## Voraussetzungen und Installation
-
-Benötigt werden Python 3.11 oder neuer und Git. Für die vollständige Beweiskette werden GNU Wget und OpenSSL benötigt; unter Windows verwendet das Projekt bevorzugt GNU Wget über WSL.
+Voraussetzung: Python 3.11+.
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[demo]"
 .venv\Scripts\python -m playwright install chromium
-```
-
-Für die Offline-Demo ist kein API-Schlüssel erforderlich. Die optionale Live-Vorprüfung benötigt `ANTHROPIC_API_KEY`.
-
-## Lokales BeweisLab
-
-Das BeweisLab läuft standardmäßig auf dem lokalen Rechner. Für die zeitlich begrenzte,
-passwortgeschützte Hackathon-Demo kann derselbe lokale Dienst ausdrücklich auf einem
-Hetzner-Server betrieben werden; seine Beweisartefakte verbleiben dort in einem isolierten
-Demo-Speicher und werden nicht an einen Fremdspeicher übertragen. Die technische Erfassung
-benötigt kein Anthropic-Modell und übermittelt Roh-HTML, Header, DOM, Bilder oder WARC nicht an
-einen fremden Extraktions- oder Speicherdienst.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/doctor-local-beweislab.ps1
-powershell -ExecutionPolicy Bypass -File scripts/start-local-beweislab.ps1
-```
-
-Danach ist es unter `http://127.0.0.1:8000/beweis-labor` erreichbar. Fälle, Capture-Zustände,
-Vorschauen und ZIP-Pakete liegen in `.muclegal-ui/`. Der Start bindet ausschließlich an
-`127.0.0.1`; für eine lokale Ressourcen- und Browserdiagnose ohne öffentliche URL dient:
-
-```powershell
-python -m muclegal diagnose-capture --output output/capture-diagnose
-```
-
-Mit der ausdrücklich zu setzenden Option `--real` wird zusätzlich die festgelegte reale Matrix
-einmal und streng sequenziell geprüft. Schutzmechanismen, Logins, Paywalls und CAPTCHAs werden
-nicht bedient. Sehr hohe Seiten werden zuerst als validiertes Vollbild versucht und bei einem
-ungültigen Ergebnis in 2.000-CSS-Pixel-Kacheln mit dokumentierter Überlappung gesichert.
-
-## Lokaler Unterlassungs- und Umsetzungsmonitor
-
-Die Ein-Seiten-Oberfläche führt von der manuellen Fallerfassung über die Überwachung bis zur
-menschlichen Entscheidung. MucLegal sucht ausdrücklich keine Erstverstöße. Eine Juristin erfasst
-einen bereits geprüften Verstoß mit Domain, genauer Fundstelle, Tenorelement und Monitoringziel;
-optional kann sie den ursprünglichen Screenshot als lokalen Beleg hochladen. Der Screenshot wird
-nicht per OCR oder Vision ausgewertet. Erst nach menschlicher Fallfreigabe kann ein Lauf über die
-zugehörige `case_id` gestartet werden.
-
-Der fallbezogene Lauf prüft die gemeldete Fundstelle, eine öffentliche Sitemap und priorisierte
-interne Links innerhalb eines festen Budgets. Das URL-Budget zählt jeden eindeutigen
-Abrufversuch, also auch durch HTTP-Schutz, Rate-Limits oder Robots-Regeln abgewiesene Ziele.
-Dadurch können Fehlerantworten den Lauf nicht unbemerkt über das vorgesehene Abruflimit hinaus
-verlängern. AGB werden als HTML oder öffentlich verlinktes PDF gesichert. Gemeldete Buttons und
-andere Elemente werden im gerenderten DOM anhand sichtbarer und zugänglicher Eigenschaften
-geprüft. Ein fehlender Treffer heißt ausschließlich
-`nicht_gefunden_im_pruefumfang`; bei Sperren oder unvollständiger Abdeckung lautet das Ergebnis
-`pruefung_unvollstaendig`.
-
-Ein Fallprofil kann zusätzlich bis zu 20 verbindliche Prüf-URLs, bekannte Button-/Linkvarianten
-und ausdrückliche `nicht_umfasst`-Abgrenzungen enthalten. Die Fundstellen-URL gehört immer zum
-verbindlichen Prüfumfang. Nicht erreichbare Pflichtziele werden in `coverage.json` ausgewiesen und
-dürfen niemals zu einem entlastenden Ergebnis führen. Für erkannte Shopify-Seiten kann das
-BeweisLab fehlende öffentliche Standardpfade für AGB und Datenschutz als Kandidaten ergänzen;
-auch diese Abrufe bleiben vollständig an die normalen Robots- und Schutzregeln gebunden.
-
-Die vollständige Funktions-, Datenmodell-, Ankerkraut- und Context.dev-Dokumentation steht in
-[`reference/FALLPROFIL_UND_RECHTSTEXTZIELE_2026-08-21.md`](reference/FALLPROFIL_UND_RECHTSTEXTZIELE_2026-08-21.md).
-Externe Extraktionsergebnisse können allenfalls als getrennte, menschlich zu bestätigende
-Analysehinweise dienen. Sie ersetzen keine lokal erzeugten Rohbytes, Header, Screenshots,
-WARC/CDX- oder Manifestartefakte und dürfen einen dokumentierten Robots-Ausschluss nicht umgehen.
-
-Den Schlüssel ausschließlich in der lokalen Serverumgebung setzen. Er wird nicht im Browser
-eingegeben und darf nicht in das Repository geschrieben werden:
-
-```powershell
-$env:ANTHROPIC_API_KEY = Read-Host -MaskInput "Neuer Anthropic API-Key"
 python -m uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
-Danach `http://127.0.0.1:8000` öffnen, den bekannten Erstverstoß erfassen, menschlich freigeben
-und den Fall im Monitoring auswählen. Für die bestehende Einzel-URL-Demo gilt weiterhin:
+Danach sind der Fallmonitor unter `http://127.0.0.1:8000` und das BeweisLab unter `http://127.0.0.1:8000/beweis-labor` erreichbar. Für die Offline-Demo ist kein API-Schlüssel erforderlich.
 
-- unveränderter Hash: Ende ohne Anthropic-Aufruf,
-- veränderter Hash: Vorher-/Nachher-Ausschnitt, Anthropic-Vorprüfung, WARC, Manifest,
-  RFC-3161-Zeitstempel und PDF,
-- Login, CAPTCHA, `robots.txt`-Verbot oder interne Adresse: sicherer Abbruch.
+## Status
 
-Zum Start ist der synthetische Tenor aus `fixtures/tenor.json` aktiv. In der Oberfläche kann
-aus belegten Tatsachen ein strikt validierter Prüfentwurf erzeugt werden. Erst eine menschliche
-Freigabe speichert ihn als aktiven Monitoring-Tenor; der Modelloutput selbst kann dies nicht.
-Rohes HTML und Dokumentationsartefakte bleiben lokal; nur der normalisierte Änderungsausschnitt wird an
-Anthropic gesendet. Laufdaten liegen im ignorierten Verzeichnis `.muclegal-ui/`.
+Entstanden für den Legal Loves Tech Hackathon 2026 in München. Der Prototyp ist eine lokale Demo und kein autonomes Produktivsystem oder Ersatz für eine juristische Prüfung.
 
-Die versionierte API stellt dafür `POST /api/v1/cases`,
-`POST /api/v1/cases/{case_id}/review` und `POST /api/v1/runs` mit genau einer freigegebenen
-`case_id` bereit. Erstverstöße tragen unveränderlich
-`erstverstoss_festgestellt_durch: "verbraucherzentrale"` und `system_detected: false`.
-
-### Müller-Click-&-Collect-Demo
-
-Die kompakte Müller-Schaltfläche im BeweisLab bereitet den Fall
-`VZ-MUELLER-CLICK-COLLECT-2025` wiederholbar vor. Als historische Fundstelle wird der
-[Wayback-Stand vom 03.07.2025](https://web.archive.org/web/20250703135028/https://www.mueller.de/unternehmen/agb/)
-hinterlegt; der aktuelle Stand stammt aus der Müller-AGB-Seite. In der Beweiskette wird für
-diesen Fall nur der geänderte Bereich der Reservieren-Klausel gegenübergestellt, während die
-vollständigen AGB- und Manifestartefakte erhalten bleiben.
-
-Nach einem aktuellen Beweisvergleich zeigt die Hinweise-Seite den Bereich
-„Kerngleichheits-Engine“. Der Knopf „Kerngleichheit prüfen“ zeigt während des Laufs einen
-Ladekreis und den aktuellen Serverstatus. Ein erneuter Klick auf denselben aktiven Fall hängt
-sich an dessen bestehende Lauf-ID an, statt einen konkurrierenden Lauf zu starten. Nach Abschluss
-werden die Falldaten neu geladen, der Befund fokussiert und als „kerngleich“, „nicht kerngleich“
-oder „nicht eindeutig“ direkt am Knopf ausgegeben. Im derzeit vorbereiteten Müller-Demostand
-lautet der technische Engine-Befund **nicht kerngleich / beseitigt**, weil die aktuelle
-Reservierungsbestätigung ausdrücklich noch keine Vertragsannahme darstellt.
-
-Die linke Seite zeigt den juristischen Ablauf und den technischen Pipeline- und Hashstatus. In der intern
-scrollbaren Proof-Seitenleiste lassen sich alle vollständigen Dokumentationspakete nach URL und Zeitpunkt
-auswählen. Text-, JSON-, Diff- und HTML-Artefakte werden als ungefährlicher Quelltext angezeigt;
-PDFs können eingebettet betrachtet, WARC/CDX und große Binärdateien heruntergeladen werden. Die
-Desktop-App-Shell füllt das Browserfenster aus, ohne dass das Dokument selbst scrollt. Sie bleibt
-ein Hackathon-Prototyp und ist keine öffentliche oder autonome Rechtsberatungsoberfläche.
-
-## Schnellstart: vollständige Offline-Demo
-
-Der folgende Befehl startet eine lokale Fixture-Seite, erzeugt Vorher- und Nachher-Snapshots, führt die Offline-Vorprüfung aus und erstellt das Beweispaket samt PDF:
-
-```powershell
-python -m muclegal demo --case kerngleich --store .muclegal-demo --report output/pdf/demo-pruefbericht.pdf
-```
-
-Alternativ steht der Gegenfall zur Verfügung:
-
-```powershell
-python -m muclegal demo --case nicht-umfasst --store .muclegal-demo --report output/pdf/demo-pruefbericht.pdf
-```
-
-Anschließend wird die Prüfoberfläche gestartet:
-
-```powershell
-python -m uvicorn app:app --host 127.0.0.1 --port 8000
-```
-
-Die Ansicht ist danach unter `http://127.0.0.1:8000` erreichbar.
-
-## Eine einzelne URL prüfen
-
-Der `check`-Befehl deckt Abruf, Normalisierung, Speicherung und Änderungserkennung ab. Für einen lokalen Test kann zuerst ein Fixture-Server gestartet werden:
-
-```powershell
-python -m http.server 8765 --directory fixtures
-```
-
-In einem zweiten Terminal:
-
-```powershell
-python -m muclegal check --url http://127.0.0.1:8765/baseline.html --profile fixtures/demo-profile.json --store .muclegal
-```
-
-Bei einer echten öffentlichen URL speichert `--screenshot` zusätzlich einen mit
-Playwright gerenderten Full-Page-Screenshot samt eigenem SHA-256-Hash:
-
-```powershell
-python -m muclegal check --url https://example.com/ --profile fixtures/public-smoke-profile.json --store .muclegal --screenshot
-```
-
-Der erste Lauf legt eine Baseline an. Weitere Läufe liefern als JSON unter anderem den aktuellen Hash, den Vorgänger-Hash, den Diff-Pfad und `needs_review`. Bei identischem Hash wird keine juristische Vorprüfung angestoßen.
-
-Die CSS-Unterstützung ist absichtlich eng gehalten. Zulässig sind einfach prüfbare Selektoren wie `main`, `#cookie-banner`, `.countdown` oder `div.notice`. Ein Include-Selektor muss genau einen Knoten treffen.
-
-## Versionierter API-Vertrag
-
-Die Backend-Schnittstelle liegt unter `/api/v1/`. Verfügbar sind insbesondere
-`/api/v1/runs`, `/api/v1/cases` und `/api/v1/tenor-drafts`; die interaktive
-Schnittstellendokumentation läuft lokal unter `/api/v1/docs`. Die bisherigen
-unversionierten `/api/...`-Pfade bleiben vorerst als kompatible Aliase bestehen.
-
-## Juristische Vorprüfung
-
-LLM-Aufrufe sind in `muclegal/llm/` gekapselt. Jeder Output wird gegen ein festes Schema validiert. Ungültige oder fehlende Antworten werden gespeichert, aber nicht als Bewertung freigegeben. `freigabe_durch_mensch` muss bis zur menschlichen Entscheidung `null` bleiben.
-
-Der Offline-Modus verwendet gekennzeichnete Fixtures. Der Live-Adapter nutzt `claude-sonnet-5` und benötigt einen gesetzten Anthropic-Schlüssel.
-
-## Eval-Auswertung
-
-Die versionierte Eval-Suite prüft beide juristischen Demo-Fälle gegen feste Qualitäts-Gates:
-
-```powershell
-python -m muclegal eval --suite fixtures/eval-suite.json --output output/eval
-```
-
-Erzeugt werden:
-
-- `eval-results.json` für die maschinelle Auswertung
-- `eval-report.md` für die fachliche Sichtung
-
-Gemessen werden Schema-Validität, erwartetes Ergebnis, Begründung, stärkstes Gegenargument und die weiterhin ausstehende menschliche Freigabe. Prompt-Version und Prompt-SHA-256 werden im Bericht festgehalten und durch einen Regressionstest geschützt.
-
-Mit gesetztem `ANTHROPIC_API_KEY` läuft dieselbe Suite live:
-
-```powershell
-python -m muclegal eval --suite fixtures/eval-suite.json --output output/eval-live --live
-```
-
-Die Suite enthält zwölf synthetische Fälle aus Startseite, PDP, Checkout, Newsletter und
-weiteren Grenzsituationen. Die Offline-Antworten sind Erwartungs-Fixtures und keine Aussage über
-Modellgenauigkeit. Für zwei voneinander unabhängige juristische Blindprüfungen werden Prüfbögen
-ohne erwartete Ergebnisse erzeugt:
-
-```powershell
-python -m muclegal blind-review --suite fixtures/eval-suite.json --output output/legal-review
-```
-
-Bis beide Prüfbögen ausgefüllt und abgeglichen sind, bleibt dieser fachliche Gate ausdrücklich offen.
-
-## Tests
-
-```powershell
-python -m pytest -q
-```
-
-Die Tests decken unter anderem stabile Hashes, Countdown- und Cookie-Rauschen, relevante Änderungen, HTTP-Fehler, Timeouts, Login-/CAPTCHA-Abbruch, Schemafehler, TSA-Ausfälle, WARC-Validierung, PDF-Bericht, UI-Freigabe und Eval-Gates ab.
-
-## Temporäre Hetzner-Demo aktualisieren
-
-Die passwortgeschützte Hackathon-Demo verwendet unveränderliche Release-Verzeichnisse,
-einen atomar gewechselten `/opt/muclegal/current`-Symlink und getrennte persistente
-Pfade für Demo-Daten und Servergeheimnisse. Der vollständige Ablauf für Prüfung,
-GitHub-Push, Upload, Aktivierung, Verifikation, Rollback und Entire-Checkpoint steht in
-[`reference/HETZNER_DEMO_UPDATE_RUNBOOK.md`](reference/HETZNER_DEMO_UPDATE_RUNBOOK.md).
-
-Lokale `.env`-Dateien und Beweisartefakte sind nie Teil eines Deployments. Die Demo
-bleibt zeitlich begrenzt; der Hetzner-Server muss unabhängig davon manuell gelöscht
-werden, damit keine weiteren Kosten entstehen.
-
-## Projektstruktur
-
-```text
-muclegal/
-  fetch/          konservativer HTTP-Abruf und Playwright-Screenshot
-  normalize/      Extraktion, NFKC-Normalisierung, Klausel-Split und Hashes
-  storage/        SQLite, Snapshot-Artefakte und Append-only-Befunde
-  llm/            Tenor-Entwurf, Vorprüfung und strikte Schema-Validierung
-  evidence/       WARC, Manifest, Zeitstempel, Screenshot und PDF
-  templates/      Ein-Seiten-Prüfoberfläche
-frontend/         React-/TanStack-Oberfläche für Fallmonitor und Tenorhilfe
-fixtures/         synthetische Demo- und Eval-Fälle
-reference/        Funktionshandbuch, Implementierungspläne und technische Übergaben
-tests/            automatisierte Abnahme- und Regressionstests
-app.py            FastAPI-Einstiegspunkt
-```
-
-## Verlässlichkeit der Dokumentationskette
-
-Rohes HTML, Header, normalisierter Text, Screenshot, Diff sowie Modellinput und -output werden lokal gespeichert und über ein Manifest miteinander verknüpft. Das WARC wird nach der Erstellung mit `warcio check -v` validiert. Der Manifest-Hash kann über RFC 3161 gestempelt und anschließend lokal geprüft werden.
-
-WARC und Primärsnapshot tragen getrennte Payload-Hashes. Nur bei Bytegleichheit wird
-`capture_relation: exact_payload` ausgewiesen; eine abweichende Wiederholungsaufnahme erzeugt
-eine Warnung. Ist freeTSA oder die optionale Wayback-Sicherung nicht erreichbar, bleibt dieser
-Status sichtbar offen. Die lokal erzeugten Artefakte und Hashes bleiben dennoch vollständig.
-
-Für einen echten Wayback-SPN-Aufruf können `WAYBACK_ACCESS_KEY` und `WAYBACK_SECRET_KEY` nur in
-der lokalen Serverumgebung gesetzt werden. Ohne diese Variablen wird der Schritt sofort als
-`not_configured` dokumentiert und blockiert die Demo nicht.
-
-Der im synthetischen Fixture enthaltene Vertragsstrafen-Richtwert ist kein gesetzlicher oder
-automatisch empfohlener Betrag. Vertragsstrafe, gerichtliche Ordnungsmittel und die rechtliche
-Reichweite eines Tenors werden immer getrennt und menschlich geprüft.
+Die ausführliche technische und fachliche Dokumentation liegt im [MucLegal-Funktionshandbuch](reference/MUCLEGAL_FUNKTIONSHANDBUCH.md).
