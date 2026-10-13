@@ -94,3 +94,22 @@ def test_english_error_is_localized():
     from api.index import app
     events=[json.loads(line) for line in TestClient(app).post('/api/scan',json={'example':'unknown','language':'en'}).text.splitlines()]
     assert events[-1]=={'type':'error','message':'Unknown example.'}
+
+
+def test_known_terms_urls_use_saved_archive_without_wayback_request(monkeypatch):
+    from types import SimpleNamespace
+    import scan
+    data=json.loads((scan.ROOT/'data/mueller.json').read_text())
+    page=SimpleNamespace(final_url=data['url'],decoded_html='<html><main><h1>AGB</h1><p>(1) '+('Aktueller Vertrag. '*40)+'</p></main></html>',headers=(('Content-Type','text/html'),),browser_metadata={})
+    monkeypatch.setattr(scan.BoundedFetcher,'fetch',lambda self,url:page)
+    def forbidden(*args): raise AssertionError('Should not need external archive request')
+    monkeypatch.setattr(scan,'archived_baseline',forbidden)
+    result=list(run_scan({'url':data['url']}))[-1]
+    assert not result['baselineCreated']
+    assert result['before']['url']==data['before']['url']
+    assert result['changed']>0
+
+
+def test_saved_archive_does_not_match_unrelated_terms_url():
+    from scan import saved_baseline
+    assert saved_baseline('https://www.mueller.de/something-else/terms') is None

@@ -124,6 +124,15 @@ def discover(fetched):
     if re.search(r'agb|terms|geschaeftsbedingungen', urlsplit(fetched.final_url).path.lower()): return fetched.final_url
     return min(ranked)[1] if ranked else None
 
+def saved_baseline(url):
+    """Reuse the sourced archive fixture only for its exact current terms URL."""
+    for name in ('decathlon','mueller'):
+        data=json.loads((ROOT/'data'/f'{name}.json').read_text())
+        if clean_url(url)==clean_url(data['url']):
+            source=data['before']
+            return source['text'], {k:v for k,v in source.items() if k!='text'}
+    return None
+
 def archived_baseline(url, fetcher):
     """Find the latest successful HTML snapshot before today, without inventing history."""
     cutoff=(datetime.now(timezone.utc)-timedelta(days=1)).strftime('%Y%m%d235959')
@@ -186,7 +195,7 @@ def run_scan(payload):
         if not previous:
             yield event(2,'Älteren Wayback-Stand suchen')
             try:
-                archived=archived_baseline(page.final_url,BoundedFetcher())
+                archived=saved_baseline(page.final_url) or archived_baseline(page.final_url,BoundedFetcher())
                 if archived: before_text,before_info=archived
                 else: warnings.append('Kein passender älterer Wayback-Stand gefunden. Dieser Scan bildet den ersten Stand.')
             except (FetchFailure,ValueError,KeyError,TypeError,OSError):

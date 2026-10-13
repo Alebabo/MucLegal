@@ -10,7 +10,7 @@ Vercel-Projekt `muclegal-scan`, Root Directory `scanner`, Framework Other, Build
 
 - URL → öffentliche AGB-Seite → Normalisierung → SHA-256 → Absatz- und Wort-Diff.
 - Echte Statusereignisse werden als NDJSON gestreamt. Keine simulierte Prozentangabe.
-- Frühere Live-Stände bleiben im jeweiligen Browser in localStorage. Ist kein Stand vorhanden, wird der letzte erfolgreiche HTML-Snapshot vor heute über Wayback CDX gesucht. Ist kein Archivstand verfügbar, wird der erste Stand gespeichert. Kein serverseitiger Speicher oder API-Schlüssel nötig.
+- Frühere Live-Stände bleiben im jeweiligen Browser in localStorage. Ist kein Stand vorhanden, werden bei den exakt passenden Decathlon-/Müller-AGB-URLs die hinterlegten, belegten Archivstände genutzt. Für andere URLs wird der letzte erfolgreiche HTML-Snapshot vor heute über Wayback CDX gesucht. Ist kein Archivstand verfügbar, wird der erste Stand gespeichert. Kein serverseitiger Speicher oder API-Schlüssel nötig.
 - Decathlon: vollständiger Webarchiv-Stand 08.10.2024 gegen vorhandene PDF, Stand 20.07.2026. PDF-Text wurde einmalig extrahiert; pypdf ist keine Runtime-Abhängigkeit.
 - Müller: vollständiges archiviertes HTML vom 03.07.2025 gegen öffentliches HTML, abgerufen am 13.10.2026. Quell-Hashes stehen in `data/mueller.json`.
 - URL-Prüfung, öffentliche IP-Adressen, robots.txt und Schutzseiten-Erkennung stammen aus der bestehenden Engine. Keine Umgehung von Zugriffshürden. HTTP(S) auf Port 80/443, begrenzte Abrufe und HTML-Dokumente. PDF-URLs und Seiten, deren AGB ausschließlich per JavaScript zugänglich sind, werden nicht live gerendert.
