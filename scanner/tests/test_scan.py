@@ -67,3 +67,13 @@ def test_live_uses_wayback_when_no_previous_scan(monkeypatch):
     result=list(run_scan({'url':fetched.final_url}))[-1]
     assert not result['baselineCreated'] and result['changed']==1
     assert 'web.archive.org' in result['before']['url']
+
+
+def test_inserted_section_does_not_misalign_changed_clause():
+    old=['4. Widerruf: Binnen 14 Tagen kann der Vertrag widerrufen werden.','5. Rücksendung: Die Rücksendung ist kostenlos.']
+    new=['4. Vorbestellung: Neu und unabhängig geregelt.','5. Widerruf: Binnen 30 Tagen kann der Vertrag widerrufen werden.','6. Rücksendung: Die Rücksendung ist kostenlos.']
+    rows=compare(old,new)
+    assert rows[0]['kind']=='insert'
+    assert rows[1]['kind']=='replace'
+    assert 'Widerruf' in ''.join(p['text'] for p in rows[1]['left'])
+    assert 'Widerruf' in ''.join(p['text'] for p in rows[1]['right'])

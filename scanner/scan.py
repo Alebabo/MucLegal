@@ -41,17 +41,47 @@ def tokens(before, after):
         if k != l: right.append({'text': ''.join(b[k:l]), 'changed': op != 'equal'})
     return left, right
 
+def align_replacements(old, new):
+    """Monotonic fuzzy alignment: inserted sections do not shift unrelated clauses."""
+    n,m=len(old),len(new)
+    if n*m>1600:
+        return [(i,None) for i in range(n)]+[(None,j) for j in range(m)]
+    scores=[[0.0]*(m+1) for _ in range(n+1)]
+    paths={}
+    for i in range(n+1):
+        for j in range(m+1):
+            if not i and not j: continue
+            options=[]
+            if i: options.append((scores[i-1][j]-.25,1,'delete'))
+            if j: options.append((scores[i][j-1]-.25,0,'insert'))
+            if i and j:
+                # Bound fuzzy-matching cost; the rendered diff still uses the complete text.
+                a,b=old[i-1],new[j-1]
+                a=a if len(a)<2000 else a[:1000]+a[-1000:]
+                b=b if len(b)<2000 else b[:1000]+b[-1000:]
+                similarity=SequenceMatcher(None,a,b,autojunk=False).ratio()
+                if similarity>=.4: options.append((scores[i-1][j-1]+2*similarity-1,2,'pair'))
+            score,_,operation=max(options)
+            scores[i][j]=score; paths[i,j]=operation
+    aligned=[];i,j=n,m
+    while i or j:
+        operation=paths[i,j]
+        if operation=='pair': aligned.append((i-1,j-1));i-=1;j-=1
+        elif operation=='delete': aligned.append((i-1,None));i-=1
+        else: aligned.append((None,j-1));j-=1
+    return list(reversed(aligned))
+
 def compare(before, after):
-    rows = []
-    for op, i, j, k, l in SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
-        if op == 'equal':
-            rows.extend({'kind':'equal', 'left': [{'text': before[x], 'changed':False}], 'right':[{'text':before[x], 'changed':False}], 'oldNumber':x+1, 'newNumber':k+x-i+1} for x in range(i,j))
+    rows=[]
+    for op,i,j,k,l in SequenceMatcher(None,before,after,autojunk=False).get_opcodes():
+        if op=='equal':
+            rows.extend({'kind':'equal','left':[{'text':before[x],'changed':False}],'right':[{'text':before[x],'changed':False}],'oldNumber':x+1,'newNumber':k+x-i+1} for x in range(i,j))
             continue
-        for offset in range(max(j-i,l-k)):
-            old = before[i+offset] if i+offset < j else ''
-            new = after[k+offset] if k+offset < l else ''
-            left, right = tokens(old,new)
-            rows.append({'kind':'replace' if old and new else ('delete' if old else 'insert'), 'left':left,'right':right,'oldNumber':i+offset+1 if old else None,'newNumber':k+offset+1 if new else None})
+        for old_index,new_index in align_replacements(before[i:j],after[k:l]):
+            old=before[i+old_index] if old_index is not None else ''
+            new=after[k+new_index] if new_index is not None else ''
+            left,right=tokens(old,new)
+            rows.append({'kind':'replace' if old and new else ('delete' if old else 'insert'),'left':left,'right':right,'oldNumber':i+old_index+1 if old_index is not None else None,'newNumber':k+new_index+1 if new_index is not None else None})
     return rows
 
 def clean_url(value):

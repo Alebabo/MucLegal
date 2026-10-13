@@ -2664,5 +2664,15 @@ Symptom: Der erste Build der isolierten `scanner`-App scheiterte mit `No Output 
 Ursache: Die App mit Framework Other hatte einen Build Command, erzeugte jedoch keinen expliziten statischen Ausgabeordner.
 Diagnose: Build-Log `dpl_G9x1Bm7cefwM4e1ZTsNsVUNtosxz`; Python-Abhängigkeiten wurden installiert, danach fehlte `public`.
 Lösung: `scanner/build.py` kopiert ausschließlich HTML, CSS und JavaScript nach `public`; `scanner/vercel.json` legt `outputDirectory: public` fest. Datenstände und Python-Code bleiben außerhalb der statischen Ausgabe.
-Verifikation: Lokaler Build erzeugt genau diese drei öffentlichen Dateien; erneuter Vercel-Build und Endpoint-Test folgen.
+Verifikation: Lokaler Build erzeugt genau diese drei öffentlichen Dateien; Deployment `dpl_CzmtUG4dd1D8bfYssVRGZkRCXYx7` erreicht READY. Browser → API → gespeicherte AGB → Diff wurde für Müller und Decathlon erfolgreich geprüft.
 Grenze: Die alte lokale Gesamtanwendung wird nicht auf Vercel betrieben; nur die getrennte Scan-App.
+
+
+## 13.10.2026 — Scanner: Absatzzuordnung nach eingefügten Abschnitten
+
+Symptom: Eine größere Einfügung konnte nachfolgende Klauseln in der Zweispaltenansicht gegen einen sachfremden Absatz stellen.
+Ursache: Replace-Blöcke wurden positionsweise statt nach Textähnlichkeit ausgerichtet.
+Diagnose: Müller-AGB-Vergleich, neue Vorbestellungsregeln vor der umnummerierten Widerrufsklausel.
+Lösung: Deterministische monotone Zuordnung mit Textähnlichkeit und separaten Einfüge-/Löschzeilen. Reihenfolge und doppelte Absätze bleiben erhalten.
+Verifikation: Regressionstest `test_inserted_section_does_not_misalign_changed_clause` und elf Scanner-Tests bestehen.
+Grenze: Bei Replace-Blöcken mit mehr als 1.600 möglichen Paaren werden Änderungen als separate Einfügungen/Löschungen ausgegeben, um die Function-Laufzeit zu begrenzen.
