@@ -24,3 +24,7 @@ python scanner/build.py
 python -m pytest scanner/tests -q
 python -m uvicorn dev:app --app-dir scanner --port 8000
 ```
+
+## Design und Sprachen
+
+Die App übernimmt die echten Light-Theme-Tokens und das Logo aus dem bestehenden Frontend, mit Manrope/Lora, Schwarz/Weiß und eckigen Komponenten. Die lokal gespeicherten WOFF2-Schriften sind für Englisch/Deutsch verkleinert. DE/EN wechseln die Oberfläche, Statusmeldungen und Fehlertexte; Vertragsquellen bleiben unverändert. Längere Absätze zeigen zunächst eine Vorschau und lassen sich für beide Spalten gemeinsam ausklappen.

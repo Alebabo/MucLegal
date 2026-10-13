@@ -77,3 +77,20 @@ def test_inserted_section_does_not_misalign_changed_clause():
     assert rows[1]['kind']=='replace'
     assert 'Widerruf' in ''.join(p['text'] for p in rows[1]['left'])
     assert 'Widerruf' in ''.join(p['text'] for p in rows[1]['right'])
+
+
+def test_english_scan_status_and_source_text_unchanged():
+    from fastapi.testclient import TestClient
+    from api.index import app
+    events=[json.loads(line) for line in TestClient(app).post('/api/scan',json={'example':'mueller','language':'en'}).text.splitlines()]
+    assert events[0]['message']=='Loading saved versions'
+    result=events[-1]
+    assert result['type']=='result'
+    assert any('Kaufvertrag' in p['text'] for row in result['rows'] for p in row['left'])
+
+
+def test_english_error_is_localized():
+    from fastapi.testclient import TestClient
+    from api.index import app
+    events=[json.loads(line) for line in TestClient(app).post('/api/scan',json={'example':'unknown','language':'en'}).text.splitlines()]
+    assert events[-1]=={'type':'error','message':'Unknown example.'}

@@ -15,5 +15,7 @@ for source, target in [('normalize/core.py', 'core.py'), ('fetch/http.py', 'http
         raise RuntimeError('Missing shared engine: ' + source)
 
 (root / 'public').mkdir(exist_ok=True)
-for name in ('index.html', 'style.css', 'app.js'):
+for name in ('index.html', 'style.css', 'design.css', 'app.js', 'muclegal-logo.png'):
     shutil.copyfile(root / name, root / 'public' / name)
+
+shutil.copytree(root / 'fonts', root / 'public' / 'fonts', dirs_exist_ok=True)

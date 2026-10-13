@@ -1,0 +1,38 @@
+/* Canonical light-theme tokens from frontend/src/styles.css. */
+@import url("/fonts/manrope.css");
+@import url("/fonts/lora.css");
+:root {
+
+  --radius: 0rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.13 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.13 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.13 0 0);
+  --primary: oklch(0.13 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.13 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.48 0 0);
+  --accent: oklch(0.96 0 0);
+  --accent-foreground: oklch(0.13 0 0);
+  --destructive: oklch(0.42 0.14 27);
+  --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.4 0.07 152);
+  --warning: oklch(0.5 0.09 62);
+  --danger: oklch(0.42 0.14 27);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
+  --ring: oklch(0.13 0 0);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.13 0 0);
+  --sidebar-accent: oklch(0.96 0 0);
+  --sidebar-accent-foreground: oklch(0.13 0 0);
+  --sidebar-border: oklch(0.9 0 0);
+--font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+--font-serif: "Lora", Georgia, serif;
+--line: var(--border);
+--green: var(--success);
+}
