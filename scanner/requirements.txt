@@ -1,0 +1,3 @@
+fastapi==0.115.6
+lxml==6.1.1
+trafilatura==2.2.0
