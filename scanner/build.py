@@ -13,3 +13,7 @@ for source, target in [('normalize/core.py', 'core.py'), ('fetch/http.py', 'http
         (root / 'engine' / target).write_text(text)
     elif not (root / 'engine' / target).exists():
         raise RuntimeError('Missing shared engine: ' + source)
+
+(root / 'public').mkdir(exist_ok=True)
+for name in ('index.html', 'style.css', 'app.js'):
+    shutil.copyfile(root / name, root / 'public' / name)

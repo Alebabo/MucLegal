@@ -2656,3 +2656,13 @@ Regressionstests decken fehlgeschlagene Abrufe im URL-Budget und das Wiederanhä
 aktive Fallprüfung ab. Frontend-Test, Typecheck und Build sichern den sichtbaren Statuspfad.
 Ein einzelner bereits begonnener HTTP-Abruf kann sein eigenes konfiguriertes Timeout weiterhin
 ausschöpfen; das globale URL- und Zeitbudget wird jeweils zwischen zwei Abrufen geprüft.
+
+
+## 13.10.2026 — Vercel-Scanner: fehlendes statisches Output Directory
+
+Symptom: Der erste Build der isolierten `scanner`-App scheiterte mit `No Output Directory named "public" found`.
+Ursache: Die App mit Framework Other hatte einen Build Command, erzeugte jedoch keinen expliziten statischen Ausgabeordner.
+Diagnose: Build-Log `dpl_G9x1Bm7cefwM4e1ZTsNsVUNtosxz`; Python-Abhängigkeiten wurden installiert, danach fehlte `public`.
+Lösung: `scanner/build.py` kopiert ausschließlich HTML, CSS und JavaScript nach `public`; `scanner/vercel.json` legt `outputDirectory: public` fest. Datenstände und Python-Code bleiben außerhalb der statischen Ausgabe.
+Verifikation: Lokaler Build erzeugt genau diese drei öffentlichen Dateien; erneuter Vercel-Build und Endpoint-Test folgen.
+Grenze: Die alte lokale Gesamtanwendung wird nicht auf Vercel betrieben; nur die getrennte Scan-App.
