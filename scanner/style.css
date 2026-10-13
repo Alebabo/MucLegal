@@ -27,3 +27,5 @@ form,.diff,.error,.baseline,#scan-button,.steps span,.cell mark,.baseline button
 @keyframes activity-spin{to{transform:rotate(360deg)}}@keyframes activity-pulse{50%{opacity:.4}}
 @media(max-width:650px){.intro{margin-top:30px}.activity-step summary{font-size:11px}.activity-detail{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.activity-indicator,.activity-step.active .activity-icon{animation:none}}
+
+.examples button[aria-pressed=true]{font-weight:700;color:var(--foreground);text-decoration:underline;text-underline-offset:4px}

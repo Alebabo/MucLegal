@@ -34,3 +34,5 @@ Der Scan-Verlauf ist ein aufklappbarer Aktivitätsgraph mit echten Prozessereign
 ## God Mode und Anzeigeverzögerung
 
 Auf ausdrückliche Nutzeranweisung vom 13.10.2026 nutzt jeder Live-Abruf die vorhandene `god_mode_session`. robots.txt wird weiterhin geprüft und protokolliert, stoppt den Abruf aber nicht. Weiterleitungen werden auch im God Mode gegen öffentliche Zieladressen geprüft. Ein ablehnender robots.txt-Status erscheint als Dokumentationshinweis mit Aufforderung zu manuellen Screenshots; es gibt keine Upload-Funktion. Der JSON-Export kennzeichnet technische God-Mode-Abrufe ausdrücklich, ohne juristische Verwertbarkeit zu behaupten. HTTP-Zugriffssperren, Logins und CAPTCHAs können den direkten Abruf weiterhin verhindern; es wird kein Browser-/Stealth-Stack hinzugefügt. Jeder gestreamte Scan-Schritt bleibt durch eine Sekunde künstliche Verzögerung sichtbar.
+
+Gespeicherte Vergleichsvorschläge laden ausschließlich die jeweilige AGB-URL ins Eingabefeld. Der gespeicherte Vergleich startet erst durch Scan oder Enter. Eine manuelle Änderung der URL hebt die Beispielauswahl auf und startet beim Absenden einen Live-Scan.
