@@ -113,3 +113,48 @@ def test_known_terms_urls_use_saved_archive_without_wayback_request(monkeypatch)
 def test_saved_archive_does_not_match_unrelated_terms_url():
     from scan import saved_baseline
     assert saved_baseline('https://www.mueller.de/something-else/terms') is None
+
+
+def test_god_mode_keeps_robots_refusal_as_information(monkeypatch):
+    import scan
+    from engine.http import HttpFetcher, FetchFailure
+    def disallow(self,url):
+        self._record_robots_check(url=url,status='geprueft_abruf_untersagt',reason='Disallowed')
+        raise FetchFailure('robots_disallowed','Blocked')
+    monkeypatch.setattr(HttpFetcher,'_require_robots_permission',disallow)
+    fetcher=scan.BoundedFetcher()
+    fetcher._require_robots_permission('https://example.com/')
+    assert fetcher.capture_checks[0]['status']=='geprueft_abruf_untersagt'
+
+
+def test_god_mode_does_not_skip_redirect_address_validation(monkeypatch):
+    import scan
+    from engine.http import HttpFetcher, FetchFailure
+    monkeypatch.setattr(HttpFetcher,'_validate_url',lambda self,url:(_ for _ in ()).throw(FetchFailure('non_public_target','Private address')))
+    with pytest.raises(FetchFailure):
+        scan.BoundedFetcher()._require_robots_permission('http://127.0.0.1/')
+
+
+def test_live_robots_warning_and_mode_are_exported(monkeypatch):
+    from types import SimpleNamespace
+    import scan
+    page=SimpleNamespace(final_url='https://example.com/agb',decoded_html='<html><main><p>(1) '+('Vertrag gültig. '*30)+'</p></main></html>',headers=(('Content-Type','text/html'),),browser_metadata={})
+    def fetch(self,url):
+        self.capture_checks=[{'url':url,'status':'geprueft_abruf_untersagt','reason':'Disallowed'}]
+        return page
+    monkeypatch.setattr(scan.BoundedFetcher,'fetch',fetch)
+    monkeypatch.setattr(scan,'archived_baseline',lambda *args:None)
+    result=list(scan.run_scan({'url':page.final_url}))[-1]
+    assert result['capture']['god_mode'] is True
+    assert result['capture']['legal_assessment']=='not_assessed'
+    assert any('manuell Screenshots' in x for x in result['warnings'])
+
+
+def test_one_second_delay_for_each_progress_event(monkeypatch):
+    from fastapi.testclient import TestClient
+    from api.index import app
+    import api.index
+    delays=[]
+    monkeypatch.setattr(api.index.time,'sleep',delays.append)
+    events=[json.loads(line) for line in TestClient(app).post('/api/scan',json={'example':'mueller'}).text.splitlines()]
+    assert delays==[1]*sum(e['type']=='progress' for e in events)

@@ -17,12 +17,13 @@ EN={
 'Kein passender älterer Wayback-Stand gefunden. Dieser Scan bildet den ersten Stand.':'No older matching Wayback version found. This scan creates the first version.',
 'Wayback derzeit nicht verfügbar. Dieser Scan bildet den ersten Stand.':'Wayback is currently unavailable. This scan creates the first version.',
 'robots.txt konnte nicht vollständig geprüft werden.':'robots.txt could not be fully checked.',
+'robots.txt schränkt den regulären Abruf ein. Bitte manuell Screenshots zur Dokumentation hinzufügen.':'robots.txt restricts standard retrieval. Please manually add screenshots for documentation.',
 'Scan fehlgeschlagen. Bitte später erneut versuchen.':'Scan failed. Please try again later.',
 'Anfrage zu groß.':'Request too large.','Ungültige Anfrage.':'Invalid request.'
 }
 FAILURES={'network_error':'The website could not be reached. Please try again later.',
 'dns_error':'The website hostname could not be resolved.',
-'robots_disallowed':'robots.txt does not allow this page to be retrieved.',
+'robots_disallowed':'robots.txt restricts standard retrieval. Please manually add screenshots for documentation.',
 'protected_or_login_page':'This page requires authentication or blocks automated retrieval.',
 'http_error':'The website returned an HTTP error.',
 'invalid_url':'Please enter a valid public HTTP(S) URL.'}

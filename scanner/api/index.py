@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -24,6 +25,8 @@ async def scan(request: Request):
                 if 'message' in event: event['message']=translate(event['message'],language)
                 if 'warnings' in event: event['warnings']=[translate(w,language) for w in event['warnings']]
                 yield json.dumps(event,ensure_ascii=False)+'\n'
+                if event['type']=='progress':
+                    time.sleep(1)
         except Exception as exc:
             logging.warning('scan_failed: %s',type(exc).__name__)
             message=str(exc) if isinstance(exc,ValueError) or hasattr(exc,'code') else 'Scan fehlgeschlagen. Bitte später erneut versuchen.'

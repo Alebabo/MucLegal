@@ -30,3 +30,7 @@ python -m uvicorn dev:app --app-dir scanner --port 8000
 Die App übernimmt die echten Light-Theme-Tokens und das Logo aus dem bestehenden Frontend, mit Manrope/Lora, Schwarz/Weiß und eckigen Komponenten. Die lokal gespeicherten WOFF2-Schriften sind für Englisch/Deutsch verkleinert. DE/EN wechseln die Oberfläche, Statusmeldungen und Fehlertexte; Vertragsquellen bleiben unverändert. Längere Absätze zeigen zunächst eine Vorschau und lassen sich für beide Spalten gemeinsam ausklappen.
 
 Der Scan-Verlauf ist ein aufklappbarer Aktivitätsgraph mit echten Prozessereignissen. Jeder Schritt lässt sich separat öffnen; nach dem Lauf ergänzen Quellen, SHA-256-Prüfsummen und Absatzanzahlen die Details. Hero- und Marketingtexte wurden entfernt.
+
+## God Mode und Anzeigeverzögerung
+
+Auf ausdrückliche Nutzeranweisung vom 13.10.2026 nutzt jeder Live-Abruf die vorhandene `god_mode_session`. robots.txt wird weiterhin geprüft und protokolliert, stoppt den Abruf aber nicht. Weiterleitungen werden auch im God Mode gegen öffentliche Zieladressen geprüft. Ein ablehnender robots.txt-Status erscheint als Dokumentationshinweis mit Aufforderung zu manuellen Screenshots; es gibt keine Upload-Funktion. Der JSON-Export kennzeichnet technische God-Mode-Abrufe ausdrücklich, ohne juristische Verwertbarkeit zu behaupten. HTTP-Zugriffssperren, Logins und CAPTCHAs können den direkten Abruf weiterhin verhindern; es wird kein Browser-/Stealth-Stack hinzugefügt. Jeder gestreamte Scan-Schritt bleibt durch eine Sekunde künstliche Verzögerung sichtbar.
