@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
+    HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
@@ -31,6 +32,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from muclegal import agb_scan
 from muclegal.live import PIPELINE_STEPS, LiveMonitorWorkflow
 from muclegal.evidence import verify_manifest
 from muclegal.evidence.suitability import classify_technical_evidence
@@ -1262,6 +1264,8 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
                 size_limit = 14 * 1024 * 1024
             elif request.url.path == "/api/v1/tenor-pdf-text":
                 size_limit = MAX_TENOR_PDF_BYTES
+            elif request.url.path == "/api/scan":
+                size_limit = 256 * 1024
             else:
                 size_limit = 64 * 1024
             if content_length and content_length.isdigit() and int(content_length) > size_limit:
@@ -1320,10 +1324,34 @@ def create_app(case_path: str | Path, review_database: str | Path, *,
         })
 
     @app.get("/beweis-labor")
+    async def agb_scanner_page():
+        """Slim AGB scanner; Evidence uses the BeweisLab capture pipeline below."""
+        return HTMLResponse(agb_scan.index_html(), headers={"Cache-Control": "no-store"})
+
+    @app.get("/beweis-labor/klassisch")
     async def evidence_lab(request: Request):
         return templates.TemplateResponse(request, "evidence_lab.html", {
             "anthropic_ready": anthropic_ready,
         })
+
+    @app.get("/beweis-labor/{name:path}", include_in_schema=False)
+    async def agb_scanner_asset(name: str):
+        found = agb_scan.static_file(name)
+        if found is None:
+            raise HTTPException(404, "Datei nicht gefunden.")
+        path, media_type = found
+        return FileResponse(path, media_type=media_type)
+
+    @app.post("/api/scan")
+    async def agb_scan_stream(request: Request):
+        payload, error = agb_scan.parse_payload(await request.body())
+        if error is not None:
+            return error
+        return StreamingResponse(
+            agb_scan.stream_events(payload),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/hinweise", include_in_schema=False)
     @app.get("/archiv", include_in_schema=False)

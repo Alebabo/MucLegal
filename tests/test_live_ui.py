@@ -666,7 +666,7 @@ class LiveWorkflowTests(unittest.TestCase):
             )
             with TestClient(app) as client:
                 detail = client.get(f"/api/cases/{case_id}").json()
-                page = client.get("/beweis-labor").text
+                page = client.get("/beweis-labor/klassisch").text
                 package_response = client.get(f"/api/v1/cases/{case_id}/download")
             with zipfile.ZipFile(io.BytesIO(package_response.content)) as package:
                 package_names = package.namelist()
@@ -1295,7 +1295,7 @@ class LiveUiTests(unittest.TestCase):
                 asset_directory=ROOT / "assets",
             )
             with TestClient(app) as client:
-                evidence_lab = client.get("/beweis-labor")
+                evidence_lab = client.get("/beweis-labor/klassisch")
                 responses = {
                     path: client.get(path, follow_redirects=False)
                     for path in ("/hinweise", "/archiv", "/neu", "/tenorhilfe")
@@ -1337,7 +1337,7 @@ class LiveUiTests(unittest.TestCase):
                 asset_directory=ROOT / "assets",
             )
             with TestClient(app) as client:
-                page = client.get("/beweis-labor")
+                page = client.get("/beweis-labor/klassisch")
                 started = client.post(
                     "/api/v1/evidence-runs",
                     json={
@@ -1416,7 +1416,7 @@ class LiveUiTests(unittest.TestCase):
                 asset_directory=ROOT / "assets",
             )
             with TestClient(app) as client:
-                page = client.get("/beweis-labor")
+                page = client.get("/beweis-labor/klassisch")
                 detail = client.get(f"/api/cases/{case_id}").json()
                 main = client.get(
                     f"/api/v1/cases/{case_id}/capture/main/normalized-text"
@@ -1497,7 +1497,7 @@ class LiveUiTests(unittest.TestCase):
                 asset_directory=ROOT / "assets",
             )
             with TestClient(app) as client:
-                page = client.get("/beweis-labor")
+                page = client.get("/beweis-labor/klassisch")
                 cases = client.get("/api/cases").json()["cases"]
 
         self.assertEqual("newer-legal-fallback", cases[0]["case_id"])
@@ -1543,7 +1543,7 @@ class LiveUiTests(unittest.TestCase):
                 asset_directory=ROOT / "assets",
             )
             with TestClient(app) as client:
-                page = client.get("/beweis-labor")
+                page = client.get("/beweis-labor/klassisch")
                 started = client.post(
                     "/api/v1/evidence-runs",
                     json={"url": "https://example.org", "verification_mode": True},
@@ -1833,7 +1833,7 @@ class LiveUiTests(unittest.TestCase):
                 asset_directory=ROOT / "assets",
             )
             with TestClient(app) as client:
-                page = client.get("/beweis-labor")
+                page = client.get("/beweis-labor/klassisch")
                 started = client.post(
                     "/api/v1/evidence-runs", json={"url": "https://example.org/angebote"}
                 )

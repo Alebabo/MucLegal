@@ -45,7 +45,7 @@ def test_mueller_demo_prepares_attached_baseline_for_live_agb_comparison() -> No
             monitoring_cases=repository,
         )
         with TestClient(app) as client:
-            page = client.get("/beweis-labor")
+            page = client.get("/beweis-labor/klassisch")
             prepared = client.post("/api/v1/demo/mueller")
             prepared_again = client.post("/api/v1/demo/mueller")
             payload = prepared.json()

@@ -36,3 +36,15 @@ Der Scan-Verlauf ist ein aufklappbarer Aktivitätsgraph mit echten Prozessereign
 Auf ausdrückliche Nutzeranweisung vom 13.10.2026 nutzt jeder Live-Abruf die vorhandene `god_mode_session`. robots.txt wird weiterhin geprüft und protokolliert, stoppt den Abruf aber nicht. Weiterleitungen werden auch im God Mode gegen öffentliche Zieladressen geprüft. Ein ablehnender robots.txt-Status erscheint als Dokumentationshinweis mit Aufforderung zu manuellen Screenshots; es gibt keine Upload-Funktion. Der JSON-Export kennzeichnet technische God-Mode-Abrufe ausdrücklich, ohne juristische Verwertbarkeit zu behaupten. HTTP-Zugriffssperren, Logins und CAPTCHAs können den direkten Abruf weiterhin verhindern; es wird kein Browser-/Stealth-Stack hinzugefügt. Jeder gestreamte Scan-Schritt bleibt durch eine Sekunde künstliche Verzögerung sichtbar.
 
 Gespeicherte Vergleichsvorschläge laden ausschließlich die jeweilige AGB-URL ins Eingabefeld. Der gespeicherte Vergleich startet erst durch Scan oder Enter. Eine manuelle Änderung der URL hebt die Beispielauswahl auf und startet beim Absenden einen Live-Scan.
+
+## Einbindung in die lokale MucLegal-App
+
+Die lokale App liefert genau diese Oberfläche unter `/beweis-labor` aus (`muclegal/agb_scan.py`); Scan-Logik und UI bleiben ausschließlich in diesem Ordner. Das bisherige BeweisLab liegt unter `/beweis-labor/klassisch` (Fallzuordnung, Grey Mode, technische Dateien).
+
+Nur lokal (`<body data-evidence="on">`) erscheint nach einem Vergleich der Button **Evidence**. Er zeigt für alte und neue Version Screenshots und normalisierte Texte aus der BeweisLab-Pipeline:
+
+- Decathlon: hinterlegte Demo-Beweisstände (Webarchiv 08.10.2024, PDF 20.07.2026).
+- Müller: hinterlegter Webarchiv-Beweisstand als alte Version, Live-Erfassung als neue Version.
+- Andere URLs: Live-Erfassung der gefundenen AGB-URL im Standardmodus (robots.txt wird beachtet, kein Grey Mode). Die Fall-ID wird pro Text-Hash im Browser gespeichert und beim nächsten Scan als Beweis der alten Version angezeigt. Ohne Erfassung zeigt die alte Version den normalisierten Scan-Text ohne Bild.
+
+Auf Vercel bleibt der Button verborgen, da dort kein Browser-Backend läuft.

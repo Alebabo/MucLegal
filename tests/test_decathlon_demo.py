@@ -33,7 +33,7 @@ def test_local_decathlon_demo_replays_manual_baseline_and_difference_flow() -> N
             monitoring_cases=repository,
         )
         with TestClient(app) as client:
-            page = client.get("/beweis-labor")
+            page = client.get("/beweis-labor/klassisch")
             prepared = client.post("/api/v1/demo/decathlon")
             payload = prepared.json()
             baseline = client.get(f"/api/v1/cases/{DEMO_BASELINE_ID}")
