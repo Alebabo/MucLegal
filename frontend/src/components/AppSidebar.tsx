@@ -13,11 +13,15 @@ import { useState } from "react";
 
 import { ThemeToggle } from "./ThemeToggle";
 
+// Without the Python backend (e.g. on Vercel) the BeweisLab tab points to the
+// separately deployed lite scanner; locally it stays on /beweis-labor.
+const BEWEISLAB_URL: string = import.meta.env["VITE_BEWEISLAB_URL"] || "/beweis-labor";
+
 const items = [
   { to: "/", label: "Home", icon: Home, exact: true },
   { to: "/tenorhilfe", label: "Tenorhilfe", icon: FilePenLine, exact: false },
   { to: "/hinweise", label: "Hinweise", icon: Info, exact: false },
-  { href: "/beweis-labor", label: "BeweisLab", icon: FlaskConical },
+  { href: BEWEISLAB_URL, label: "BeweisLab", icon: FlaskConical },
   { to: "/neu", label: "Neu hinzufügen", icon: Plus, exact: false },
   { to: "/archiv", label: "Archiv", icon: Archive, exact: false },
 ] as const;
