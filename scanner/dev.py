@@ -1,14 +1,17 @@
 """Local static+API smoke server for the lite scanner; uvicorn is a dev dependency only."""
+import os
 from pathlib import Path
 from api.index import app
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 ROOT=Path(__file__).resolve().parent
 STATIC={'index.html':'text/html','style.css':'text/css','design.css':'text/css','app.js':'application/javascript',
         'evidence.js':'application/javascript','muclegal-logo.png':'image/png'}
 FONTS={'.css':'text/css','.woff2':'font/woff2'}
 @app.get('/')
-def home(): return FileResponse(ROOT/'index.html',media_type='text/html')
+def home():
+    origin=os.environ.get('MUCLEGAL_APP_URL','https://muclegal-app.vercel.app').rstrip('/')
+    return HTMLResponse((ROOT/'index.html').read_text(encoding='utf-8').replace('__APP_ORIGIN__',origin))
 @app.get('/fonts/{name}')
 def font(name:str):
     path=ROOT/'fonts'/name

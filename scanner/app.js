@@ -44,3 +44,12 @@ $('url').addEventListener('input',()=>{selectedExample=null;document.querySelect
 
 document.querySelectorAll("[data-lang]").forEach(button=>button.onclick=()=>{if(!busy){language=button.dataset.lang;applyLanguage();}});
 applyLanguage();
+
+// Sidebar collapse, mirroring the frontend's AppSidebar (state kept per browser).
+(()=>{const side=document.getElementById('app-sidebar'),button=document.getElementById('side-collapse');if(!side||!button)return;
+const label=button.querySelector('span');
+// Local app on :8000: the React pages run on :4173 (same rule as the classic BeweisLab).
+if(side.dataset.appOrigin===''&&['127.0.0.1','localhost'].includes(location.hostname)&&location.port!=='4173'){const origin=location.protocol+'//'+location.hostname+':4173';side.querySelectorAll('a[href^="/"]').forEach(link=>link.href=origin+link.getAttribute('href'))}
+function apply(collapsed){side.classList.toggle('collapsed',collapsed);button.setAttribute('aria-label',collapsed?'Seitenleiste ausklappen':'Seitenleiste einklappen');label.textContent=collapsed?'Ausklappen':'Einklappen'}
+let collapsed=false;try{collapsed=localStorage.getItem('muclegal:sidebar-collapsed')==='1'}catch{}apply(collapsed);
+button.onclick=()=>{collapsed=!collapsed;apply(collapsed);try{localStorage.setItem('muclegal:sidebar-collapsed',collapsed?'1':'0')}catch{}};})();

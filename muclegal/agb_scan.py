@@ -58,6 +58,7 @@ def index_html() -> str:
     html = (SCANNER_DIR / "index.html").read_text(encoding="utf-8")
     for name in STATIC_FILES:
         html = html.replace(f'="{name}"', f'="{ASSET_PREFIX}{name}"')
+    html = html.replace("__APP_ORIGIN__", "")
     return html.replace("<body>", '<body data-evidence="on">', 1)
 
 

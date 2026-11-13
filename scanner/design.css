@@ -73,3 +73,25 @@
 .evidence-column>.evidence-text{padding:0 22px 22px;max-height:78vh;overflow:auto}
 .legacy-link{margin-left:auto}
 @media(max-width:800px){.evidence-columns{grid-template-columns:1fr}.evidence-column+.evidence-column{border-left:0;border-top:1px solid var(--line)}.evidence-top{flex-direction:column;align-items:start}.evidence-log-item{grid-template-columns:1fr;gap:2px}}
+
+/* App sidebar, identical to the MucLegal frontend navigation. */
+body{display:flex;min-height:100vh}
+.app-shell{flex:1;min-width:0}
+.app-sidebar{position:sticky;top:0;height:100vh;width:248px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--sidebar-border);background:var(--sidebar);transition:width .2s;z-index:40}
+.side-brand{display:flex;align-items:center;height:80px;padding:0 16px}
+.side-brand img{height:64px;width:100%;object-fit:contain;object-position:left}
+.side-mark{display:none;place-items:center;width:36px;height:36px;border:1px solid var(--foreground);background:var(--foreground);color:var(--background);font-size:11px;font-weight:800;letter-spacing:.06em}
+.side-nav{flex:1;display:flex;flex-direction:column;gap:4px;padding:8px 12px}
+.side-link{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;border-radius:9999px;padding:10px 12px;font-size:14px;color:var(--muted-foreground);text-align:left;text-decoration:none!important;transition:background .15s,color .15s}
+.side-link svg{flex-shrink:0}
+.side-link span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-link:hover{background:var(--sidebar-accent);color:var(--sidebar-accent-foreground)}
+.side-link.active{background:var(--sidebar-accent);color:var(--sidebar-accent-foreground);font-weight:500}
+.side-foot{border-top:1px solid var(--sidebar-border);padding:12px}
+.app-sidebar.collapsed{width:72px}
+.app-sidebar.collapsed .side-brand{justify-content:center;padding:0 12px}
+.app-sidebar.collapsed .side-brand img,.app-sidebar.collapsed .side-link span{display:none}
+.app-sidebar.collapsed .side-mark{display:grid}
+.app-sidebar.collapsed .side-link{justify-content:center}
+@media(min-width:768px){header .brand{visibility:hidden}}
+@media(max-width:767px){.app-sidebar{display:none}}
