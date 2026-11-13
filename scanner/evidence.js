@@ -11,9 +11,9 @@ noImageRole:'Für diese Seite liegt kein Screenshot vor.',
 scanText:'Normalisierter Text aus dem Scan (ohne Beweisbild).',noPrevious:'Kein früherer Stand vorhanden.',
 preparing:'Gespeicherte Beweisstände werden geladen …',capturing:'Live-Erfassung im BeweisLab läuft …',
 captured:'Beweise erfasst.',loaded:'Beweisstände geladen.',cached:'Gespeicherte Erfassung dieses Textstands.',
-liveNote:'Live-Erfassung vom {date}. Kann vom gespeicherten Vergleichsstand abweichen.',
+liveNote:'Live-Erfassung vom {date} · God Mode. Kann vom gespeicherten Vergleichsstand abweichen.',
 demoNote:'Hinterlegter Demo-Beweisstand.',
-standard:'Standard-Erfassung: robots.txt wird beachtet, keine Umgehung von Zugriffshürden.',
+standard:'God Mode: robots.txt wird ignoriert (Nutzeranweisung 13.11.2026). Zulässigkeit des Abrufs selbst prüfen. Logins, Paywalls und CAPTCHAs werden nicht umgangen.',
 notConfigured:'Live-Erfassung ist in dieser Instanz nicht konfiguriert.',busy:'Es läuft bereits eine Erfassung. Bitte kurz warten.',
 failed:'Erfassung fehlgeschlagen.',noCase:'Die Erfassung lieferte kein Beweispaket.',
 tile:(i,n)=>'Abschnitt '+i+' / '+n,loading:'Text wird geladen …',legacy:'Erweitertes BeweisLab ↗'},
@@ -24,9 +24,9 @@ noImageRole:'No screenshot is available for this page.',
 scanText:'Normalized text from the scan (no evidence image).',noPrevious:'No previous version available.',
 preparing:'Loading saved evidence …',capturing:'Live capture in BeweisLab running …',
 captured:'Evidence captured.',loaded:'Evidence loaded.',cached:'Saved capture of this text version.',
-liveNote:'Live capture from {date}. May differ from the saved comparison version.',
+liveNote:'Live capture from {date} · God Mode. May differ from the saved comparison version.',
 demoNote:'Stored demo evidence.',
-standard:'Standard capture: robots.txt is respected, access barriers are not bypassed.',
+standard:'God Mode: robots.txt is ignored (user instruction 2026-11-13). Check that retrieval is permitted. Logins, paywalls and CAPTCHAs are not bypassed.',
 notConfigured:'Live capture is not configured in this instance.',busy:'Another capture is running. Please wait a moment.',
 failed:'Capture failed.',noCase:'The capture produced no evidence package.',
 tile:(i,n)=>'Section '+i+' / '+n,loading:'Loading text …',legacy:'Advanced BeweisLab ↗'}
@@ -54,7 +54,7 @@ function setButtons(){button.disabled=running;button.textContent=L('button');el(
 function renderLog(run){const log=el('evidence-log');log.hidden=false;log.replaceChildren();(run.audit_log||[]).forEach((item,index,all)=>{const li=document.createElement('li');const active=index===all.length-1&&!terminal.has(run.status);li.className='evidence-log-item '+(item.state==='failed'?'failed':active?'active':'done');const b=document.createElement('b');b.textContent=stepLabels[lang()][item.step]||item.step;const p=document.createElement('span');p.textContent=item.message||'';li.append(b,p);log.append(li)});log.scrollTop=log.scrollHeight}
 
 async function streamCapture(url){
-  const response=await fetch('/api/v1/evidence-runs/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,verification_mode:false,god_mode_authorized:false})});
+  const response=await fetch('/api/v1/evidence-runs/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,verification_mode:true,god_mode_authorized:true})});
   if(!response.ok){let m='HTTP '+response.status;try{m=(await response.json()).detail||m}catch{}const e=Error(m);e.status=response.status;throw e}
   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',done=null;
   const consume=line=>{if(!line.trim())return;const msg=JSON.parse(line);if(msg.type==='error')throw Error(msg.detail||L('failed'));if(msg.run){renderLog(msg.run);if(msg.type==='complete')done=msg.run}};
@@ -62,7 +62,7 @@ async function streamCapture(url){
   if(!done)throw Error(L('failed'));
   if(done.case_detail)return done.case_detail;
   if(!done.result_available)throw Error(done.message||L('noCase'));
-  const list=(await api('/api/cases')).cases||[];
+  const index=await api('/api/cases'),list=[...(index.god_mode_cases||[]),...(index.cases||[])];
   const item=list.find(c=>c.requested_url===url)||list.find(c=>c.url===url);
   if(!item)throw Error(L('noCase'));
   return api('/api/cases/'+encodeURIComponent(item.case_id));
@@ -94,7 +94,7 @@ async function open(force=false){
         // Only reuse for later scans when the captured text belongs to this scan's hash.
         if(!example)remember(result.after.hash,detail.case_id);
         const date=new Date().toLocaleDateString(lang()==='en'?'en-GB':'de-DE');
-        state.new={detail,note:example?L('liveNote').replace('{date}',date):''};
+        state.new={detail,note:L('liveNote').replace('{date}',date)};
         setStatus(L('captured'),'ok');
       }
     }

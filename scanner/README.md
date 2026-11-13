@@ -45,6 +45,8 @@ Nur lokal (`<body data-evidence="on">`) erscheint nach einem Vergleich der Butto
 
 - Decathlon: hinterlegte Demo-Beweisstände (Webarchiv 08.10.2024, PDF 20.07.2026).
 - Müller: hinterlegter Webarchiv-Beweisstand als alte Version, Live-Erfassung als neue Version.
-- Andere URLs: Live-Erfassung der gefundenen AGB-URL im Standardmodus (robots.txt wird beachtet, kein Grey Mode). Die Fall-ID wird pro Text-Hash im Browser gespeichert und beim nächsten Scan als Beweis der alten Version angezeigt. Ohne Erfassung zeigt die alte Version den normalisierten Scan-Text ohne Bild.
+- Andere URLs: Live-Erfassung der gefundenen AGB-URL. Die Fall-ID wird pro Text-Hash im Browser gespeichert und beim nächsten Scan als Beweis der alten Version angezeigt. Ohne Erfassung zeigt die alte Version den normalisierten Scan-Text ohne Bild.
+
+Auf ausdrückliche Nutzeranweisung vom 13.11.2026 läuft jede Evidence-Erfassung im God Mode (`god_mode_authorized`): robots.txt wird geprüft, protokolliert und ignoriert. Die Artefakte liegen getrennt unter `god-mode-bundles/`, sind als „AUTORISIERTE ERFASSUNG“ gekennzeichnet und enthalten `god_mode_authorization.json`. Logins, Paywalls, CAPTCHAs und Identitätstäuschung bleiben ausgeschlossen. Die Zulässigkeit des Abrufs prüft der Nutzer selbst.
 
 Auf Vercel bleibt der Button verborgen, da dort kein Browser-Backend läuft.
