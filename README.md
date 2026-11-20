@@ -20,6 +20,8 @@ Jeder erfasste Seitenstand wird lokal normalisiert: dynamisches Rauschen wie Coo
 
 Damit bleibt der häufige tägliche Prüfschritt deterministisch und ohne laufende KI-Kosten. Ein kostenpflichtiger Modellaufruf erfolgt nur, wenn sich der relevante normalisierte Inhalt tatsächlich geändert hat. Die teure Prüfung wird so vom Regelfall zum Ausnahmefall.
 
+Das allgemeine Prinzip – Seitenstände hashen, RSS/Atom-Feeds auf neue Einträge reduzieren und nur das Delta mit festem Token-Budget an einen KI-Agenten übergeben – ist als eigenständiger, domänenunabhängiger Kern in [HashDelta](https://github.com/Alebabo/HashDelta) dokumentiert. MucLegal setzt dasselbe Prinzip mit einer eigenen, auf Beweissicherung ausgelegten Normalisierung um (Hauptinhaltsextraktion, Normalisiererversion im Vergleich, Sicherheitsgates gegen Extraktionsfehler).
+
 ## Compliance-orientiertes Crawling
 
 MucLegal arbeitet mit einem transparenten Projekt-User-Agent und ausschließlich auf öffentlich erreichbaren Seiten. Im Normalbetrieb:

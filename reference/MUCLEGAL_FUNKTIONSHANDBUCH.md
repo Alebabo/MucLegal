@@ -648,6 +648,11 @@ Die technische Verwendbarkeit garantiert keine rechtliche Verwertbarkeit.
 Ein Roh-HTML-Hash würde sich durch Session-IDs, Cookiebanner, Werbeblöcke oder laufende
 Countdowns ständig ändern. MucLegal erzeugt deshalb einen stabileren Vergleichstext.
 
+Der zugrunde liegende Algorithmus (normalisieren, SHA-256 vergleichen, nur das Delta weitergeben)
+ist in allgemeiner Form im Repository [HashDelta](https://github.com/Alebabo/HashDelta)
+beschrieben. Die hier dokumentierte Normalisierung ist die MucLegal-spezifische, strengere
+Variante für Beweiszwecke.
+
 ### 6.2 Verarbeitung
 
 Die Normalisierung umfasst:
